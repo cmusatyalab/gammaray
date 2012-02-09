@@ -1,0 +1,5 @@
+Notes:
+    (1) Disk creation
+            qemu-img create -f raw tinycore.raw 12M
+    (2) OS Installation -- Used virt-manager GUI
+            sudo virt-manager
