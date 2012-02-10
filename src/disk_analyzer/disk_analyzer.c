@@ -18,7 +18,7 @@
 
 void print_partition_type(uint8_t type)
 {
-    char* LUT[] = { "Empty","","","","","","","HPFS/NTFS","","","","W95 FAT32","","","","", /* 0x00 - 0x0f */
+    char* LUT[] = { "Empty","","","","","Extended","","HPFS/NTFS","","","","W95 FAT32","","","","", /* 0x00 - 0x0f */
                     "","","","","","","","","","","","","","","","", /* 0x10 - 0x1f */
                     "","","","","","","","","","","","","","","","", /* 0x20 - 0x2f */
                     "","","","","","","","","","","","","","","","", /* 0x30 - 0x3f */
@@ -99,31 +99,18 @@ void print_partition(uint8_t* start)
     return;
 }
 
-/* main thread of execution */
-int main(int argc, char* args[])
+int analyze_mbr(FILE * mbrfd, long int offset)
 {
+    fprintf_light_cyan(stdout, "\n\nAnalyzing Boot Sector at Offset 0x%lx\n\n",
+                               offset);
     uint8_t mbr[512];
-    fprintf_blue(stdout, "Raw Disk Analyzer -- By: Wolfgang Richter "
-                         "<wolf@cs.cmu.edu>\n");
-
-    if (argc < 2)
-    {
-        fprintf_light_red(stderr, "Usage: ./%s <raw disk file>\n", args[0]);
-        return EXIT_FAILURE;
-    }
-
     /* read Master Boot Record (MBR) */
-    fprintf_cyan(stdout, "Analyzing Disk: %s\n\n", args[1]);
 
-    FILE* mbrfd = fopen(args[1], "r");
-    
-    if (mbrfd == NULL)
+    if (fseek(mbrfd, offset, 0))
     {
-        fprintf_light_red(stderr, "Error opening raw disk file."
-                                  "Does it exist?\n");
-        return EXIT_FAILURE;
+        fprintf_light_red(stderr, "Error seeking to position 0x%lx.\n", offset);
     }
-
+    
     size_t read = fread(mbr, 1, 512, mbrfd);
 
     if (read < 512)
@@ -166,6 +153,34 @@ int main(int argc, char* args[])
     print_partition(&(mbr[480]));
     fprintf_light_yellow(stdout, "\nChecking partition table entry 4.\n");
     print_partition(&(mbr[496]));
+
+    return EXIT_SUCCESS;
+}
+
+/* main thread of execution */
+int main(int argc, char* args[])
+{
+    fprintf_blue(stdout, "Raw Disk Analyzer -- By: Wolfgang Richter "
+                         "<wolf@cs.cmu.edu>\n");
+
+    if (argc < 2)
+    {
+        fprintf_light_red(stderr, "Usage: ./%s <raw disk file>\n", args[0]);
+        return EXIT_FAILURE;
+    }
+
+    fprintf_cyan(stdout, "Analyzing Disk: %s\n\n", args[1]);
+
+    FILE* mbrfd = fopen(args[1], "r");
+    
+    if (mbrfd == NULL)
+    {
+        fprintf_light_red(stderr, "Error opening raw disk file."
+                                  "Does it exist?\n");
+        return EXIT_FAILURE;
+    }
+
+    analyze_mbr(mbrfd, 0x0);
 
     return EXIT_SUCCESS;
 }
