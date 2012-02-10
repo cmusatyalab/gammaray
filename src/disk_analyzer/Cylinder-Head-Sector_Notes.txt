@@ -1,0 +1,123 @@
+Cylinder-Head-Sector Notes
+-------------------------------------------------------------------------------
+
+Note Taker: Wolfgang Richter <wolf@cs.cmu.edu>
+
+The CHS scheme no longer has a true physical bearing on what actually happens
+within hard drives today.
+
+I'm using two main sources currently:
+
+[1] http://www.art0.org/general/an-introduction-to-hard-disk-geometry
+[2] http://en.wikipedia.org/wiki/Cylinder-head-sector
+
+Currently looking for more primary sources.  Perhaps ATA-* documentation might
+be helpful.
+
+
+
+
+Sectors
+-------------------------------------------------------------------------------
+
+Smallest unit of addressable storage, generally 512 bytes on hard drives.  New
+standards pushing this towards 4096 bytes.
+
+* Numbering starts at 0x01 --> there is _no_ sector 0x00
+* Sector number encoded in 6 bits --> 2**6 == 64 - 1 (no 0) = 63 max sectors
+
+Sectors are contained within a track.  A track is a circular path defined on
+the hard drive as a position where the head can follow and read and write
+magnetically.
+
+
+
+
+Heads
+-------------------------------------------------------------------------------
+
+Heads read and write data magnetically on hard drives, they are the primary
+moving component and move from the edge of the circular platter towards the
+center and back again.
+
+Platters have 2 sides, thus there are 2 heads per platter generally with one
+per side.
+
+* In MBR's 8 bits are reserved for numbering heads.
+* Numbering starts at 0x00 (adds one to total heads)
+* 0xff + 0x01 = 256 total possible heads
+
+8 MB (less than true 8192 for 8 Mibibytes) Limit -->
+ (256 heads) * (63 sectors per head) * (512 bytes per sector) = 8257536 bytes =
+ 
+                        8064 Kibibytes = 7.875 Mibibytes
+
+
+
+
+Tracks
+-------------------------------------------------------------------------------
+
+Tracks are thin concentric circular strips of sectors on disk.  Obviously,
+moving out from the center of the platter these circular strips become longer
+and can contain more sectors.  At _least_ one head is required to read a single
+track---multiple heads increase read and write bandwidth.
+
+A track is uniquely identified by a cylinder-head combination and contains
+sectors-per-track number of sectors.
+
+Cylinders therefore contain sectors-per-track * number of heads sectors.
+
+* Numbering starts at 0x00
+* 10 bits reserved for cylinders == 2**10 number of cylinders
+
+With 1024 possible cylinders/tracks we get the total 8GB Limit:
+
+        1024 * 8064 Kibibytes = 8257536 Kibibytes = 8064 Mibibytes = 7.875 GB
+
+
+
+
+Cylinders
+-------------------------------------------------------------------------------
+
+A cylinder comprises the same track number on each platter spanning all tracks
+across all platters (genereally though of as vertically).  It is a cylinder
+limited by the depth of the hard drive, going through all platters---but it
+only exists conceptually.  Heads switch between cylinders to read the tracks on
+the platter side they are attached to.
+
+CHS addressing starts at (0x00,0x00,0x01) [sectors numbered from 1], and max
+is (0x3ff,0xff,0x3f) or (1023,255,63).  CHS addresses are 24 bits long.
+
+
+
+
+Blocks and Clusters
+-------------------------------------------------------------------------------
+
+Block refers to either a sector or a group of sectors.  Clusters are logical
+allocation units for data on file systems.  They can span tracks and to not
+need to be contiguous (although they often are for performance).
+
+
+
+
+Logical Block Addressing/Logical Sector Number
+-------------------------------------------------------------------------------
+
+            LBA = (c * N_heads + h) * N_sectors_per_track + (s - 1)
+
+LBA is superseding the old CHS style of addressing sectors and positions on
+disk.  LBA has support for larger disks and new standards provide 48 bits for
+LBA addressing.
+
+
+
+
+Geometry
+-------------------------------------------------------------------------------
+
+Geometry of a disk may be specified with a single CHS tuple:
+
+      (Number of Cylinders, Number of Heads, Number of Sectors per track)
