@@ -1,8 +1,8 @@
 default:
-	@gcc disk_analyzer.c -o disk_analyzer -Wall -Werror
+	@gcc disk_analyzer.c color.c -o disk_analyzer -Wall -Werror #-DNOCOLOR
 
 test: default
 	@./disk_analyzer /home/wolf/Dropbox/Projects/xray/sample/tinycore.raw
 
 clean:
-	@rm disk_analyzer
+	@rm disk_analyzer *.gch
