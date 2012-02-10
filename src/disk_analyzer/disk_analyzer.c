@@ -15,6 +15,7 @@
 #include <stdlib.h>
 
 #include "color.h"
+#include "ext2.h"
 
 void print_partition_type(uint8_t type)
 {
@@ -157,6 +158,33 @@ int analyze_mbr(FILE * mbrfd, long int offset)
     return EXIT_SUCCESS;
 }
 
+int analyze_ext2_superblock(FILE *  disk, long int offset)
+{
+    uint8_t buf[sizeof(struct ext2_superblock)];
+    offset += 1024; /* ext2 superblock always at 1024th byte position */
+    fprintf_light_cyan(stdout, "\n\nAnalyzing ext2 Superblock at Position "
+                               "0x%lx\n", offset);
+
+    if (fseek(disk, offset, 0))
+    {
+        fprintf_light_red(stderr, "Error seeking to position 0x%lx.\n", offset);
+    }
+
+    if (fread(buf, 1, sizeof(struct ext2_superblock), disk) !=
+        sizeof(struct ext2_superblock))
+    {
+        fprintf_light_red(stdout, 
+                          "Error while trying to read ext2 superblock.\n");
+        return EXIT_FAILURE;
+    }
+
+    struct ext2_superblock* superblock = (struct ext2_superblock*) buf; 
+
+    print_ext2_superblock(*superblock);
+
+    return EXIT_SUCCESS;
+}
+
 /* main thread of execution */
 int main(int argc, char* args[])
 {
@@ -171,16 +199,17 @@ int main(int argc, char* args[])
 
     fprintf_cyan(stdout, "Analyzing Disk: %s\n\n", args[1]);
 
-    FILE* mbrfd = fopen(args[1], "r");
+    FILE* disk = fopen(args[1], "r");
     
-    if (mbrfd == NULL)
+    if (disk == NULL)
     {
         fprintf_light_red(stderr, "Error opening raw disk file."
                                   "Does it exist?\n");
         return EXIT_FAILURE;
     }
 
-    analyze_mbr(mbrfd, 0x0);
+    analyze_mbr(disk, 0x0);
+    analyze_ext2_superblock(disk, 0x7e00);
 
     return EXIT_SUCCESS;
 }
