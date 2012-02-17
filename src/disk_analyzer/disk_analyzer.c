@@ -161,8 +161,7 @@ int analyze_mbr(FILE * mbrfd, long int offset)
 
 int analyze_ext2_superblock(FILE * disk, long int offset)
 {
-    uint8_t buf[sizeof(struct ext2_superblock)];
-    offset += 1024; /* ext2 superblock always at 1024th byte position */
+    struct ext2_superblock superblock;
     fprintf_light_cyan(stdout, "\n\nAnalyzing ext2 Superblock at Position "
                                "0x%lx\n", offset);
 
@@ -172,7 +171,7 @@ int analyze_ext2_superblock(FILE * disk, long int offset)
                           offset);
     }
 
-    if (fread(buf, 1, sizeof(struct ext2_superblock), disk) !=
+    if (fread(&superblock, 1, sizeof(struct ext2_superblock), disk) !=
         sizeof(struct ext2_superblock))
     {
         fprintf_light_red(stdout, 
@@ -180,16 +179,14 @@ int analyze_ext2_superblock(FILE * disk, long int offset)
         return EXIT_FAILURE;
     }
 
-    struct ext2_superblock* superblock = (struct ext2_superblock*) buf; 
-
-    print_ext2_superblock(*superblock);
+    print_ext2_superblock(superblock);
 
     return EXIT_SUCCESS;
 }
 
 int analyze_ext2_block_group_descriptor(FILE * disk, long int offset)
 {
-    uint8_t buf[sizeof(struct ext2_block_group_descriptor)];
+    struct ext2_block_group_descriptor bgd;
     fprintf_light_cyan(stdout, "\n\nAnalyzing ext2 Block Group Descriptor at "
                                "Position 0x%lx\n", offset);
 
@@ -199,7 +196,7 @@ int analyze_ext2_block_group_descriptor(FILE * disk, long int offset)
                           offset);
     }
 
-    if (fread(buf, 1, sizeof(struct ext2_block_group_descriptor), disk) !=
+    if (fread(&bgd, 1, sizeof(struct ext2_block_group_descriptor), disk) !=
         sizeof(struct ext2_block_group_descriptor))
     {
         fprintf_light_red(stdout, 
@@ -208,17 +205,14 @@ int analyze_ext2_block_group_descriptor(FILE * disk, long int offset)
         return EXIT_FAILURE;
     }
 
-    struct ext2_block_group_descriptor* bgd =
-                                    (struct ext2_block_group_descriptor*) buf;
-
-    print_ext2_block_group_descriptor(*bgd);
+    print_ext2_block_group_descriptor(bgd);
 
     return EXIT_SUCCESS;
 }
 
 int analyze_ext2_inode_table(FILE * disk, long int offset)
 {
-    uint8_t buf[sizeof(struct ext2_inode)];
+    struct ext2_inode inode;
     fprintf_light_cyan(stdout, "\n\nAnalyzing ext2 inode Table at "
                                "Position 0x%lx\n", offset);
 
@@ -228,16 +222,14 @@ int analyze_ext2_inode_table(FILE * disk, long int offset)
                           offset);
     }
 
-    if (fread(buf, 1, sizeof(struct ext2_inode), disk) !=
+    if (fread(&inode, 1, sizeof(struct ext2_inode), disk) !=
         sizeof(struct ext2_inode))
     {
         fprintf_light_red(stdout, "Error while trying to read ext2 inode.\n");
         return EXIT_FAILURE;
     }
 
-    struct ext2_inode* inode = (struct ext2_inode*) buf;
-
-    print_ext2_inode(*inode);
+    print_ext2_inode(inode);
 
     return EXIT_SUCCESS;
 }
@@ -266,7 +258,7 @@ int main(int argc, char* args[])
     }
 
     analyze_mbr(disk, 0x0);
-    analyze_ext2_superblock(disk, 0x7e00);
+    analyze_ext2_superblock(disk, 0x7e00 + 1024);
     analyze_ext2_block_group_descriptor(disk, 0x7e00 + 1024*2);
     analyze_ext2_inode_table(disk, 0x7e00 + 1024*40 + sizeof(struct ext2_inode));
 
