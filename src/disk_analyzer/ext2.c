@@ -21,49 +21,103 @@ char* s_errors_LUT[] = {
 int print_inode_mode(uint16_t i_mode)
 {
     fprintf_yellow(stdout, "\t(  ");
-    if (i_mode & 0x1)
+
+    /* file format */
+    if ((i_mode & 0xc000) == 0xc000)
+        fprintf_blue(stdout, "EXT2_S_IFSOCK | ");
+    if ((i_mode & 0xa000) == 0xa000)
+        fprintf_blue(stdout, "EXT2_S_IFLNK | ");
+    if (i_mode & 0x8000)
+        fprintf_blue(stdout, "EXT2_S_IFREG | ");
+    if ((i_mode & 0x6000) == 0x6000)
+        fprintf_blue(stdout, "EXT2_S_IFBLK | ");
+    if (i_mode & 0x4000)
+        fprintf_blue(stdout, "EXT2_S_IFDIR | ");
+    if (i_mode & 0x2000)
+        fprintf_blue(stdout, "EXT2_S_IFCHR | ");
+    if (i_mode & 0x1000)
+        fprintf_blue(stdout, "EXT2_S_IFIFO | ");
+
+    /* process execution/group override */
+    if (i_mode & 0x0800)
+        fprintf_blue(stdout, "EXT2_S_ISUID | ");
+    if (i_mode & 0x0400)
+        fprintf_blue(stdout, "EXT2_S_ISGID | ");
+    if (i_mode & 0x0200)
+        fprintf_blue(stdout, "EXT2_S_ISVTX | ");
+
+    /* access control */
+    if (i_mode & 0x0100)
+        fprintf_blue(stdout, "EXT2_S_IRUSR | ");
+    if (i_mode & 0x0080)
+        fprintf_blue(stdout, "EXT2_S_IWUSR | ");
+    if (i_mode & 0x0040)
+        fprintf_blue(stdout, "EXT2_S_IXUSR | ");
+    if (i_mode & 0x0020)
+        fprintf_blue(stdout, "EXT2_S_IRGRP | ");
+    if (i_mode & 0x0010)
+        fprintf_blue(stdout, "EXT2_S_IWGRP | ");
+    if (i_mode & 0x0008)
+        fprintf_blue(stdout, "EXT2_S_IXGRP | ");
+    if (i_mode & 0x0004)
+        fprintf_blue(stdout, "EXT2_S_IROTH | ");
+    if (i_mode & 0x0002)
+        fprintf_blue(stdout, "EXT2_S_IWOTH | ");
+    if (i_mode & 0x0001)
+        fprintf_blue(stdout, "EXT2_S_IXOTH | ");
+
+
+    fprintf_yellow(stdout, "\b\b )\n");
+    return 0;
+}
+
+int print_inode_flags(uint16_t i_flags)
+{
+    fprintf_yellow(stdout, "\t(  ");
+    if (i_flags & 0x1)
         fprintf_blue(stdout, "EXT2_SECRM_FL | ");
-    if (i_mode & 0x2)
+    if (i_flags & 0x2)
         fprintf_blue(stdout, "EXT2_UNRM_FL | ");    
-    if (i_mode & 0x4)
+    if (i_flags & 0x4)
         fprintf_blue(stdout, "EXT2_COMPR_FL | ");
-    if (i_mode & 0x8)
+    if (i_flags & 0x8)
         fprintf_blue(stdout, "EXT2_SYNC_FL | ");
 
     /* compression */
-    if (i_mode & 0x10)
+    if (i_flags & 0x10)
         fprintf_blue(stdout, "EXT2_IMMUTABLE_FL | ");
-    if (i_mode & 0x20)
+    if (i_flags & 0x20)
         fprintf_blue(stdout, "EXT2_APPEND_FL | ");
-    if (i_mode & 0x40)
+    if (i_flags & 0x40)
         fprintf_blue(stdout, "EXT2_NODUMP_FL | ");
-    if (i_mode & 0x80)
+    if (i_flags & 0x80)
         fprintf_blue(stdout, "EXT2_NOATIME_FL | ");
 
-    if (i_mode & 0x100)
+    if (i_flags & 0x100)
         fprintf_blue(stdout, "EXT2_DIRTY_FL | ");
-    if (i_mode & 0x200)
+    if (i_flags & 0x200)
         fprintf_blue(stdout, "EXT2_COMPRBLK_FL | ");
-    if (i_mode & 0x400)
+    if (i_flags & 0x400)
         fprintf_blue(stdout, "EXT2_NOCOMPR_FL | ");
-    if (i_mode & 0x800)
+    if (i_flags & 0x800)
         fprintf_blue(stdout, "EXT2_ECOMPR_FL | ");
 
-    if (i_mode & 0x1000)
+    if (i_flags & 0x1000)
         fprintf_blue(stdout, "EXT2_BTREE_FL | ");
-    if (i_mode & 0x2000)
+    if (i_flags & 0x2000)
         fprintf_blue(stdout, "EXT2_INDEX_FL | ");
-    if (i_mode & 0x4000)
+    if (i_flags & 0x4000)
         fprintf_blue(stdout, "EXT2_IMAGIC_FL | ");
-    if (i_mode & 0x8000)
+    if (i_flags & 0x8000)
         fprintf_blue(stdout, "EXT3_JOURNAL_DATA_FL | ");
 
-    if (i_mode & 0x80000000)
+    if (i_flags & 0x80000000)
         fprintf_blue(stdout, "EXT2_RESERVED_FL | ");
 
    fprintf_yellow(stdout, "\b\b )\n");
    return 0;
 }
+
 int print_ext2_inode(struct ext2_inode inode)
 {
     fprintf_yellow(stdout, "i_mode: 0x%"PRIx16"\n",
@@ -89,6 +143,7 @@ int print_ext2_inode(struct ext2_inode inode)
                            inode.i_blocks);
     fprintf_yellow(stdout, "i_flags: %"PRIu32"\n",
                            inode.i_flags);
+    print_inode_flags(inode.i_flags);
     fprintf_yellow(stdout, "i_osd1: %"PRIu32"\n",
                            inode.i_osd1);
     fprintf_yellow(stdout, "i_block: %"PRIu32"\n",
