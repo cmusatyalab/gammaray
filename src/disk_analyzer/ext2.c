@@ -18,23 +18,62 @@ char* s_errors_LUT[] = {
                                 "EXT2_ERRORS_PANIC"
                        };
 
+int print_ext2_inode(struct ext2_inode inode)
+{
+    fprintf_yellow(stdout, "i_mode: %"PRIu16"\n",
+                           inode.i_mode);
+    fprintf_yellow(stdout, "i_uid: %"PRIu16"\n",
+                           inode.i_uid);
+    fprintf_yellow(stdout, "i_size: %"PRIu32"\n",
+                           inode.i_size);
+    fprintf_yellow(stdout, "i_atime: %"PRIu32"\n",
+                           inode.i_atime);
+    fprintf_yellow(stdout, "i_ctime: %"PRIu32"\n",
+                           inode.i_ctime);
+    fprintf_yellow(stdout, "i_mtime: %"PRIu32"\n",
+                           inode.i_mtime);
+    fprintf_yellow(stdout, "i_dtime: %"PRIu32"\n",
+                           inode.i_dtime);
+    fprintf_yellow(stdout, "i_gid: %"PRIu16"\n",
+                           inode.i_gid);
+    fprintf_yellow(stdout, "i_links_count: %"PRIu16"\n",
+                           inode.i_links_count);
+    fprintf_yellow(stdout, "i_blocks: %"PRIu32"\n",
+                           inode.i_blocks);
+    fprintf_yellow(stdout, "i_flags: %"PRIu32"\n",
+                           inode.i_flags);
+    fprintf_yellow(stdout, "i_osd1: %"PRIu32"\n",
+                           inode.i_osd1);
+    fprintf_yellow(stdout, "i_block: %"PRIu32"\n",
+                           inode.i_block[0]); /* uint32_t i_block[15]; */
+    fprintf_yellow(stdout, "i_generation: %"PRIu32"\n",
+                           inode.i_generation);
+    fprintf_yellow(stdout, "i_file_acl: 0%.3"PRIo32"\n",
+                           inode.i_file_acl);
+    fprintf_yellow(stdout, "i_dir_acl: 0%.3"PRIo32"\n",
+                           inode.i_dir_acl);
+    fprintf_yellow(stdout, "i_faddr: %"PRIu32"\n",
+                           inode.i_faddr);
+    /* uint8_t i_osd2[8] */
+    return 0;
+}
+
 int print_ext2_block_group_descriptor(struct ext2_block_group_descriptor bgd)
 {
     fprintf_yellow(stdout, "bg_block_bitmap: %"PRIu32"\n",
-                            bgd.bg_block_bitmap);
+                           bgd.bg_block_bitmap);
     fprintf_yellow(stdout, "bg_inode_bitmap: %"PRIu32"\n",
-                            bgd.bg_inode_bitmap);
+                           bgd.bg_inode_bitmap);
     fprintf_yellow(stdout, "bg_inode_table: %"PRIu32"\n",
-                            bgd.bg_inode_table);
+                           bgd.bg_inode_table);
     fprintf_yellow(stdout, "bg_free_blocks_count: %"PRIu16"\n",
-                            bgd.bg_free_blocks_count);
+                           bgd.bg_free_blocks_count);
     fprintf_yellow(stdout, "bg_free_inodes_count: %"PRIu16"\n",
-                            bgd.bg_free_inodes_count);
+                           bgd.bg_free_inodes_count);
     fprintf_yellow(stdout, "bg_used_dirs_count: %"PRIu16"\n",
-                            bgd.bg_used_dirs_count);
-    fprintf_yellow(stdout, "bg_pad: %"PRIu16"\n",
-                            bgd.bg_pad);
-    // bgd.bg_reserved
+                           bgd.bg_used_dirs_count);
+    /* uint16_t bg_pad; */
+    /* uint8_t bg_reserved[12]; */
     return 0;
 }
 
