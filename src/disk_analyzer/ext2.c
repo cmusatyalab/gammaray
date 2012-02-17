@@ -1,5 +1,14 @@
 #include "ext2.h"
 
+struct ext2_dir_entry
+{
+    uint32_t inode;
+    uint16_t rec_len;
+    uint8_t name_len;
+    uint8_t file_type;
+    uint8_t name[255];
+} __attribute__((packed));
+
 char* s_creator_os_LUT[] = {
                                 "EXT2_OS_LINUX","EXT2_OS_HURD","EXT2_OS_MASIX",
                                 "EXT2_OS_FREEBSD","EXT2_OS_LITES"
@@ -17,6 +26,25 @@ char* s_errors_LUT[] = {
                                 "","EXT2_ERRORS_CONTINUE","EXT2_ERRORS_RO",
                                 "EXT2_ERRORS_PANIC"
                        };
+
+int print_ext2_dir_entry(uint32_t entry, uint8_t* data)
+{
+    struct ext2_dir_entry dir = *((struct ext2_dir_entry*) data);
+
+    fprintf_yellow(stdout, "%s", dir.name);
+    //fprintf(stdout, "\n\n")
+    return 0;
+} 
+
+int print_ext2_dir_entries(uint8_t* bytes, uint32_t len)
+{
+    uint32_t i;
+    uint32_t num_entries = len / sizeof(struct ext2_dir_entry);
+
+    for (i = 0; i < num_entries; i++)
+        print_ext2_dir_entry(i, bytes+i*sizeof(struct ext2_dir_entry));
+    return 0;
+}
 
 int print_inode_mode(uint16_t i_mode)
 {
@@ -118,11 +146,34 @@ int print_inode_flags(uint16_t i_flags)
    return 0;
 }
 
+int print_ext2_inode_osd2(uint8_t osd2[12])
+{
+    fprintf_yellow(stdout, "i_osd2 --\\/\n");
+    fprintf_yellow(stdout, "\tl_i_frag: %"PRIu8"\n", osd2[0]);
+    fprintf_yellow(stdout, "\tl_i_fsize: %"PRIu8"\n", osd2[1]);
+    /* osd2[2-3] are reserved on Linux */
+    fprintf_yellow(stdout, "\tl_i_uid_high: %"PRIu16"\n", (uint16_t) osd2[4]);
+    fprintf_yellow(stdout, "\tl_i_gid_high: %"PRIu16"\n", (uint16_t) osd2[6]);
+    /* osd2[8-11] are reserved on Linux */
+    return 0;
+}
+
+int print_inode_permissions(uint16_t i_mode)
+{
+    fprintf_yellow(stdout, "\tPermissions: 0%"PRIo16"\n", i_mode &
+                                             (0x01c0 | 0x0038 | 0x007));
+    return 0;
+}
+
 int print_ext2_inode(struct ext2_inode inode)
 {
+    int ret = 0;
     fprintf_yellow(stdout, "i_mode: 0x%"PRIx16"\n",
                            inode.i_mode);
     print_inode_mode(inode.i_mode);
+    print_inode_permissions(inode.i_mode);
+    if (inode.i_mode & 0x4000)
+        ret = inode.i_block[0];
     fprintf_yellow(stdout, "i_uid: %"PRIu16"\n",
                            inode.i_uid);
     fprintf_yellow(stdout, "i_size: %"PRIu32"\n",
@@ -146,8 +197,36 @@ int print_ext2_inode(struct ext2_inode inode)
     print_inode_flags(inode.i_flags);
     fprintf_yellow(stdout, "i_osd1: %"PRIu32"\n",
                            inode.i_osd1);
-    fprintf_yellow(stdout, "i_block: %"PRIu32"\n",
+    fprintf_yellow(stdout, "i_block[0]; direct: %"PRIu32"\n",
                            inode.i_block[0]); /* uint32_t i_block[15]; */
+    fprintf_yellow(stdout, "i_block[1]; direct: %"PRIu32"\n",
+                           inode.i_block[1]);
+    fprintf_yellow(stdout, "i_block[2]; direct: %"PRIu32"\n",
+                           inode.i_block[2]);
+    fprintf_yellow(stdout, "i_block[3]; direct: %"PRIu32"\n",
+                           inode.i_block[3]);
+    fprintf_yellow(stdout, "i_block[4]; direct: %"PRIu32"\n",
+                           inode.i_block[4]);
+    fprintf_yellow(stdout, "i_block[5]; direct: %"PRIu32"\n",
+                           inode.i_block[5]);
+    fprintf_yellow(stdout, "i_block[6]; direct: %"PRIu32"\n",
+                           inode.i_block[6]);
+    fprintf_yellow(stdout, "i_block[7]; direct: %"PRIu32"\n",
+                           inode.i_block[7]);
+    fprintf_yellow(stdout, "i_block[8]; direct: %"PRIu32"\n",
+                           inode.i_block[8]);
+    fprintf_yellow(stdout, "i_block[9]; direct: %"PRIu32"\n",
+                           inode.i_block[9]);
+    fprintf_yellow(stdout, "i_block[10]; direct: %"PRIu32"\n",
+                           inode.i_block[10]);
+    fprintf_yellow(stdout, "i_block[11]; direct: %"PRIu32"\n",
+                           inode.i_block[11]);
+    fprintf_yellow(stdout, "i_block[12]; indirect: %"PRIu32"\n",
+                           inode.i_block[12]);
+    fprintf_yellow(stdout, "i_block[13]; doubly-indirect: %"PRIu32"\n",
+                           inode.i_block[13]);
+    fprintf_yellow(stdout, "i_block[14]; triply-indirect: %"PRIu32"\n",
+                           inode.i_block[14]);
     fprintf_yellow(stdout, "i_generation: %"PRIu32"\n",
                            inode.i_generation);
     fprintf_yellow(stdout, "i_file_acl: 0%.3"PRIo32"\n",
@@ -156,8 +235,8 @@ int print_ext2_inode(struct ext2_inode inode)
                            inode.i_dir_acl);
     fprintf_yellow(stdout, "i_faddr: %"PRIu32"\n",
                            inode.i_faddr);
-    /* uint8_t i_osd2[8] */
-    return 0;
+    print_ext2_inode_osd2(inode.i_osd2);
+    return ret;
 }
 
 int print_ext2_block_group_descriptor(struct ext2_block_group_descriptor bgd)

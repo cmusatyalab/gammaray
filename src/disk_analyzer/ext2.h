@@ -95,5 +95,6 @@ struct ext2_inode
 int print_ext2_superblock(struct ext2_superblock superblock);
 int print_ext2_block_group_descriptor(struct ext2_block_group_descriptor);
 int print_ext2_inode(struct ext2_inode);
+int print_ext2_dir_entries(uint8_t* bytes, uint32_t len);
 
 #endif

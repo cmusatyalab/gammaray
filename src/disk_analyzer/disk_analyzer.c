@@ -212,6 +212,7 @@ int analyze_ext2_block_group_descriptor(FILE * disk, long int offset)
 
 int analyze_ext2_inode_table(FILE * disk, long int offset)
 {
+    int ret = 0;
     struct ext2_inode inode;
     fprintf_light_cyan(stdout, "\n\nAnalyzing ext2 inode Table at "
                                "Position 0x%lx\n", offset);
@@ -229,7 +230,32 @@ int analyze_ext2_inode_table(FILE * disk, long int offset)
         return EXIT_FAILURE;
     }
 
-    print_ext2_inode(inode);
+    ret =print_ext2_inode(inode);
+
+    return ret;
+}
+
+int analyze_ext2_dir_entries(FILE * disk, long int offset)
+{
+
+    uint8_t buf[1024];
+    fprintf_light_cyan(stdout, "\n\nAnalyzing ext2 dir entries at "
+                               "Position 0x%lx\n", offset);
+
+    if (fseek(disk, offset, 0))
+    {
+        fprintf_light_red(stderr, "Error seeking to position 0x%lx.\n",
+                          offset);
+    }
+
+    if (fread(buf, 1, 1024, disk) != 1024)
+    {
+        fprintf_light_red(stdout, "Error while trying to read ext2 data "
+                                  "block.\n");
+        return EXIT_FAILURE;
+    }
+
+    print_ext2_dir_entries(buf, 1024);
 
     return EXIT_SUCCESS;
 }
@@ -257,10 +283,30 @@ int main(int argc, char* args[])
         return EXIT_FAILURE;
     }
 
+    int ret = 0;
     analyze_mbr(disk, 0x0);
     analyze_ext2_superblock(disk, 0x7e00 + 1024);
     analyze_ext2_block_group_descriptor(disk, 0x7e00 + 1024*2);
-    analyze_ext2_inode_table(disk, 0x7e00 + 1024*40 + sizeof(struct ext2_inode));
+    fprintf_light_cyan(stdout, "\nBad Blocks Inode");
+    analyze_ext2_inode_table(disk, 0x7e00 + 1024*40);
+    fprintf_light_cyan(stdout, "\nRoot Directory Inode");
+    ret = analyze_ext2_inode_table(disk, 0x7e00 + 1024*40 + sizeof(struct ext2_inode));
+    if (ret)
+        analyze_ext2_dir_entries(disk, 0x7e00 + 1024*ret);
+    fprintf_light_cyan(stdout, "\nACL Index Inode");
+    analyze_ext2_inode_table(disk, 0x7e00 + 1024*40 + 2*sizeof(struct ext2_inode));
+    fprintf_light_cyan(stdout, "\nACL Data Inode");
+    analyze_ext2_inode_table(disk, 0x7e00 + 1024*40 + 3*sizeof(struct ext2_inode));
+    fprintf_light_cyan(stdout, "\nBoot Loader Inode");
+    analyze_ext2_inode_table(disk, 0x7e00 + 1024*40 + 4*sizeof(struct ext2_inode));
+    fprintf_light_cyan(stdout, "\nUndelete Directory Inode");
+    analyze_ext2_inode_table(disk, 0x7e00 + 1024*40 + 5*sizeof(struct ext2_inode));
+    fprintf_light_cyan(stdout, "\nFirst File Inode -- s_first_ino");
+    analyze_ext2_inode_table(disk, 0x7e00 + 1024*40 + 10*sizeof(struct ext2_inode));
+    fprintf_light_cyan(stdout, "\nSecond File Inode");
+    analyze_ext2_inode_table(disk, 0x7e00 + 1024*40 + 11*sizeof(struct ext2_inode));
+    fprintf_light_cyan(stdout, "\nThird File Inode");
+    analyze_ext2_inode_table(disk, 0x7e00 + 1024*40 + 12*sizeof(struct ext2_inode));
 
     return EXIT_SUCCESS;
 }
