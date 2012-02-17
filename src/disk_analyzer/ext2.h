@@ -89,7 +89,7 @@ struct ext2_inode
     uint32_t i_file_acl;
     uint32_t i_dir_acl;
     uint32_t i_faddr;
-    uint8_t  i_osd2[8];
+    uint8_t  i_osd2[12];
 } __attribute__((packed));
 
 int print_ext2_superblock(struct ext2_superblock superblock);
