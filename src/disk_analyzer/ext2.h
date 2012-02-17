@@ -56,8 +56,21 @@ struct ext2_superblock
     uint8_t  padding[3];
     uint32_t s_default_mount_options;
     uint32_t s_first_meta_bg;
-}__attribute__((packed));
+} __attribute__((packed));
+
+struct ext2_block_group_descriptor
+{
+    uint32_t bg_block_bitmap;
+    uint32_t bg_inode_bitmap;
+    uint32_t bg_inode_table;
+    uint16_t bg_free_blocks_count;
+    uint16_t bg_free_inodes_count;
+    uint16_t bg_used_dirs_count;
+    uint16_t bg_pad;
+    uint8_t  bg_reserved[12];
+} __attribute__((packed));
 
 int print_ext2_superblock(struct ext2_superblock superblock);
+int print_ext2_block_group_descriptor(struct ext2_block_group_descriptor);
 
 #endif

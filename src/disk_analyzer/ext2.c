@@ -18,6 +18,26 @@ char* s_errors_LUT[] = {
                                 "EXT2_ERRORS_PANIC"
                        };
 
+int print_ext2_block_group_descriptor(struct ext2_block_group_descriptor bgd)
+{
+    fprintf_yellow(stdout, "bg_block_bitmap: %"PRIu32"\n",
+                            bgd.bg_block_bitmap);
+    fprintf_yellow(stdout, "bg_inode_bitmap: %"PRIu32"\n",
+                            bgd.bg_inode_bitmap);
+    fprintf_yellow(stdout, "bg_inode_table: %"PRIu32"\n",
+                            bgd.bg_inode_table);
+    fprintf_yellow(stdout, "bg_free_blocks_count: %"PRIu16"\n",
+                            bgd.bg_free_blocks_count);
+    fprintf_yellow(stdout, "bg_free_inodes_count: %"PRIu16"\n",
+                            bgd.bg_free_inodes_count);
+    fprintf_yellow(stdout, "bg_used_dirs_count: %"PRIu16"\n",
+                            bgd.bg_used_dirs_count);
+    fprintf_yellow(stdout, "bg_pad: %"PRIu16"\n",
+                            bgd.bg_pad);
+    // bgd.bg_reserved
+    return 0;
+}
+
 int print_ext2_superblock(struct ext2_superblock superblock)
 {
     fprintf_yellow(stdout, "s_inodes_count: %"PRIu32"\n",
