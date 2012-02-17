@@ -18,10 +18,57 @@ char* s_errors_LUT[] = {
                                 "EXT2_ERRORS_PANIC"
                        };
 
+int print_inode_mode(uint16_t i_mode)
+{
+    fprintf_yellow(stdout, "\t(  ");
+    if (i_mode & 0x1)
+        fprintf_blue(stdout, "EXT2_SECRM_FL | ");
+    if (i_mode & 0x2)
+        fprintf_blue(stdout, "EXT2_UNRM_FL | ");    
+    if (i_mode & 0x4)
+        fprintf_blue(stdout, "EXT2_COMPR_FL | ");
+    if (i_mode & 0x8)
+        fprintf_blue(stdout, "EXT2_SYNC_FL | ");
+
+    /* compression */
+    if (i_mode & 0x10)
+        fprintf_blue(stdout, "EXT2_IMMUTABLE_FL | ");
+    if (i_mode & 0x20)
+        fprintf_blue(stdout, "EXT2_APPEND_FL | ");
+    if (i_mode & 0x40)
+        fprintf_blue(stdout, "EXT2_NODUMP_FL | ");
+    if (i_mode & 0x80)
+        fprintf_blue(stdout, "EXT2_NOATIME_FL | ");
+
+    if (i_mode & 0x100)
+        fprintf_blue(stdout, "EXT2_DIRTY_FL | ");
+    if (i_mode & 0x200)
+        fprintf_blue(stdout, "EXT2_COMPRBLK_FL | ");
+    if (i_mode & 0x400)
+        fprintf_blue(stdout, "EXT2_NOCOMPR_FL | ");
+    if (i_mode & 0x800)
+        fprintf_blue(stdout, "EXT2_ECOMPR_FL | ");
+
+    if (i_mode & 0x1000)
+        fprintf_blue(stdout, "EXT2_BTREE_FL | ");
+    if (i_mode & 0x2000)
+        fprintf_blue(stdout, "EXT2_INDEX_FL | ");
+    if (i_mode & 0x4000)
+        fprintf_blue(stdout, "EXT2_IMAGIC_FL | ");
+    if (i_mode & 0x8000)
+        fprintf_blue(stdout, "EXT3_JOURNAL_DATA_FL | ");
+
+    if (i_mode & 0x80000000)
+        fprintf_blue(stdout, "EXT2_RESERVED_FL | ");
+
+   fprintf_yellow(stdout, "\b\b )\n");
+   return 0;
+}
 int print_ext2_inode(struct ext2_inode inode)
 {
-    fprintf_yellow(stdout, "i_mode: %"PRIu16"\n",
+    fprintf_yellow(stdout, "i_mode: 0x%"PRIx16"\n",
                            inode.i_mode);
+    print_inode_mode(inode.i_mode);
     fprintf_yellow(stdout, "i_uid: %"PRIu16"\n",
                            inode.i_uid);
     fprintf_yellow(stdout, "i_size: %"PRIu32"\n",
