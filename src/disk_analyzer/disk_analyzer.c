@@ -230,7 +230,7 @@ int analyze_ext2_inode_table(FILE * disk, long int offset)
         return EXIT_FAILURE;
     }
 
-    ret =print_ext2_inode(inode);
+    ret = print_ext2_inode(inode);
 
     return ret;
 }
@@ -292,7 +292,20 @@ int main(int argc, char* args[])
     fprintf_light_cyan(stdout, "\nRoot Directory Inode");
     ret = analyze_ext2_inode_table(disk, 0x7e00 + 1024*40 + sizeof(struct ext2_inode));
     if (ret)
+    {
         analyze_ext2_dir_entries(disk, 0x7e00 + 1024*ret);
+        analyze_ext2_dir_entries(disk, 0x7e00 + 1024*ret + 12);
+        analyze_ext2_dir_entries(disk, 0x7e00 + 1024*ret + 24);
+        analyze_ext2_dir_entries(disk, 0x7e00 + 1024*ret + 44);
+    }
+    simple_find(0x7e00 + 1024*40, disk, 2, "/");
+    return EXIT_SUCCESS;
+    ret = analyze_ext2_inode_table(disk, 0x7e00 + 1024*40 + sizeof(struct ext2_inode)*10);
+    if (ret)
+    {
+        analyze_ext2_dir_entries(disk, 0x7e00 + 1024*ret);
+        analyze_ext2_dir_entries(disk, 0x7e00 + 1024*(ret) + 12);
+    }
     fprintf_light_cyan(stdout, "\nACL Index Inode");
     analyze_ext2_inode_table(disk, 0x7e00 + 1024*40 + 2*sizeof(struct ext2_inode));
     fprintf_light_cyan(stdout, "\nACL Data Inode");

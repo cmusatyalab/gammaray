@@ -96,5 +96,7 @@ int print_ext2_superblock(struct ext2_superblock superblock);
 int print_ext2_block_group_descriptor(struct ext2_block_group_descriptor);
 int print_ext2_inode(struct ext2_inode);
 int print_ext2_dir_entries(uint8_t* bytes, uint32_t len);
+int simple_find(uint32_t inode_table_location,
+                FILE* disk, uint32_t inode, char* path_prefix);
 
 #endif

@@ -1,12 +1,14 @@
 #include "ext2.h"
 
+#include <string.h>
+
 struct ext2_dir_entry
 {
-    uint32_t inode;
-    uint16_t rec_len;
-    uint8_t name_len;
-    uint8_t file_type;
-    uint8_t name[255];
+    uint32_t inode;     /* 4 bytes */
+    uint16_t rec_len;   /* 6 bytes */
+    uint8_t name_len;   /* 7 bytes */
+    uint8_t file_type;  /* 8 bytes */
+    uint8_t name[255];  /* 263 bytes */
 } __attribute__((packed));
 
 char* s_creator_os_LUT[] = {
@@ -27,12 +29,20 @@ char* s_errors_LUT[] = {
                                 "EXT2_ERRORS_PANIC"
                        };
 
-int print_ext2_dir_entry(uint32_t entry, uint8_t* data)
+int print_ext2_dir_entry(uint32_t entry, struct ext2_dir_entry dir)
 {
-    struct ext2_dir_entry dir = *((struct ext2_dir_entry*) data);
-
-    fprintf_yellow(stdout, "%s", dir.name);
-    //fprintf(stdout, "\n\n")
+    fprintf_yellow(stdout, "%d ext2_dir_entry.inode: %"PRIu32"\n", entry,
+                           dir.inode);
+    fprintf_yellow(stdout, "%d ext2_dir_entry.rec_len: %"PRIu16"\n", entry,
+                           dir.rec_len);
+    fprintf_yellow(stdout, "%d ext2_dir_entry.name_len: %"PRIu8"\n", entry,
+                           dir.name_len);
+    if (dir.name_len < 256)
+        dir.name[dir.name_len] = '\0';
+    else
+        dir.name[0] = '\0';
+    fprintf_yellow(stdout, "%d ext2_dir_entry.name: %s\n", entry, dir.name);
+    fprintf(stdout, "\n\n");
     return 0;
 } 
 
@@ -42,8 +52,107 @@ int print_ext2_dir_entries(uint8_t* bytes, uint32_t len)
     uint32_t num_entries = len / sizeof(struct ext2_dir_entry);
 
     for (i = 0; i < num_entries; i++)
-        print_ext2_dir_entry(i, bytes+i*sizeof(struct ext2_dir_entry));
+        print_ext2_dir_entry(i, *((struct ext2_dir_entry*)
+                                  (bytes + i*sizeof(struct ext2_dir_entry))));
     return 0;
+}
+
+int read_inode(FILE* disk, uint32_t inode_table_offset,
+               uint32_t inode_number, struct ext2_inode* inode)
+{
+   if (fseek(disk, inode_table_offset + (inode_number-1)*sizeof(struct ext2_inode), 0))
+    {
+        fprintf_light_red(stderr, "Error seeking to position 0x%lx.\n",
+                          inode_table_offset);
+        return -1;
+    }
+
+    if (fread(inode, 1, sizeof(struct ext2_inode), disk) != sizeof(struct ext2_inode))
+    {
+        fprintf_light_red(stdout, "Error while trying to read ext2 inode.\n");
+        return -1;
+    }
+
+    return 0;
+}
+
+int read_dir_entry(uint32_t offset, FILE* disk, struct ext2_dir_entry* dir)
+{
+   if (fseek(disk, offset, 0))
+    {
+        fprintf_light_red(stderr, "Error seeking to position 0x%lx.\n",
+                          offset);
+        return -1;
+    }
+
+    if (fread(dir, 1, sizeof(struct ext2_dir_entry), disk) != sizeof(struct ext2_dir_entry))
+    {
+        fprintf_light_red(stdout, "Error while trying to read ext2 dir"
+                                  "entry.\n");
+        return -1;
+    }
+
+    if (dir->name_len < 256)
+        dir->name[dir->name_len] = '\0';
+    else
+        dir->name[0] = '\0';
+
+    return dir->rec_len;
+
+}
+
+
+/* depth first find */
+int simple_find(uint32_t inode_table_offset,
+                FILE* disk, uint32_t inode_number, char* path_prefix)
+{
+    /* go inode by inode */
+    struct ext2_inode inode;
+    struct ext2_dir_entry dir;
+    char path[4096] = {0};
+    uint16_t dir_entry_offset = 0, total_offset = 0;
+    uint32_t dir_block = 0;
+    uint32_t block_group_offset = 8192*1024*((inode_number - 1) / 1136);
+    //fprintf_light_cyan(stdout, "inode table offset: 0x%"PRIx32" inode: %"PRIu32"\n",
+    //                           inode_table_offset, inode_number);
+    
+    /* start crawling root inode */
+    read_inode(disk, inode_table_offset+block_group_offset, inode_number % 1136,
+               &inode);
+    //print_ext2_inode(inode);
+    dir_block = inode.i_block[0]; 
+    if (inode.i_mode & 0x8000)
+        return 0;
+    if (dir_block == 0)
+        return 0;
+
+    while(total_offset < 1024)
+    {
+        //fprintf_light_red(stdout, "reading data block: %"PRIu32"\n", dir_block);
+        dir_entry_offset = read_dir_entry(0x7e00 + 1024*(dir_block%8192) +
+                                          total_offset + block_group_offset, disk, &dir);
+        total_offset += dir_entry_offset;
+
+        if (strcmp((const char *) dir.name, ".") == 0 ||
+            strcmp((const char *) dir.name, "..") == 0)
+            continue;
+
+        //print_ext2_dir_entry(0, dir);
+        //fprintf_light_red(stdout, "total_offset: %"PRIu16"\n", total_offset);
+        strcpy(path, path_prefix);
+        strcat(path, (char*) dir.name);
+        fprintf_yellow(stdout, "%s\n", path);
+
+        strcat(path, "/");
+        //fprintf_light_red(stdout, "recursing deeper...inode: %"PRIu32"\n", dir.inode);
+        //read_inode(disk, inode_table_offset+block_group_offset, inode_number % 1136, &inode);
+        //print_ext2_inode(inode);
+
+        simple_find(inode_table_offset, disk, dir.inode, path);
+    }
+    
+
+    return 0; 
 }
 
 int print_inode_mode(uint16_t i_mode)
