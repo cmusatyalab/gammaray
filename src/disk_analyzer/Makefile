@@ -4,5 +4,9 @@ default:
 test: default
 	@./disk_analyzer /home/wolf/Dropbox/Projects/xray/sample/tinycore.raw
 
+demo: default
+	./disk_analyzer /home/wolf/Dropbox/Projects/xray/sample/tinycore.raw | \
+	less -ru
+
 clean:
 	@rm disk_analyzer *.gch
