@@ -2,6 +2,9 @@
 
 #include <string.h>
 
+#include <sys/stat.h> 
+#include <sys/types.h>
+
 struct ext2_dir_entry
 {
     uint32_t inode;     /* 4 bytes */
@@ -28,6 +31,252 @@ char* s_errors_LUT[] = {
                                 "","EXT2_ERRORS_CONTINUE","EXT2_ERRORS_RO",
                                 "EXT2_ERRORS_PANIC"
                        };
+
+uint32_t compute_block_offset(uint32_t first_block_group_offset,
+                             uint32_t block_size,
+                             uint32_t block_num)
+{
+    return first_block_group_offset + block_size * block_num;
+}
+
+int read_block(FILE* disk, uint32_t partition_offset, uint32_t block_size,
+               uint32_t block, uint8_t* buf)
+{
+    uint32_t offset = compute_block_offset(partition_offset, block_size, 
+                                          block);
+
+   if (fseek(disk, offset, 0))
+    {
+        fprintf_light_red(stderr, "Error seeking to position 0x%lx.\n", 
+                                  offset);
+        return -1;
+    }
+
+    if (fread(buf, 1, block_size, disk) != block_size)
+    {
+        fprintf_light_red(stdout, "Error while trying to read block.\n");
+        return -1;
+    }
+
+    return 0;
+}
+
+int write_block(FILE* dest, uint32_t total_size, uint32_t block_size,
+                uint8_t* buf)
+{
+    if (total_size <= block_size)
+    {
+        if (fwrite(buf, 1, total_size, dest) != total_size)
+        {
+            fprintf_light_red(stderr, "Error writing to destination file."
+                                      "\n");
+            return -1;
+        }
+        return 0;
+    }
+    else
+    {
+        if (fwrite(buf, 1, block_size, dest) != block_size)
+        {
+            fprintf_light_red(stderr, "Error writing to destination file."
+                                      "\n");
+            return -1;
+        }
+        total_size -= block_size;
+    }
+    return total_size;
+}
+
+int reconstruct_file(FILE* disk, FILE* dest, struct ext2_inode inode,
+                     uint32_t partition_offset, uint32_t block_size)
+{
+    /* total file size */
+    int i, j, k;
+    uint32_t total_size = inode.i_size;
+    uint8_t buf[block_size];
+    uint32_t indirect_buf[block_size], double_buf[block_size],
+             treble_buf[block_size];
+
+    /* block positions 0-11 are direct */
+    for (i = 0; i < 12; i++)
+    {
+        if (inode.i_block[i] == 0)
+            return 0;
+
+        if (read_block(disk, partition_offset, block_size, inode.i_block[i],
+                       buf))
+        {
+            fprintf_light_red(stderr, "Error reading direct block %"PRIu32
+                                      "\n", inode.i_block[i]);
+            return -1;
+        }
+
+        total_size = write_block(dest, total_size, block_size, buf);
+        
+        if (total_size < 0)
+        {
+            fprintf_light_red(stderr, "Error while writing direct block.\n");
+            return -1;
+        }
+
+        if (total_size == 0)
+            return 0;
+    }
+
+    /* block position 12 is indirect */
+    if (inode.i_block[i] == 0)
+        return 0;
+
+    if (read_block(disk, partition_offset, block_size, inode.i_block[i++],
+                   (uint8_t*) indirect_buf))
+    {
+        fprintf_light_red(stderr, "Error reading direct block %"PRIu32
+                                  "\n", inode.i_block[--i]);
+        return -1;
+    }
+
+    for (j = 0; j < (block_size / sizeof(uint32_t)); j++)
+    {
+        if (indirect_buf[j] == 0)
+            return 0;
+
+        if(read_block(disk, partition_offset, block_size,
+                      indirect_buf[j], buf))
+        {
+            fprintf_light_red(stderr, "Error reading direct block %"PRIu32
+                                      "\n");
+            return -1;
+        }
+
+        total_size = write_block(dest, total_size, block_size, buf);
+        
+        if (total_size < 0)
+        {
+            fprintf_light_red(stderr, "Error while writing direct block.\n");
+            return -1;
+        }
+
+        if (total_size == 0)
+            return 0;
+    }
+
+    /* block position 13 is doubly indirect */
+    if (inode.i_block[i] == 0)
+        return 0;
+
+    if (read_block(disk, partition_offset, block_size, inode.i_block[i++],
+                   (uint8_t*) double_buf))
+    {
+        fprintf_light_red(stderr, "Error reading direct block %"PRIu32
+                                  "\n", inode.i_block[--i]);
+        return -1;
+    }
+
+    for (j = 0; j < (block_size / sizeof(uint32_t)); j++)
+    {
+        if (double_buf[j] == 0)
+            return 0;
+
+        if(read_block(disk, partition_offset, block_size,
+                      double_buf[j], (uint8_t*) indirect_buf))
+        {
+            fprintf_light_red(stderr, "Error reading indirect block %"PRIu32
+                                      "\n", double_buf[j]);
+            return -1;
+        }
+
+        for (k = 0; k < (block_size / sizeof(uint32_t)); k++)
+        {
+            if (indirect_buf[k] == 0)
+                return 0;
+
+            if(read_block(disk, partition_offset, block_size,
+                          indirect_buf[k], (uint8_t*) buf))
+            {
+                fprintf_light_red(stderr, "Error reading indirect block %"PRIu32
+                                          "\n", indirect_buf[k]);
+                return -1;
+            }
+
+            total_size = write_block(dest, total_size, block_size, buf);
+            
+            if (total_size < 0)
+            {
+                fprintf_light_red(stderr, "Error while writing direct block.\n");
+                return -1;
+            }
+
+            if (total_size == 0)
+                return 0;
+        }
+    }
+
+    /* block position 14 is trebly indirect */
+    if (inode.i_block[i] == 0)
+        return 0;
+
+    if (read_block(disk, partition_offset, block_size, inode.i_block[i],
+                   (uint8_t*) treble_buf))
+    {
+        fprintf_light_red(stderr, "Error reading direct block %"PRIu32
+                                  "\n", inode.i_block[i]);
+        return -1;
+    }
+
+    for (i = 0; i < (block_size / sizeof(uint32_t)); i++)
+    {
+        if (treble_buf[i] == 0)
+            return 0;
+
+        if(read_block(disk, partition_offset, block_size,
+                      treble_buf[i], (uint8_t*) double_buf))
+        {
+            fprintf_light_red(stderr, "Error reading indirect block %"PRIu32
+                                      "\n", treble_buf[i]);
+            return -1;
+        }
+
+        for (j = 0; j < (block_size / sizeof(uint32_t)); j++)
+        {
+            if (double_buf[j] == 0)
+                return 0;
+
+            if(read_block(disk, partition_offset, block_size,
+                          double_buf[j], (uint8_t*) indirect_buf))
+            {
+                fprintf_light_red(stderr, "Error reading indirect block %"PRIu32
+                                          "\n", double_buf[j]);
+                return -1;
+            }
+
+            for (k = 0; k < (block_size / sizeof(uint32_t)); k++)
+            {
+                if (indirect_buf[k] == 0)
+                    return 0;
+
+                if(read_block(disk, partition_offset, block_size,
+                              indirect_buf[k], (uint8_t*) buf))
+                {
+                    fprintf_light_red(stderr, "Error reading indirect block %"PRIu32
+                                              "\n", indirect_buf[k]);
+                    return -1;
+                }
+
+                total_size = write_block(dest, total_size, block_size, buf);
+                
+                if (total_size < 0)
+                {
+                    fprintf_light_red(stderr, "Error while writing direct block.\n");
+                    return -1;
+                }
+
+                if (total_size == 0)
+                    return 0;
+            }
+        }
+    }
+    return 0;
+}
 
 int print_ext2_dir_entry(uint32_t entry, struct ext2_dir_entry dir)
 {
@@ -98,9 +347,57 @@ int read_dir_entry(uint32_t offset, FILE* disk, struct ext2_dir_entry* dir)
         dir->name[0] = '\0';
 
     return dir->rec_len;
-
 }
 
+mode_t get_inode_mode(uint16_t i_mode)
+{
+    mode_t mode = 0;
+
+    /* file format */
+    if ((i_mode & 0xc000) == 0xc000)
+        mode |= S_IFSOCK;
+    if ((i_mode & 0xa000) == 0xa000)
+        mode |= S_IFLNK;
+    if (i_mode & 0x8000)
+        mode |= S_IFREG;
+    if ((i_mode & 0x6000) == 0x6000)
+        mode |= S_IFBLK;
+    if (i_mode & 0x4000)
+        mode |= S_IFDIR;
+    if (i_mode & 0x2000)
+        mode |= S_IFCHR;
+    if (i_mode & 0x1000)
+        mode |= S_IFIFO;
+
+    /* process execution/group override */
+    if (i_mode & 0x0800)
+        mode |= S_ISUID;
+    if (i_mode & 0x0400)
+        mode |= S_ISGID;
+    if (i_mode & 0x0200)
+        mode |= S_ISVTX;
+
+    /* access control */
+    if (i_mode & 0x0100)
+        mode |= S_IRUSR;
+    if (i_mode & 0x0080)
+        mode |= S_IWUSR;
+    if (i_mode & 0x0040)
+        mode |= S_IXUSR;
+    if (i_mode & 0x0020)
+        mode |= S_IRGRP;
+    if (i_mode & 0x0010)
+        mode |= S_IWGRP;
+    if (i_mode & 0x0008)
+        mode |= S_IXGRP;
+    if (i_mode & 0x0004)
+        mode |= S_IROTH;
+    if (i_mode & 0x0002)
+        mode |= S_IWOTH;
+    if (i_mode & 0x0001)
+        mode |= S_IXOTH;
+    return mode;
+}
 
 /* depth first find */
 int simple_find(uint32_t inode_table_offset,
@@ -109,7 +406,7 @@ int simple_find(uint32_t inode_table_offset,
     /* go inode by inode */
     struct ext2_inode inode;
     struct ext2_dir_entry dir;
-    char path[4096] = {0};
+    char path[4096] = {0}, reconstructed[4096] = {'/','t','m','p','/','\0'};
     uint16_t dir_entry_offset = 0, total_offset = 0;
     uint32_t dir_block = 0;
     uint32_t block_group_offset = 8192*1024*((inode_number - 1) / 1136);
@@ -120,9 +417,47 @@ int simple_find(uint32_t inode_table_offset,
     read_inode(disk, inode_table_offset+block_group_offset, inode_number % 1136,
                &inode);
     //print_ext2_inode(inode);
-    dir_block = inode.i_block[0]; 
+    dir_block = inode.i_block[0];
+    
+    /* create folder */
+    if (inode.i_mode & 0x4000)
+    {
+        if (path_prefix[1])
+        {
+            strcat(reconstructed, &(path_prefix[1]));
+            fprintf_light_red(stdout, "Creating dir: %s\n", reconstructed);
+            mkdir(reconstructed, get_inode_mode(inode.i_mode));
+        }
+    }
+    
+    /* reconstruct file for debugging */
     if (inode.i_mode & 0x8000)
+    {
+        strcat(reconstructed, &(path_prefix[1]));
+        reconstructed[strlen(reconstructed) - 1] = '\0';
+        FILE* dest = fopen(reconstructed, "wb");
+
+        if (dest == NULL)
+        {
+            fprintf_light_red(stderr, "Failed opening reconstruction file %s."
+                                      "\n", reconstructed);
+            return -1;
+        }
+
+        if (reconstruct_file(disk, dest, inode, 0x7e00, 1024))
+        {
+            fprintf_light_red(stderr, "Reconstructing file failed.");
+            fclose(dest);
+            return -1;
+        }
+
+        fprintf_light_yellow(stdout, "Reconstructed file: %s\n",
+                                     reconstructed);
+
+        fclose(dest);
         return 0;
+    }
+
     if (dir_block == 0)
         return 0;
 

@@ -321,5 +321,7 @@ int main(int argc, char* args[])
     fprintf_light_cyan(stdout, "\nThird File Inode");
     analyze_ext2_inode_table(disk, 0x7e00 + 1024*40 + 12*sizeof(struct ext2_inode));
 
+    fclose(disk);
+
     return EXIT_SUCCESS;
 }
