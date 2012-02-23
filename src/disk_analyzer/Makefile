@@ -4,6 +4,9 @@ default:
 test: default
 	@./disk_analyzer /home/wolf/Dropbox/Projects/xray/sample/tinycore.raw
 
+bigtest: default
+	@./disk_analyzer /home/wolf/sample_virtual_disks/tinycore_big.img
+
 demo: default
 	./disk_analyzer /home/wolf/Dropbox/Projects/xray/sample/tinycore.raw | \
 	less -ru
