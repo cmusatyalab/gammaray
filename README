@@ -3,3 +3,9 @@ Notes:
             qemu-img create -f raw tinycore.raw 12M
     (2) OS Installation -- Used virt-manager GUI
             sudo virt-manager
+
+Requirements:
+
+    (1) protobuf serialization and deserialization
+    (2) snappy for compression on network traffic
+    (3) ZeroMQ for communication
