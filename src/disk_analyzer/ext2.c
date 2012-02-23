@@ -92,7 +92,8 @@ int reconstruct_file(FILE* disk, FILE* dest, struct ext2_inode inode,
 {
     /* total file size */
     int i, j, k;
-    uint32_t total_size = inode.i_size;
+    uint64_t total_size = ((uint64_t) inode.i_dir_acl) << 32;
+    total_size |= inode.i_size;
     uint8_t buf[block_size];
     uint32_t indirect_buf[block_size], double_buf[block_size],
              treble_buf[block_size];
@@ -309,7 +310,7 @@ int print_ext2_dir_entries(uint8_t* bytes, uint32_t len)
 int read_inode(FILE* disk, uint32_t inode_table_offset,
                uint32_t inode_number, struct ext2_inode* inode)
 {
-   if (fseek(disk, inode_table_offset + (inode_number-1)*sizeof(struct ext2_inode), 0))
+   if (fseek(disk, inode_table_offset + (inode_number-1)*256, 0))
     {
         fprintf_light_red(stderr, "Error seeking to position 0x%lx.\n",
                           inode_table_offset);
@@ -409,12 +410,12 @@ int simple_find(uint32_t inode_table_offset,
     char path[4096] = {0}, reconstructed[4096] = {'/','t','m','p','/','\0'};
     uint16_t dir_entry_offset = 0, total_offset = 0;
     uint32_t dir_block = 0;
-    uint32_t block_group_offset = 8192*1024*((inode_number - 1) / 1136);
+    uint32_t block_group_offset = 32768*(1024<<2)*((inode_number - 1) / 8192);
     //fprintf_light_cyan(stdout, "inode table offset: 0x%"PRIx32" inode: %"PRIu32"\n",
     //                           inode_table_offset, inode_number);
     
     /* start crawling root inode */
-    read_inode(disk, inode_table_offset+block_group_offset, inode_number % 1136,
+    read_inode(disk, inode_table_offset+block_group_offset, inode_number % 8192,
                &inode);
     //print_ext2_inode(inode);
     dir_block = inode.i_block[0];
@@ -444,7 +445,7 @@ int simple_find(uint32_t inode_table_offset,
             return -1;
         }
 
-        if (reconstruct_file(disk, dest, inode, 0x7e00, 1024))
+        if (reconstruct_file(disk, dest, inode, 0x7e00, 1024<<2))
         {
             fprintf_light_red(stderr, "Reconstructing file failed.");
             fclose(dest);
@@ -461,10 +462,10 @@ int simple_find(uint32_t inode_table_offset,
     if (dir_block == 0)
         return 0;
 
-    while(total_offset < 1024)
+    while(total_offset < (1024<<2))
     {
         //fprintf_light_red(stdout, "reading data block: %"PRIu32"\n", dir_block);
-        dir_entry_offset = read_dir_entry(0x7e00 + 1024*(dir_block%8192) +
+        dir_entry_offset = read_dir_entry(0x7e00 + (1024<<2)*(dir_block%32768) +
                                           total_offset + block_group_offset, disk, &dir);
         total_offset += dir_entry_offset;
 

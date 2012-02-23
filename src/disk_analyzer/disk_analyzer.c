@@ -5,7 +5,7 @@
  *                                                                           *
  *****************************************************************************/
 
-
+#define _FILE_OFFSET_BITS 64
 #define UINT_16(s) (uint16_t) s
 #define UINT_32(i) (uint32_t) i
 
@@ -278,29 +278,30 @@ int main(int argc, char* args[])
     
     if (disk == NULL)
     {
-        fprintf_light_red(stderr, "Error opening raw disk file."
+        fprintf_light_red(stderr, "Error opening raw disk file. "
                                   "Does it exist?\n");
         return EXIT_FAILURE;
     }
 
-    int ret = 0;
+    //int ret = 0;
     analyze_mbr(disk, 0x0);
-    analyze_ext2_superblock(disk, 0x7e00 + 1024);
-    analyze_ext2_block_group_descriptor(disk, 0x7e00 + 1024*2);
+    /* MBR sector size constant 512 bytes */
+    analyze_ext2_superblock(disk, 0x7e00 + 1024); /* Computation: sector size * LBA of first sector = 0x7e00) */
+    analyze_ext2_block_group_descriptor(disk, 0x7e00 + (1024<<2));
     fprintf_light_cyan(stdout, "\nBad Blocks Inode");
-    analyze_ext2_inode_table(disk, 0x7e00 + 1024*40);
+    analyze_ext2_inode_table(disk, 0x7e00 + (1024<<2)*643);
     fprintf_light_cyan(stdout, "\nRoot Directory Inode");
-    ret = analyze_ext2_inode_table(disk, 0x7e00 + 1024*40 + sizeof(struct ext2_inode));
-    if (ret)
+    analyze_ext2_inode_table(disk, 0x7e00 + (1024<<2)*643 + 256);
+/*    if (ret)
     {
         analyze_ext2_dir_entries(disk, 0x7e00 + 1024*ret);
         analyze_ext2_dir_entries(disk, 0x7e00 + 1024*ret + 12);
         analyze_ext2_dir_entries(disk, 0x7e00 + 1024*ret + 24);
         analyze_ext2_dir_entries(disk, 0x7e00 + 1024*ret + 44);
-    }
-    simple_find(0x7e00 + 1024*40, disk, 2, "/");
+    }*/
+    simple_find(0x7e00 + (1024<<2)*643, disk, 2, "/");
     return EXIT_SUCCESS;
-    ret = analyze_ext2_inode_table(disk, 0x7e00 + 1024*40 + sizeof(struct ext2_inode)*10);
+    /*ret = analyze_ext2_inode_table(disk, 0x7e00 + 1024*40 + sizeof(struct ext2_inode)*10);
     if (ret)
     {
         analyze_ext2_dir_entries(disk, 0x7e00 + 1024*ret);
@@ -319,7 +320,7 @@ int main(int argc, char* args[])
     fprintf_light_cyan(stdout, "\nSecond File Inode");
     analyze_ext2_inode_table(disk, 0x7e00 + 1024*40 + 11*sizeof(struct ext2_inode));
     fprintf_light_cyan(stdout, "\nThird File Inode");
-    analyze_ext2_inode_table(disk, 0x7e00 + 1024*40 + 12*sizeof(struct ext2_inode));
+    analyze_ext2_inode_table(disk, 0x7e00 + 1024*40 + 12*sizeof(struct ext2_inode));*/
 
     fclose(disk);
 
