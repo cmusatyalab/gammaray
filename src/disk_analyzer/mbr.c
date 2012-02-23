@@ -125,8 +125,6 @@ int print_mbr(struct mbr mbr)
 
 int parse_mbr(FILE* disk, struct mbr* mbr)
 {
-    /* read Master Boot Record (MBR) */
-
     if (fread(mbr, 1, sizeof(struct mbr), disk) < sizeof(struct mbr))
     {
         fprintf_light_red(stderr, "Error reading MBR from raw disk file.\n");
@@ -151,7 +149,10 @@ int64_t next_partition_offset(struct mbr mbr)
     static int i = 0;
 
     if (i >= 4)
+    {
+        i = 0;
         return -1;
+    }
 
     if (mbr.pt[i].partition_type == 0x83)
     {
