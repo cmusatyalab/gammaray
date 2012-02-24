@@ -18,113 +18,12 @@
 #include "ext2.h"
 #include "mbr.h"
 
-int analyze_ext2_superblock(FILE * disk, long int offset)
-{
-    struct ext2_superblock superblock;
-    fprintf_light_cyan(stdout, "\n\nAnalyzing ext2 Superblock at Position "
-                               "0x%lx\n", offset);
-
-    if (fseek(disk, offset, 0))
-    {
-        fprintf_light_red(stderr, "Error seeking to position 0x%lx.\n",
-                          offset);
-    }
-
-    if (fread(&superblock, 1, sizeof(struct ext2_superblock), disk) !=
-        sizeof(struct ext2_superblock))
-    {
-        fprintf_light_red(stdout, 
-                          "Error while trying to read ext2 superblock.\n");
-        return EXIT_FAILURE;
-    }
-
-    print_ext2_superblock(superblock);
-
-    return EXIT_SUCCESS;
-}
-
-int analyze_ext2_block_group_descriptor(FILE * disk, long int offset)
-{
-    struct ext2_block_group_descriptor bgd;
-    fprintf_light_cyan(stdout, "\n\nAnalyzing ext2 Block Group Descriptor at "
-                               "Position 0x%lx\n", offset);
-
-    if (fseek(disk, offset, 0))
-    {
-        fprintf_light_red(stderr, "Error seeking to position 0x%lx.\n",
-                          offset);
-    }
-
-    if (fread(&bgd, 1, sizeof(struct ext2_block_group_descriptor), disk) !=
-        sizeof(struct ext2_block_group_descriptor))
-    {
-        fprintf_light_red(stdout, 
-                          "Error while trying to read ext2 Block Group "
-                          "Descriptor.\n");
-        return EXIT_FAILURE;
-    }
-
-    print_ext2_block_group_descriptor(bgd);
-
-    return EXIT_SUCCESS;
-}
-
-int analyze_ext2_inode_table(FILE * disk, long int offset)
-{
-    int ret = 0;
-    struct ext2_inode inode;
-    fprintf_light_cyan(stdout, "\n\nAnalyzing ext2 inode Table at "
-                               "Position 0x%lx\n", offset);
-
-    if (fseek(disk, offset, 0))
-    {
-        fprintf_light_red(stderr, "Error seeking to position 0x%lx.\n",
-                          offset);
-    }
-
-    if (fread(&inode, 1, sizeof(struct ext2_inode), disk) !=
-        sizeof(struct ext2_inode))
-    {
-        fprintf_light_red(stdout, "Error while trying to read ext2 inode.\n");
-        return EXIT_FAILURE;
-    }
-
-    ret = print_ext2_inode(inode);
-
-    return ret;
-}
-
-int analyze_ext2_dir_entries(FILE * disk, long int offset)
-{
-
-    uint8_t buf[1024];
-    fprintf_light_cyan(stdout, "\n\nAnalyzing ext2 dir entries at "
-                               "Position 0x%lx\n", offset);
-
-    if (fseek(disk, offset, 0))
-    {
-        fprintf_light_red(stderr, "Error seeking to position 0x%lx.\n",
-                          offset);
-    }
-
-    if (fread(buf, 1, 1024, disk) != 1024)
-    {
-        fprintf_light_red(stdout, "Error while trying to read ext2 data "
-                                  "block.\n");
-        return EXIT_FAILURE;
-    }
-
-    print_ext2_dir_entries(buf, 1024);
-
-    return EXIT_SUCCESS;
-}
-
 /* main thread of execution */
 int main(int argc, char* args[])
 {
     FILE* disk;
     struct mbr mbr;
-    //struct ext2_superblock ext2_superblock;
+    struct ext2_superblock ext2_superblock;
     int64_t partition_offset;
 
     fprintf_blue(stdout, "Raw Disk Analyzer -- By: Wolfgang Richter "
@@ -156,15 +55,23 @@ int main(int argc, char* args[])
     print_mbr(mbr);
     while ((partition_offset = next_partition_offset(mbr)) >= 0)
     {
-        //if (ext2_probe(ext2_superblock))
-        //{
-        //}
+        if (ext2_probe(disk, partition_offset, &ext2_superblock))
+        {
+            fprintf_light_red(stderr, "ext2 probe failed.\n");
+            continue;
+        }
+        else
+        {
+            fprintf_light_green(stdout, "--- Analyzing ext2 Partition at "
+                                        "Offset 0x%.16"PRIx64" ---\n",
+                                        partition_offset);
+            ext2_print_superblock(ext2_superblock);
+            ext2_list_block_groups(disk, partition_offset, ext2_superblock);
+            //ext2_list_files(ext2_superblock);
+        }
     }
 
     /* MBR sector size constant 512 bytes */
-    //analyze_ext2_superblock(disk, 0x7e00 + 1024); /* Computation: sector size * LBA of first sector = 0x7e00) */
-    //analyze_ext2_block_group_descriptor(disk, 0x7e00 + (1024<<2));
-    //fprintf_light_cyan(stdout, "\nBad Blocks Inode");
     //analyze_ext2_inode_table(disk, 0x7e00 + (1024<<2)*643);
     //fprintf_light_cyan(stdout, "\nRoot Directory Inode");
     //analyze_ext2_inode_table(disk, 0x7e00 + (1024<<2)*643 + 256);

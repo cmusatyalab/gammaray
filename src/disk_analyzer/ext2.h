@@ -92,11 +92,16 @@ struct ext2_inode
     uint8_t  i_osd2[12];
 } __attribute__((packed));
 
-int print_ext2_superblock(struct ext2_superblock superblock);
-int print_ext2_block_group_descriptor(struct ext2_block_group_descriptor);
-int print_ext2_inode(struct ext2_inode);
-int print_ext2_dir_entries(uint8_t* bytes, uint32_t len);
+int ext2_print_superblock(struct ext2_superblock superblock);
+int ext2_print_block_group_descriptor(struct ext2_block_group_descriptor);
+int ext2_print_inode(struct ext2_inode);
+int ext2_print_dir_entries(uint8_t* bytes, uint32_t len);
 int simple_find(uint32_t inode_table_location,
                 FILE* disk, uint32_t inode, char* path_prefix);
+int ext2_probe(FILE* disk, int64_t partition_offset, struct ext2_superblock* superblock);
+
+int ext2_list_block_groups(FILE* disk, int64_t partition_offset, struct ext2_superblock superblock);
+int ext2_list_root_fs(FILE* disk, int64_t partition_offset, struct ext2_superblock superblock);
+int ext2_reconstruct_root_fs(FILE* disk, int64_t partition_offset, struct ext2_superblock superblock, char* prefix);
 
 #endif

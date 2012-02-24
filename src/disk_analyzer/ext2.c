@@ -32,33 +32,159 @@ char* s_errors_LUT[] = {
                                 "EXT2_ERRORS_PANIC"
                        };
 
-uint32_t compute_block_offset(uint32_t first_block_group_offset,
-                             uint32_t block_size,
-                             uint32_t block_num)
+int ext2_print_superblock(struct ext2_superblock superblock)
 {
-    return first_block_group_offset + block_size * block_num;
+    fprintf_yellow(stdout, "s_inodes_count: %"PRIu32"\n",
+                           superblock.s_inodes_count);
+    fprintf_yellow(stdout, "s_blocks_count: %"PRIu32"\n",
+                           superblock.s_blocks_count);
+    fprintf_yellow(stdout, "s_r_blocks_count: %"PRIu32"\n",
+                           superblock.s_r_blocks_count);
+    fprintf_yellow(stdout, "s_free_blocks_count: %"PRIu32"\n",
+                           superblock.s_free_blocks_count);
+    fprintf_yellow(stdout, "s_free_inodes_count: %"PRIu32"\n",
+                           superblock.s_free_inodes_count);
+    fprintf_yellow(stdout, "s_first_data_block: %"PRIu32"\n",
+                           superblock.s_first_data_block);
+    fprintf_yellow(stdout, "s_log_block_size: %"PRIu32"\n",
+                           superblock.s_log_block_size);
+    fprintf_yellow(stdout, "s_log_frag_size: %"PRIu32"\n",
+                           superblock.s_log_frag_size);
+    fprintf_yellow(stdout, "s_blocks_per_group: %"PRIu32"\n",
+                           superblock.s_blocks_per_group);
+    fprintf_yellow(stdout, "s_frags_per_group: %"PRIu32"\n",
+                           superblock.s_frags_per_group);
+    fprintf_yellow(stdout, "s_inodes_per_group: %"PRIu32"\n",
+                           superblock.s_inodes_per_group);
+    fprintf_yellow(stdout, "s_mtime: %"PRIu32"\n",
+                           superblock.s_mtime);
+    fprintf_yellow(stdout, "s_wtime: %"PRIu32"\n",
+                           superblock.s_wtime);
+    fprintf_yellow(stdout, "s_mnt_count: %"PRIu16"\n",
+                           superblock.s_mnt_count);
+    fprintf_yellow(stdout, "s_max_mnt_count: %"PRIu16"\n",
+                           superblock.s_max_mnt_count);
+    fprintf_yellow(stdout, "s_magic: %"PRIx16"\n",
+                           superblock.s_magic);
+    if (superblock.s_magic == 0xef53)
+    {
+        fprintf_light_green(stdout, "Magic value matches EXT_SUPER_MAGIC\n"); 
+    }
+    else
+    {
+        fprintf_light_red(stdout,
+                          "Magic value does not match EXT_SUPER_MAGIC\n");
+    }
+    fprintf_yellow(stdout, "s_state: %"PRIu16"\n",
+                           superblock.s_state);
+    fprintf_light_yellow(stdout, "File System State: %s\n",
+                                 s_state_LUT[superblock.s_state]);
+    fprintf_yellow(stdout, "s_errors: %"PRIu16"\n",
+                           superblock.s_errors);
+    fprintf_light_yellow(stdout, "Error State: %s\n",
+                                 s_errors_LUT[superblock.s_state]);
+    fprintf_yellow(stdout, "s_minor_rev_level: %"PRIu16"\n",
+                           superblock.s_minor_rev_level);
+    fprintf_yellow(stdout, "s_lastcheck: %"PRIu32"\n",
+                           superblock.s_lastcheck);
+    fprintf_yellow(stdout, "s_checkinterval: %"PRIu32"\n",
+                           superblock.s_checkinterval);
+    fprintf_yellow(stdout, "s_creator_os: %"PRIu32"\n",
+                           superblock.s_creator_os);
+    fprintf_light_yellow(stdout, "Resolved OS: %s\n",
+                                 s_creator_os_LUT[superblock.s_creator_os]);
+    fprintf_yellow(stdout, "s_rev_level: %"PRIu32"\n",
+                           superblock.s_rev_level);
+    fprintf_light_yellow(stdout, "Revision Level: %s\n",
+                                 s_rev_level_LUT[superblock.s_rev_level]);
+    fprintf_yellow(stdout, "s_def_resuid: %"PRIu16"\n",
+                           superblock.s_def_resuid);
+    fprintf_yellow(stdout, "s_def_resgid: %"PRIu16"\n",
+                           superblock.s_def_resgid);
+    fprintf_yellow(stdout, "s_first_ino: %"PRIu32"\n",
+                           superblock.s_first_ino);
+    fprintf_yellow(stdout, "s_inode_size: %"PRIu16"\n",
+                           superblock.s_inode_size);
+    fprintf_yellow(stdout, "s_block_group_nr: %"PRIu16"\n",
+                           superblock.s_block_group_nr);
+    fprintf_yellow(stdout, "s_feature_compat: %"PRIu32"\n",
+                          superblock.s_feature_compat);
+    fprintf_yellow(stdout, "s_feature_incompat: %"PRIu32"\n",
+                           superblock.s_feature_incompat);
+    fprintf_yellow(stdout, "s_feature_ro_compat: %"PRIu32"\n",
+                           superblock.s_feature_ro_compat);
+    //uint8_t s_uuid[16];
+    //uint8_t s_volume_name[16];
+    //uint8_t s_last_mounted[64];
+    fprintf_yellow(stdout, "s_algo_bitmap: %"PRIu32"\n",
+                           superblock.s_algo_bitmap);
+    fprintf_yellow(stdout, "s_prealloc_blocks: %"PRIu8"\n",
+    superblock.s_prealloc_blocks);                       
+    fprintf_yellow(stdout, "s_prealloc_blocks: %"PRIu8"\n",
+                           superblock.s_prealloc_blocks);
+    //uint8_t alignment[2];
+    //uint8_t s_journal_uuid[16];
+    fprintf_yellow(stdout, "s_journal_inum: %"PRIu32"\n",
+                           superblock.s_journal_inum);
+    fprintf_yellow(stdout, "s_journal_dev: %"PRIu32"\n",
+                           superblock.s_journal_dev);
+    fprintf_yellow(stdout, "s_last_orphan: %"PRIu32"\n",
+                           superblock.s_last_orphan);
+    //uint32_t s_hash_seed[4];
+    fprintf_yellow(stdout, "s_def_hash_version: %"PRIu8"\n",
+                           superblock.s_def_hash_version);  
+    //uint8_t padding[3];
+    fprintf_yellow(stdout, "s_default_mount_options: %"PRIu32"\n",
+                           superblock.s_default_mount_options);
+    fprintf_yellow(stdout, "s_first_meta_bg: %"PRIu32"\n",
+                           superblock.s_first_meta_bg);
+    return 0;
 }
 
-int read_block(FILE* disk, uint32_t partition_offset, uint32_t block_size,
-               uint32_t block, uint8_t* buf)
+uint32_t ext2_block_size(struct ext2_superblock superblock)
 {
-    uint32_t offset = compute_block_offset(partition_offset, block_size, 
-                                          block);
+    return ((uint32_t) 1024) << superblock.s_log_block_size;
+}
 
-   if (fseek(disk, offset, 0))
+uint32_t ext2_num_block_groups(struct ext2_superblock superblock)
+{
+    uint32_t blocks = superblock.s_blocks_count;
+    uint32_t blocks_per_group = superblock.s_blocks_per_group;
+
+    return (blocks + blocks_per_group - 1) / blocks_per_group;
+}
+
+int ext2_next_block_group_descriptor(FILE* disk,
+                                     int64_t partition_offset,
+                                     struct ext2_superblock superblock,
+                                     struct ext2_block_group_descriptor* bgd)
+{
+    static uint32_t i = 0;
+    uint64_t offset = (superblock.s_first_data_block+1) * ext2_block_size(superblock);
+    uint32_t num_block_groups = ext2_num_block_groups(superblock);
+
+    for (; i < num_block_groups;)
     {
-        fprintf_light_red(stderr, "Error seeking to position 0x%lx.\n", 
-                                  offset);
-        return -1;
+        if (fseek(disk, partition_offset + offset + i*sizeof(struct ext2_block_group_descriptor), 0))
+        {
+            fprintf_light_red(stderr, "Error seeking to position 0x%lx.\n",
+                              offset);
+            return -1;
+        }
+
+        if (fread(bgd, 1, sizeof(struct ext2_block_group_descriptor), disk) !=
+            sizeof(struct ext2_block_group_descriptor))
+        {
+            fprintf_light_red(stderr, 
+                              "Error while trying to read ext2 Block Group "
+                              "Descriptor.\n");
+            return -1;
+        }
+        i++;
+        return 1;
     }
 
-    if (fread(buf, 1, block_size, disk) != block_size)
-    {
-        fprintf_light_red(stdout, "Error while trying to read block.\n");
-        return -1;
-    }
-
-    return 0;
+    return 0; 
 }
 
 int write_block(FILE* dest, uint32_t total_size, uint32_t block_size,
@@ -87,199 +213,7 @@ int write_block(FILE* dest, uint32_t total_size, uint32_t block_size,
     return total_size;
 }
 
-int reconstruct_file(FILE* disk, FILE* dest, struct ext2_inode inode,
-                     uint32_t partition_offset, uint32_t block_size)
-{
-    /* total file size */
-    int i, j, k;
-    uint64_t total_size = ((uint64_t) inode.i_dir_acl) << 32;
-    total_size |= inode.i_size;
-    uint8_t buf[block_size];
-    uint32_t indirect_buf[block_size], double_buf[block_size],
-             treble_buf[block_size];
-
-    /* block positions 0-11 are direct */
-    for (i = 0; i < 12; i++)
-    {
-        if (inode.i_block[i] == 0)
-            return 0;
-
-        if (read_block(disk, partition_offset, block_size, inode.i_block[i],
-                       buf))
-        {
-            fprintf_light_red(stderr, "Error reading direct block %"PRIu32
-                                      "\n", inode.i_block[i]);
-            return -1;
-        }
-
-        total_size = write_block(dest, total_size, block_size, buf);
-        
-        if (total_size < 0)
-        {
-            fprintf_light_red(stderr, "Error while writing direct block.\n");
-            return -1;
-        }
-
-        if (total_size == 0)
-            return 0;
-    }
-
-    /* block position 12 is indirect */
-    if (inode.i_block[i] == 0)
-        return 0;
-
-    if (read_block(disk, partition_offset, block_size, inode.i_block[i++],
-                   (uint8_t*) indirect_buf))
-    {
-        fprintf_light_red(stderr, "Error reading direct block %"PRIu32
-                                  "\n", inode.i_block[--i]);
-        return -1;
-    }
-
-    for (j = 0; j < (block_size / sizeof(uint32_t)); j++)
-    {
-        if (indirect_buf[j] == 0)
-            return 0;
-
-        if(read_block(disk, partition_offset, block_size,
-                      indirect_buf[j], buf))
-        {
-            fprintf_light_red(stderr, "Error reading direct block %"PRIu32
-                                      "\n");
-            return -1;
-        }
-
-        total_size = write_block(dest, total_size, block_size, buf);
-        
-        if (total_size < 0)
-        {
-            fprintf_light_red(stderr, "Error while writing direct block.\n");
-            return -1;
-        }
-
-        if (total_size == 0)
-            return 0;
-    }
-
-    /* block position 13 is doubly indirect */
-    if (inode.i_block[i] == 0)
-        return 0;
-
-    if (read_block(disk, partition_offset, block_size, inode.i_block[i++],
-                   (uint8_t*) double_buf))
-    {
-        fprintf_light_red(stderr, "Error reading direct block %"PRIu32
-                                  "\n", inode.i_block[--i]);
-        return -1;
-    }
-
-    for (j = 0; j < (block_size / sizeof(uint32_t)); j++)
-    {
-        if (double_buf[j] == 0)
-            return 0;
-
-        if(read_block(disk, partition_offset, block_size,
-                      double_buf[j], (uint8_t*) indirect_buf))
-        {
-            fprintf_light_red(stderr, "Error reading indirect block %"PRIu32
-                                      "\n", double_buf[j]);
-            return -1;
-        }
-
-        for (k = 0; k < (block_size / sizeof(uint32_t)); k++)
-        {
-            if (indirect_buf[k] == 0)
-                return 0;
-
-            if(read_block(disk, partition_offset, block_size,
-                          indirect_buf[k], (uint8_t*) buf))
-            {
-                fprintf_light_red(stderr, "Error reading indirect block %"PRIu32
-                                          "\n", indirect_buf[k]);
-                return -1;
-            }
-
-            total_size = write_block(dest, total_size, block_size, buf);
-            
-            if (total_size < 0)
-            {
-                fprintf_light_red(stderr, "Error while writing direct block.\n");
-                return -1;
-            }
-
-            if (total_size == 0)
-                return 0;
-        }
-    }
-
-    /* block position 14 is trebly indirect */
-    if (inode.i_block[i] == 0)
-        return 0;
-
-    if (read_block(disk, partition_offset, block_size, inode.i_block[i],
-                   (uint8_t*) treble_buf))
-    {
-        fprintf_light_red(stderr, "Error reading direct block %"PRIu32
-                                  "\n", inode.i_block[i]);
-        return -1;
-    }
-
-    for (i = 0; i < (block_size / sizeof(uint32_t)); i++)
-    {
-        if (treble_buf[i] == 0)
-            return 0;
-
-        if(read_block(disk, partition_offset, block_size,
-                      treble_buf[i], (uint8_t*) double_buf))
-        {
-            fprintf_light_red(stderr, "Error reading indirect block %"PRIu32
-                                      "\n", treble_buf[i]);
-            return -1;
-        }
-
-        for (j = 0; j < (block_size / sizeof(uint32_t)); j++)
-        {
-            if (double_buf[j] == 0)
-                return 0;
-
-            if(read_block(disk, partition_offset, block_size,
-                          double_buf[j], (uint8_t*) indirect_buf))
-            {
-                fprintf_light_red(stderr, "Error reading indirect block %"PRIu32
-                                          "\n", double_buf[j]);
-                return -1;
-            }
-
-            for (k = 0; k < (block_size / sizeof(uint32_t)); k++)
-            {
-                if (indirect_buf[k] == 0)
-                    return 0;
-
-                if(read_block(disk, partition_offset, block_size,
-                              indirect_buf[k], (uint8_t*) buf))
-                {
-                    fprintf_light_red(stderr, "Error reading indirect block %"PRIu32
-                                              "\n", indirect_buf[k]);
-                    return -1;
-                }
-
-                total_size = write_block(dest, total_size, block_size, buf);
-                
-                if (total_size < 0)
-                {
-                    fprintf_light_red(stderr, "Error while writing direct block.\n");
-                    return -1;
-                }
-
-                if (total_size == 0)
-                    return 0;
-            }
-        }
-    }
-    return 0;
-}
-
-int print_ext2_dir_entry(uint32_t entry, struct ext2_dir_entry dir)
+int ext2_print_dir_entry(uint32_t entry, struct ext2_dir_entry dir)
 {
     fprintf_yellow(stdout, "%d ext2_dir_entry.inode: %"PRIu32"\n", entry,
                            dir.inode);
@@ -296,35 +230,17 @@ int print_ext2_dir_entry(uint32_t entry, struct ext2_dir_entry dir)
     return 0;
 } 
 
-int print_ext2_dir_entries(uint8_t* bytes, uint32_t len)
+int ext2_print_dir_entries(uint8_t* bytes, uint32_t len)
 {
     uint32_t i;
     uint32_t num_entries = len / sizeof(struct ext2_dir_entry);
 
     for (i = 0; i < num_entries; i++)
-        print_ext2_dir_entry(i, *((struct ext2_dir_entry*)
+        ext2_print_dir_entry(i, *((struct ext2_dir_entry*)
                                   (bytes + i*sizeof(struct ext2_dir_entry))));
     return 0;
 }
 
-int read_inode(FILE* disk, uint32_t inode_table_offset,
-               uint32_t inode_number, struct ext2_inode* inode)
-{
-   if (fseek(disk, inode_table_offset + (inode_number-1)*256, 0))
-    {
-        fprintf_light_red(stderr, "Error seeking to position 0x%lx.\n",
-                          inode_table_offset);
-        return -1;
-    }
-
-    if (fread(inode, 1, sizeof(struct ext2_inode), disk) != sizeof(struct ext2_inode))
-    {
-        fprintf_light_red(stdout, "Error while trying to read ext2 inode.\n");
-        return -1;
-    }
-
-    return 0;
-}
 
 int read_dir_entry(uint32_t offset, FILE* disk, struct ext2_dir_entry* dir)
 {
@@ -350,7 +266,7 @@ int read_dir_entry(uint32_t offset, FILE* disk, struct ext2_dir_entry* dir)
     return dir->rec_len;
 }
 
-mode_t get_inode_mode(uint16_t i_mode)
+mode_t ext2_inode_mode(uint16_t i_mode)
 {
     mode_t mode = 0;
 
@@ -400,6 +316,323 @@ mode_t get_inode_mode(uint16_t i_mode)
     return mode;
 }
 
+uint64_t ext2_block_offset(uint64_t block_num, struct ext2_superblock superblock)
+{
+    uint64_t block_size = ext2_block_size(superblock);
+    return block_size * block_num;
+}
+
+int ext2_read_block(FILE* disk, int64_t partition_offset, 
+                    uint64_t block_num, struct ext2_superblock superblock,
+                    uint8_t* buf)
+{
+    uint64_t block_size = ext2_block_size(superblock);
+    uint64_t offset = ext2_block_offset(block_num, superblock);
+    offset += partition_offset;
+
+    if (fseek(disk, offset, 0))
+    {
+        fprintf_light_red(stderr, "Error seeking to position 0x%lx.\n", 
+                                  offset);
+        return -1;
+    }
+
+    if (fread(buf, 1, block_size, disk) != block_size)
+    {
+        fprintf_light_red(stdout, "Error while trying to read block.\n");
+        return -1;
+    }
+
+    return 0;
+
+}
+
+int ext2_get_bgd(FILE* disk, int64_t partition_offset,
+                 struct ext2_superblock superblock,
+                 uint32_t block_group,
+                 struct ext2_block_group_descriptor* bgd)
+{
+    uint64_t offset = (superblock.s_first_data_block+1) *
+                      ext2_block_size(superblock) +
+                      block_group*sizeof(struct ext2_block_group_descriptor);
+
+    if (fseek(disk, partition_offset + offset, 0))
+    {
+        fprintf_light_red(stderr, "Error seeking to position 0x%lx.\n",
+                          offset);
+        return -1;
+    }
+
+    if (fread(bgd, 1, sizeof(struct ext2_block_group_descriptor), disk) !=
+        sizeof(struct ext2_block_group_descriptor))
+    {
+        fprintf_light_red(stderr, 
+                          "Error while trying to read ext2 Block Group "
+                          "Descriptor.\n");
+        return -1;
+    }
+
+    return 0;
+}
+
+int ext2_get_inode(FILE* disk, int64_t partition_offset,
+                   struct ext2_superblock superblock,
+                   uint32_t inode_num, struct ext2_inode* inode)
+{
+    uint64_t block_group = (inode_num - 1) / superblock.s_inodes_per_group;
+    struct ext2_block_group_descriptor bgd;
+    uint64_t inode_table_offset;
+    uint64_t inode_offset = (inode_num - 1) % superblock.s_inodes_per_group;
+    inode_offset *= superblock.s_inode_size;
+
+    if (ext2_get_bgd(disk, partition_offset, superblock, block_group, &bgd))
+    {
+        fprintf(stderr, "Error retrieving block group descriptor %"PRIu64".\n", block_group);
+        return -1;
+    }
+
+    inode_table_offset = ext2_block_offset(bgd.bg_inode_table, superblock);
+
+    if (fseek(disk, partition_offset + inode_table_offset + inode_offset, 0))
+    {
+        fprintf_light_red(stderr, "Error seeking to position 0x%lx.\n",
+                                  partition_offset + inode_table_offset +
+                                  inode_offset);
+        return -1;
+    }
+
+    if (fread(inode, 1, sizeof(struct ext2_inode), disk) != sizeof(struct ext2_inode))
+    {
+        fprintf_light_red(stdout, "Error while trying to read ext2 inode.\n");
+        return -1;
+    }
+
+    return 0;
+}
+
+int ext2_read_file_block(FILE* disk, int64_t partition_offset,
+                         struct ext2_superblock superblock, uint64_t block_num,
+                         struct ext2_inode inode, uint32_t* buf)
+{
+    uint64_t block_size = ext2_block_size(superblock);
+    uint64_t addresses_in_block = block_size / 4;
+    
+    /* ranges for lookup */
+    uint32_t direct_low = 0;
+    uint32_t direct_high = 11;
+    uint32_t indirect_low = direct_high + 1;
+    uint32_t indirect_high = direct_high + (addresses_in_block);
+    uint32_t double_low = indirect_high + 1;
+    uint32_t double_high = indirect_high + (addresses_in_block)*
+                                           (addresses_in_block);
+    uint32_t triple_low = double_high + 1;
+    uint32_t triple_high = double_high + (addresses_in_block)*
+                                         (addresses_in_block)*
+                                         (addresses_in_block);
+
+    if (block_num < direct_low || block_num > triple_high)
+        return -1;
+    
+    /* figure out type of block lookup (direct, indirect, double, treble) */
+    /* DIRECT */
+    if (block_num <= direct_high)
+    {
+        if (inode.i_block[block_num] == 0)
+            return 1; /* finished */
+        ext2_read_block(disk, partition_offset, inode.i_block[block_num], superblock, (uint8_t*) buf);
+        return 0;
+    }
+
+    /* INDIRECT */
+    if (block_num <= indirect_high)
+    {
+        block_num -= indirect_low; /* rebase, 0 is beginning indirect block range */
+        
+        if (inode.i_block[block_num] == 0)
+            return 1; /* finished */
+        
+        ext2_read_block(disk, partition_offset, inode.i_block[12], superblock, (uint8_t*) buf);
+
+        if (buf[block_num] == 0)
+            return 1;
+        
+        ext2_read_block(disk, partition_offset, buf[block_num], superblock, (uint8_t*) buf);
+        return 0;
+    }
+
+    /* DOUBLE */
+    if (block_num <= double_high)
+    {
+        block_num -= double_low;
+
+        if (inode.i_block[13] == 0)
+            return 1;
+
+        ext2_read_block(disk, partition_offset, /* double */
+                        inode.i_block[13], superblock, (uint8_t*) buf);
+
+        if (buf[block_num / addresses_in_block])
+            return 1;
+
+        ext2_read_block(disk, partition_offset, /* indirect */
+                        buf[block_num / addresses_in_block], superblock, (uint8_t*) buf);
+
+
+        if (buf[block_num % addresses_in_block] == 0)
+            return 1;
+        ext2_read_block(disk, partition_offset, /* real */
+                        buf[block_num % addresses_in_block], superblock, (uint8_t*) buf);
+
+        return 0;
+    }
+
+    /* TRIPLE */
+    if (block_num <= triple_high)
+    {
+        block_num -= triple_low;
+
+        if (inode.i_block[14] == 0)
+            return 1;
+
+        ext2_read_block(disk, partition_offset, /* triple */
+                        inode.i_block[14], superblock, (uint8_t*) buf);
+
+        if (buf[block_num / (addresses_in_block*addresses_in_block)] == 0)
+            return 1;
+        
+        ext2_read_block(disk, partition_offset, /* double */
+                        buf[block_num / (addresses_in_block*addresses_in_block)],
+                        superblock, (uint8_t*) buf);
+
+        if (buf[block_num / addresses_in_block])
+            return 1;
+        
+        ext2_read_block(disk, partition_offset, /* indirect */
+                        buf[block_num / addresses_in_block], superblock,
+                        (uint8_t*) buf);
+
+        if (buf[block_num % addresses_in_block])
+            return 1;
+
+        ext2_read_block(disk, partition_offset, /* real */
+                        buf[block_num % addresses_in_block], superblock,
+                        (uint8_t*) buf);
+    }
+
+    return -1;
+}
+
+int ext2_read_dir_entry(uint8_t* buf, struct ext2_dir_entry* dir)
+{
+    memcpy(dir, buf, sizeof(struct ext2_dir_entry));
+    return 0;
+}
+
+uint64_t ext2_file_size(struct ext2_inode inode)
+{
+    uint64_t total_size = ((uint64_t) inode.i_dir_acl) << 32;
+    total_size |= inode.i_size;
+    return total_size;
+}
+
+/* recursive function listing a tree rooted at some directory.
+ * recursion ends at leaf files.
+ */
+int ext2_list_tree(FILE* disk, int64_t partition_offset, 
+                   struct ext2_superblock superblock,
+                   struct ext2_inode root_inode,
+                   char* prefix)
+{
+    struct ext2_inode child_inode;
+    struct ext2_dir_entry dir;
+    uint64_t block_size = ext2_block_size(superblock), position = 0;
+    uint8_t buf[block_size];
+    uint64_t num_blocks;
+    uint64_t i;
+    int ret_check;
+    char path[8192];
+
+    if (root_inode.i_mode & 0x8000) /* file, no dir entries more */
+        return 0;
+
+    if (ext2_file_size(root_inode) == 0)
+    {
+        num_blocks = 0;
+    }
+    else
+    {
+        num_blocks = (ext2_file_size(root_inode) + block_size) / block_size;
+    }
+
+    /* go through each valid block of the inode */
+    for (; i < num_blocks; i++)
+    {
+        ret_check = ext2_read_file_block(disk, partition_offset, superblock, i, root_inode, (uint32_t*) buf);
+        
+        if (ret_check < 0) /* error reading */
+        {
+            fprintf_light_red(stderr, "Error reading inode dir block.\n");
+            return -1;
+        }
+        else if (ret_check > 0) /* no more blocks? */
+        {
+            return 0;
+        }
+
+        position = 0;
+
+        while (position < block_size)
+        {
+            strcpy(path, prefix);
+
+            if (ext2_read_dir_entry(&buf[position], &dir))
+            {
+                fprintf_light_red(stderr, "Error reading dir entry from block.\n");
+                return -1;
+            }
+
+            if (dir.inode == 0)
+            {
+                fprintf_red(stderr, "Error (?) dir inode is 0.\n");
+                return 0;
+            }
+
+            if (ext2_get_inode(disk, partition_offset, superblock, dir.inode, &child_inode))
+            {
+               fprintf_light_red(stderr, "Error reading child inode.\n");
+               return -1;
+            } 
+
+            dir.name[dir.name_len] = 0;
+            strcat(path, (char*) dir.name);
+            
+            if (strcmp((const char *) dir.name, ".") != 0 ||
+                strcmp((const char *) dir.name, "..") != 0)
+            {
+                if (child_inode.i_mode & 0x4000)
+                {
+                    fprintf_light_yellow(stdout, "%s\n", path);
+                }
+                else if (child_inode.i_mode & 0x8000)
+                {
+                    fprintf_yellow(stdout, "%s\n", path);
+                }
+                else
+                {
+                    fprintf_red(stdout, "%s\n", path);
+                }
+            }
+
+            ext2_list_tree(disk, partition_offset, superblock, child_inode,
+                           strcat(path, "/")); /* recursive call */
+
+            position += dir.rec_len;
+        }
+    }
+
+    return 0;
+}
+
 /* depth first find */
 int simple_find(uint32_t inode_table_offset,
                 FILE* disk, uint32_t inode_number, char* path_prefix)
@@ -415,8 +648,8 @@ int simple_find(uint32_t inode_table_offset,
     //                           inode_table_offset, inode_number);
     
     /* start crawling root inode */
-    read_inode(disk, inode_table_offset+block_group_offset, inode_number % 8192,
-               &inode);
+    //read_inode(disk, inode_table_offset+block_group_offset, inode_number % 8192,
+    //           &inode);
     //print_ext2_inode(inode);
     dir_block = inode.i_block[0];
     
@@ -427,7 +660,7 @@ int simple_find(uint32_t inode_table_offset,
         {
             strcat(reconstructed, &(path_prefix[1]));
             fprintf_light_red(stdout, "Creating dir: %s\n", reconstructed);
-            mkdir(reconstructed, get_inode_mode(inode.i_mode));
+            mkdir(reconstructed, ext2_inode_mode(inode.i_mode));
         }
     }
     
@@ -445,12 +678,12 @@ int simple_find(uint32_t inode_table_offset,
             return -1;
         }
 
-        if (reconstruct_file(disk, dest, inode, 0x7e00, 1024<<2))
-        {
-            fprintf_light_red(stderr, "Reconstructing file failed.");
-            fclose(dest);
-            return -1;
-        }
+        //if (reconstruct_file(disk, dest, inode, 0x7e00, 1024<<2))
+        //{
+        //   fprintf_light_red(stderr, "Reconstructing file failed.");
+        //    fclose(dest);
+        //    return -1;
+        //}
 
         fprintf_light_yellow(stdout, "Reconstructed file: %s\n",
                                      reconstructed);
@@ -686,6 +919,7 @@ int print_ext2_inode(struct ext2_inode inode)
 
 int print_ext2_block_group_descriptor(struct ext2_block_group_descriptor bgd)
 {
+    fprintf_light_cyan(stdout, "--- Analyzing Block Group Descriptor ---\n");
     fprintf_yellow(stdout, "bg_block_bitmap: %"PRIu32"\n",
                            bgd.bg_block_bitmap);
     fprintf_yellow(stdout, "bg_inode_bitmap: %"PRIu32"\n",
@@ -808,5 +1042,56 @@ int print_ext2_superblock(struct ext2_superblock superblock)
                            superblock.s_default_mount_options);
     fprintf_yellow(stdout, "s_first_meta_bg: %"PRIu32"\n",
                            superblock.s_first_meta_bg);
+    return 0;
+}
+
+int ext2_probe(FILE* disk, int64_t partition_offset, struct ext2_superblock* superblock)
+{
+    if (partition_offset == 0)
+    {
+        fprintf_light_red(stderr, "ext2 probe failed on partition at offset: "
+                                  "0x%.16"PRIx64".\n", partition_offset);
+        return -1;
+    }
+
+    partition_offset += 1024;
+
+    if (fseek(disk, partition_offset, 0))
+    {
+        fprintf_light_red(stderr, "Error seeking to position 0x%.16"PRIx64".\n",
+                                  partition_offset);
+        return -1;
+    }
+
+    if (fread(superblock, 1, sizeof(struct ext2_superblock), disk) !=
+        sizeof(struct ext2_superblock))
+    {
+        fprintf_light_red(stderr, 
+                          "Error while trying to read ext2 superblock.\n");
+        return -1;
+    }
+
+    if (superblock->s_magic != 0xef53)
+    {
+        fprintf_light_red(stderr, "ext2 superblock s_magic mismatch.\n");
+        return -1;
+    }
+
+    return 0;
+}
+
+int ext2_list_block_groups(FILE* disk, int64_t partition_offset,
+                           struct ext2_superblock superblock)
+{
+    struct ext2_block_group_descriptor bgd;
+
+    while (ext2_next_block_group_descriptor(disk, partition_offset, superblock, &bgd) > 0)
+    {
+       if (print_ext2_block_group_descriptor(bgd))
+       {
+           fprintf_light_red(stderr, "Failed printing block group descriptor.\n");
+           return -1;
+       }
+    }
     return 0;
 }
