@@ -606,7 +606,7 @@ int ext2_list_tree(FILE* disk, int64_t partition_offset,
             dir.name[dir.name_len] = 0;
             strcat(path, (char*) dir.name);
             
-            if (strcmp((const char *) dir.name, ".") != 0 ||
+            if (strcmp((const char *) dir.name, ".") != 0 && 
                 strcmp((const char *) dir.name, "..") != 0)
             {
                 if (child_inode.i_mode & 0x4000)
@@ -628,6 +628,25 @@ int ext2_list_tree(FILE* disk, int64_t partition_offset,
 
             position += dir.rec_len;
         }
+    }
+
+    return 0;
+}
+
+int ext2_list_root_fs(FILE* disk, int64_t partition_offset,
+                      struct ext2_superblock superblock, char* prefix)
+{
+    struct ext2_inode root;
+    if (ext2_get_inode(disk, partition_offset, superblock, 2, &root))
+    {
+        fprintf(stderr, "Failed getting root fs inode.\n");
+        return -1;
+    }
+
+    if (ext2_list_tree(disk, partition_offset, superblock, root, prefix))
+    {
+        fprintf(stdout, "Error listing fs tree from root inode.\n");
+        return -1;
     }
 
     return 0;

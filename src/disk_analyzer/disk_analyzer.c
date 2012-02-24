@@ -67,6 +67,7 @@ int main(int argc, char* args[])
                                         partition_offset);
             ext2_print_superblock(ext2_superblock);
             ext2_list_block_groups(disk, partition_offset, ext2_superblock);
+            ext2_list_root_fs(disk, partition_offset, ext2_superblock, "/");
             //ext2_list_files(ext2_superblock);
         }
     }

@@ -101,7 +101,7 @@ int simple_find(uint32_t inode_table_location,
 int ext2_probe(FILE* disk, int64_t partition_offset, struct ext2_superblock* superblock);
 
 int ext2_list_block_groups(FILE* disk, int64_t partition_offset, struct ext2_superblock superblock);
-int ext2_list_root_fs(FILE* disk, int64_t partition_offset, struct ext2_superblock superblock);
+int ext2_list_root_fs(FILE* disk, int64_t partition_offset, struct ext2_superblock superblock, char* prefix);
 int ext2_reconstruct_root_fs(FILE* disk, int64_t partition_offset, struct ext2_superblock superblock, char* prefix);
 
 #endif
