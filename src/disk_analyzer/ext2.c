@@ -32,6 +32,58 @@ char* s_errors_LUT[] = {
                                 "EXT2_ERRORS_PANIC"
                        };
 
+int ascii_dump(uint8_t* buf, uint32_t count)
+{
+    uint32_t i;
+
+    for (i = 0; i < count; i++)
+    {
+        if (buf[i] <= 31 || buf[i] >= 127)
+            fprintf(stdout, ".");
+        else
+            fprintf(stdout, "%c", (char) buf[i]);
+    }
+
+    return 0;
+}
+
+int ext2_print_block(uint8_t* buf, uint32_t block_size)
+{
+    uint32_t i;
+
+    for (i = 0; i < block_size; i++)
+    {
+        if (i % 16 == 0)
+        {
+            if (i > 0)
+            {
+                fprintf(stdout, " |");
+                ascii_dump(&(buf[i-16]), 16);
+                fprintf(stdout, "|\n");
+            }
+            fprintf(stdout, "%.8"PRIx32, i);
+        }
+
+        if (i % 8 == 0)
+            fprintf(stdout, " %.2"PRIx8" ", buf[i]);
+        else
+            fprintf(stdout, "%.2"PRIx8" ", buf[i]);
+    }
+
+    if (i > 0)
+    {
+        fprintf(stdout, " |");
+        if (block_size % 16)
+            ascii_dump(&(buf[i-(block_size % 16)]), block_size % 16);
+        else
+            ascii_dump(&(buf[i-16]), 16);
+        fprintf(stdout, "|\n");
+    }
+    
+    fprintf(stdout, "\n");
+    return 0;
+}
+
 int ext2_print_superblock(struct ext2_superblock superblock)
 {
     fprintf_yellow(stdout, "s_inodes_count: %"PRIu32"\n",
@@ -323,7 +375,7 @@ uint64_t ext2_block_offset(uint64_t block_num, struct ext2_superblock superblock
 }
 
 int ext2_read_block(FILE* disk, int64_t partition_offset, 
-                    uint64_t block_num, struct ext2_superblock superblock,
+                    struct ext2_superblock superblock, uint64_t block_num, 
                     uint8_t* buf)
 {
     uint64_t block_size = ext2_block_size(superblock);
@@ -444,7 +496,7 @@ int ext2_read_file_block(FILE* disk, int64_t partition_offset,
             fprintf(stderr, "ZOMG BLOCK_NUM is 0!\n");
             return 1; /* finished */
         }
-        ext2_read_block(disk, partition_offset, inode.i_block[block_num], superblock, (uint8_t*) buf);
+        ext2_read_block(disk, partition_offset, superblock, inode.i_block[block_num], (uint8_t*) buf);
         return 0;
     }
 
@@ -456,12 +508,12 @@ int ext2_read_file_block(FILE* disk, int64_t partition_offset,
         if (inode.i_block[block_num] == 0)
             return 1; /* finished */
         
-        ext2_read_block(disk, partition_offset, inode.i_block[12], superblock, (uint8_t*) buf);
+        ext2_read_block(disk, partition_offset, superblock, inode.i_block[12], (uint8_t*) buf);
 
         if (buf[block_num] == 0)
             return 1;
         
-        ext2_read_block(disk, partition_offset, buf[block_num], superblock, (uint8_t*) buf);
+        ext2_read_block(disk, partition_offset, superblock, buf[block_num], (uint8_t*) buf);
         return 0;
     }
 
@@ -474,19 +526,19 @@ int ext2_read_file_block(FILE* disk, int64_t partition_offset,
             return 1;
 
         ext2_read_block(disk, partition_offset, /* double */
-                        inode.i_block[13], superblock, (uint8_t*) buf);
+                        superblock, inode.i_block[13], (uint8_t*) buf);
 
         if (buf[block_num / addresses_in_block])
             return 1;
 
         ext2_read_block(disk, partition_offset, /* indirect */
-                        buf[block_num / addresses_in_block], superblock, (uint8_t*) buf);
+                        superblock, buf[block_num / addresses_in_block], (uint8_t*) buf);
 
 
         if (buf[block_num % addresses_in_block] == 0)
             return 1;
         ext2_read_block(disk, partition_offset, /* real */
-                        buf[block_num % addresses_in_block], superblock, (uint8_t*) buf);
+                        superblock, buf[block_num % addresses_in_block], (uint8_t*) buf);
 
         return 0;
     }
@@ -500,27 +552,26 @@ int ext2_read_file_block(FILE* disk, int64_t partition_offset,
             return 1;
 
         ext2_read_block(disk, partition_offset, /* triple */
-                        inode.i_block[14], superblock, (uint8_t*) buf);
+                        superblock, inode.i_block[14], (uint8_t*) buf);
 
         if (buf[block_num / (addresses_in_block*addresses_in_block)] == 0)
             return 1;
         
         ext2_read_block(disk, partition_offset, /* double */
-                        buf[block_num / (addresses_in_block*addresses_in_block)],
-                        superblock, (uint8_t*) buf);
+                        superblock, buf[block_num / (addresses_in_block*addresses_in_block)],(uint8_t*) buf);
 
         if (buf[block_num / addresses_in_block])
             return 1;
         
         ext2_read_block(disk, partition_offset, /* indirect */
-                        buf[block_num / addresses_in_block], superblock,
+                        superblock, buf[block_num / addresses_in_block],
                         (uint8_t*) buf);
 
         if (buf[block_num % addresses_in_block])
             return 1;
 
         ext2_read_block(disk, partition_offset, /* real */
-                        buf[block_num % addresses_in_block], superblock,
+                        superblock, buf[block_num % addresses_in_block],  
                         (uint8_t*) buf);
     }
 

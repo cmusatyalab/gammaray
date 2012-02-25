@@ -98,11 +98,22 @@ int ext2_print_inode(struct ext2_inode);
 int ext2_print_dir_entries(uint8_t* bytes, uint32_t len);
 int simple_find(uint32_t inode_table_location,
                 FILE* disk, uint32_t inode, char* path_prefix);
-int ext2_probe(FILE* disk, int64_t partition_offset, struct ext2_superblock* superblock);
+int ext2_probe(FILE* disk, int64_t partition_offset,
+               struct ext2_superblock* superblock);
 
-int ext2_read_inode(FILE* disk, int64_t partition_offset, struct ext2_superblock superblock, uint32_t inode_num, struct ext2_inode* inode);
-int ext2_list_block_groups(FILE* disk, int64_t partition_offset, struct ext2_superblock superblock);
-int ext2_list_root_fs(FILE* disk, int64_t partition_offset, struct ext2_superblock superblock, char* prefix);
-int ext2_reconstruct_root_fs(FILE* disk, int64_t partition_offset, struct ext2_superblock superblock, char* prefix);
+int ext2_read_inode(FILE* disk, int64_t partition_offset,
+                    struct ext2_superblock superblock, uint32_t inode_num,
+                    struct ext2_inode* inode);
+int ext2_list_block_groups(FILE* disk, int64_t partition_offset,
+                           struct ext2_superblock superblock);
+int ext2_list_root_fs(FILE* disk, int64_t partition_offset,
+                      struct ext2_superblock superblock, char* prefix);
+int ext2_reconstruct_root_fs(FILE* disk, int64_t partition_offset, 
+                             struct ext2_superblock superblock, char* prefix);
+int ext2_read_block(FILE* disk, int64_t partition_offset, 
+                    struct ext2_superblock superblock, uint64_t block_num, 
+                    uint8_t* buf);
+int ext2_print_block(uint8_t* buf, uint32_t block_size);
+uint32_t ext2_block_size(struct ext2_superblock superblock);
 
 #endif
