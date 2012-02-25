@@ -15,7 +15,7 @@ int main(int argc, char* argv[])
     char buf[512];
     uint64_t inode_num;
 
-    fprintf_blue(stdout, "Raw Disk Analyzer -- By: Wolfgang Richter "
+    fprintf_blue(stdout, "File System inode Explorer -- By: Wolfgang Richter "
                          "<wolf@cs.cmu.edu>\n");
 
     if (argc < 2)
