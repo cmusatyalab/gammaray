@@ -68,43 +68,10 @@ int main(int argc, char* args[])
             ext2_print_superblock(ext2_superblock);
             ext2_list_block_groups(disk, partition_offset, ext2_superblock);
             ext2_list_root_fs(disk, partition_offset, ext2_superblock, "/");
-            //ext2_list_files(ext2_superblock);
+            ext2_reconstruct_root_fs(disk, partition_offset, ext2_superblock,
+                                     "", "/home/wolf/copydisk/");
         }
     }
-
-    /* MBR sector size constant 512 bytes */
-    //analyze_ext2_inode_table(disk, 0x7e00 + (1024<<2)*643);
-    //fprintf_light_cyan(stdout, "\nRoot Directory Inode");
-    //analyze_ext2_inode_table(disk, 0x7e00 + (1024<<2)*643 + 256);
-/*    if (ret)
-    {
-        analyze_ext2_dir_entries(disk, 0x7e00 + 1024*ret);
-        analyze_ext2_dir_entries(disk, 0x7e00 + 1024*ret + 12);
-        analyze_ext2_dir_entries(disk, 0x7e00 + 1024*ret + 24);
-        analyze_ext2_dir_entries(disk, 0x7e00 + 1024*ret + 44);
-    }*/
-    //simple_find(0x7e00 + (1024<<2)*643, disk, 2, "/");
-    //return EXIT_SUCCESS;
-    /*ret = analyze_ext2_inode_table(disk, 0x7e00 + 1024*40 + sizeof(struct ext2_inode)*10);
-    if (ret)
-    {
-        analyze_ext2_dir_entries(disk, 0x7e00 + 1024*ret);
-        analyze_ext2_dir_entries(disk, 0x7e00 + 1024*(ret) + 12);
-    }
-    fprintf_light_cyan(stdout, "\nACL Index Inode");
-    analyze_ext2_inode_table(disk, 0x7e00 + 1024*40 + 2*sizeof(struct ext2_inode));
-    fprintf_light_cyan(stdout, "\nACL Data Inode");
-    analyze_ext2_inode_table(disk, 0x7e00 + 1024*40 + 3*sizeof(struct ext2_inode));
-    fprintf_light_cyan(stdout, "\nBoot Loader Inode");
-    analyze_ext2_inode_table(disk, 0x7e00 + 1024*40 + 4*sizeof(struct ext2_inode));
-    fprintf_light_cyan(stdout, "\nUndelete Directory Inode");
-    analyze_ext2_inode_table(disk, 0x7e00 + 1024*40 + 5*sizeof(struct ext2_inode));
-    fprintf_light_cyan(stdout, "\nFirst File Inode -- s_first_ino");
-    analyze_ext2_inode_table(disk, 0x7e00 + 1024*40 + 10*sizeof(struct ext2_inode));
-    fprintf_light_cyan(stdout, "\nSecond File Inode");
-    analyze_ext2_inode_table(disk, 0x7e00 + 1024*40 + 11*sizeof(struct ext2_inode));
-    fprintf_light_cyan(stdout, "\nThird File Inode");
-    analyze_ext2_inode_table(disk, 0x7e00 + 1024*40 + 12*sizeof(struct ext2_inode));*/
 
     fclose(disk);
 

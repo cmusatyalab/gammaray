@@ -109,7 +109,8 @@ int ext2_list_block_groups(FILE* disk, int64_t partition_offset,
 int ext2_list_root_fs(FILE* disk, int64_t partition_offset,
                       struct ext2_superblock superblock, char* prefix);
 int ext2_reconstruct_root_fs(FILE* disk, int64_t partition_offset, 
-                             struct ext2_superblock superblock, char* prefix);
+                             struct ext2_superblock superblock, char* prefix,
+                             char* copy_prefix);
 int ext2_read_block(FILE* disk, int64_t partition_offset, 
                     struct ext2_superblock superblock, uint64_t block_num, 
                     uint8_t* buf);
