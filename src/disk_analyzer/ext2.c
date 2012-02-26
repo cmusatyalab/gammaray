@@ -80,7 +80,6 @@ int ext2_print_block(uint8_t* buf, uint32_t block_size)
         fprintf(stdout, "|\n");
     }
     
-    fprintf(stdout, "\n");
     return 0;
 }
 
