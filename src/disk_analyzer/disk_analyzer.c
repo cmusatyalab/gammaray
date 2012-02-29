@@ -33,7 +33,7 @@ int main(int argc, char* args[])
 
     if (argc < 2)
     {
-        fprintf_light_red(stderr, "Usage: ./%s <raw disk file>\n", args[0]);
+        fprintf_light_red(stderr, "Usage: %s <raw disk file>\n", args[0]);
         return EXIT_FAILURE;
     }
 
