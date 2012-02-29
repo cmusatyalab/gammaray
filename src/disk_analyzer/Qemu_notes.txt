@@ -1,0 +1,7 @@
+Investigate:
+    - bdrv_open_common
+    - bdrv_commit
+    - bdrv_write
+    - bdrv_flush
+    - hw/virtio-blk.c
+    - virtio_blk_handle_write
