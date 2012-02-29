@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include "mbr.h"
 
 char* MBR_PT_LUT[] = { "Empty","","","","","Extended","","HPFS/NTFS","","","","W95 FAT32","","","","", /* 0x00 - 0x0f */
@@ -144,22 +146,28 @@ int parse_mbr(FILE* disk, struct mbr* mbr)
 }
 
 /* REENTRANT */
-int64_t next_partition_offset(struct mbr mbr)
+int64_t mbr_partition_offset(struct mbr mbr, int pte)
 {
-    static int i = 0;
-
-    if (i >= 4)
+    /* linux partition match */
+    if (mbr.pt[pte].partition_type == 0x83)
     {
-        i = 0;
-        return -1;
+        return SECTOR_SIZE*mbr.pt[pte].first_sector_lba;
     }
 
-    if (mbr.pt[i].partition_type == 0x83)
-    {
-        return 512*mbr.pt[i++].first_sector_lba;
-    }
+    return 0;
+}
 
-    i++;
+int print_partition_sectors(struct partition_table_entry pte)
+{
+    fprintf(stdout, "%"PRIu32" %"PRIu32, pte.first_sector_lba,
+                                         pte.first_sector_lba +
+                                         pte.sector_count);
+    return 0;
+}
 
+int mbr_get_partition_table_entry(struct mbr mbr, int pte_num,
+                                  struct partition_table_entry* pte)
+{
+    memcpy(pte, &mbr.pt[pte_num], sizeof(struct partition_table_entry));
     return 0;
 }

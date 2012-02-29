@@ -12,8 +12,9 @@ int main(int argc, char* argv[])
     struct ext2_superblock superblock;
     struct ext2_inode inode;
     int64_t partition_offset;
-    char buf[512];
+    char buf[SECTOR_SIZE];
     uint64_t inode_num;
+    int i;
 
     fprintf_blue(stdout, "File System inode Explorer -- By: Wolfgang Richter "
                          "<wolf@cs.cmu.edu>\n");
@@ -41,41 +42,44 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
-    while ((partition_offset = next_partition_offset(mbr)) >= 0)
+    for (i = 0; i < 4; i++)
     {
-        if (ext2_probe(disk, partition_offset, &superblock))
+        if ((partition_offset = mbr_partition_offset(mbr, i)) >= 0)
         {
-            fprintf_light_red(stderr, "ext2 probe failed.\n");
-            continue;
-        }
-        else
-        {
-            fprintf_light_green(stdout, "--- Found ext2 Partition at "
-                                        "Offset 0x%.16"PRIx64" ---\n",
-                                        partition_offset);
-            fprintf(stdout, "Would you like to explore this partition "
-                            "[y/n]? ");
-            fscanf(stdin, "%c", buf);
-            if (buf[0] == 'y' || buf[0] == 'Y')
+            if (ext2_probe(disk, partition_offset, &superblock))
             {
-                while (1)
+                fprintf_light_red(stderr, "ext2 probe failed.\n");
+                continue;
+            }
+            else
+            {
+                fprintf_light_green(stdout, "--- Found ext2 Partition at "
+                                            "Offset 0x%.16"PRIx64" ---\n",
+                                            partition_offset);
+                fprintf(stdout, "Would you like to explore this partition "
+                                "[y/n]? ");
+                fscanf(stdin, "%c", buf);
+                if (buf[0] == 'y' || buf[0] == 'Y')
                 {
-                    fprintf_light_blue(stdout, "> ");
-                    fscanf(stdin, "%s", buf);
-                    if(strcmp(buf, "show") == 0)
+                    while (1)
                     {
-                        fscanf(stdin, "%"PRIu64, &inode_num);
-                        fprintf_cyan(stdout, "Examining inode: %"PRIu64
-                                             ".\n", inode_num);
-                        ext2_read_inode(disk, partition_offset, superblock,
-                                        inode_num, &inode);
-                        ext2_print_inode(inode);
-                    }
-                    if (strcmp(buf, "exit") == 0)
-                    {
-                        fprintf_cyan(stdout, "Goodbye.\n");
-                        fclose(disk);
-                        return EXIT_SUCCESS; 
+                        fprintf_light_blue(stdout, "> ");
+                        fscanf(stdin, "%s", buf);
+                        if(strcmp(buf, "show") == 0)
+                        {
+                            fscanf(stdin, "%"PRIu64, &inode_num);
+                            fprintf_cyan(stdout, "Examining inode: %"PRIu64
+                                                 ".\n", inode_num);
+                            ext2_read_inode(disk, partition_offset, superblock,
+                                            inode_num, &inode);
+                            ext2_print_inode(inode);
+                        }
+                        if (strcmp(buf, "exit") == 0)
+                        {
+                            fprintf_cyan(stdout, "Goodbye.\n");
+                            fclose(disk);
+                            return EXIT_SUCCESS; 
+                        }
                     }
                 }
             }

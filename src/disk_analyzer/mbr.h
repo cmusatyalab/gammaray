@@ -7,6 +7,8 @@
 
 #include "color.h"
 
+#define SECTOR_SIZE 512
+
 struct partition_table_entry
 {
     uint8_t status;
@@ -27,8 +29,11 @@ struct mbr
 }__attribute__((packed));
 
 int print_mbr(struct mbr mbr);
-int print_partition(struct partition_table_entry);
+int print_partition(struct partition_table_entry pte);
+int print_partition_sectors(struct partition_table_entry pte);
 int parse_mbr(FILE* disk, struct mbr* mbr);
-int64_t next_partition_offset(struct mbr mbr);
+int64_t mbr_partition_offset(struct mbr mbr, int pte);
+int mbr_get_partition_table_entry(struct mbr mbr, int pte_num,
+                                  struct partition_table_entry* pte);
 
 #endif

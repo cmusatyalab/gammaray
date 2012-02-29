@@ -11,9 +11,10 @@ int main(int argc, char* argv[])
     struct mbr mbr;
     struct ext2_superblock superblock;
     int64_t partition_offset;
-    char buf[512];
+    char buf[SECTOR_SIZE];
     uint64_t block_num;
     uint8_t* block_buf;
+    int i;
 
     fprintf_blue(stdout, "File System Data Block Explorer -- "
                          "By: Wolfgang Richter <wolf@cs.cmu.edu>\n");
@@ -41,51 +42,54 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
-    while ((partition_offset = next_partition_offset(mbr)) >= 0)
+    for (i = 0; i < 4; i++)
     {
-        if (ext2_probe(disk, partition_offset, &superblock))
+        if ((partition_offset = mbr_partition_offset(mbr, i)) >= 0)
         {
-            fprintf_light_red(stderr, "ext2 probe failed.\n");
-            continue;
-        }
-        else
-        {
-            fprintf_light_green(stdout, "--- Found ext2 Partition at "
-                                        "Offset 0x%.16"PRIx64" ---\n",
-                                        partition_offset);
-            fprintf(stdout, "Would you like to explore this partition "
-                            "[y/n]? ");
-            fscanf(stdin, "%c", buf);
-            block_buf = (uint8_t*) malloc(ext2_block_size(superblock));
-
-            if (block_buf == NULL)
+            if (ext2_probe(disk, partition_offset, &superblock))
             {
-                fprintf_light_red(stderr, "Out of Memory error.\n");
-                return EXIT_FAILURE;
+                fprintf_light_red(stderr, "ext2 probe failed.\n");
+                continue;
             }
-
-            if (buf[0] == 'y' || buf[0] == 'Y')
+            else
             {
-                while (1)
-                {
-                    fprintf_light_blue(stdout, "> ");
-                    fscanf(stdin, "%s", buf);
+                fprintf_light_green(stdout, "--- Found ext2 Partition at "
+                                            "Offset 0x%.16"PRIx64" ---\n",
+                                            partition_offset);
+                fprintf(stdout, "Would you like to explore this partition "
+                                "[y/n]? ");
+                fscanf(stdin, "%c", buf);
+                block_buf = (uint8_t*) malloc(ext2_block_size(superblock));
 
-                    if(strcmp(buf, "show") == 0)
+                if (block_buf == NULL)
+                {
+                    fprintf_light_red(stderr, "Out of Memory error.\n");
+                    return EXIT_FAILURE;
+                }
+
+                if (buf[0] == 'y' || buf[0] == 'Y')
+                {
+                    while (1)
                     {
-                        fscanf(stdin, "%"PRIu64, &block_num);
-                        fprintf_cyan(stdout, "Examining data block: %"PRIu64
-                                             ".\n", block_num);
-                        ext2_read_block(disk, partition_offset, superblock,
-                                        block_num, block_buf);
-                        ext2_print_block(block_buf, ext2_block_size(superblock));
-                    }
-                    
-                    if (strcmp(buf, "exit") == 0)
-                    {
-                        fprintf_cyan(stdout, "Goodbye.\n");
-                        fclose(disk);
-                        return EXIT_SUCCESS; 
+                        fprintf_light_blue(stdout, "> ");
+                        fscanf(stdin, "%s", buf);
+
+                        if(strcmp(buf, "show") == 0)
+                        {
+                            fscanf(stdin, "%"PRIu64, &block_num);
+                            fprintf_cyan(stdout, "Examining data block: %"PRIu64
+                                                 ".\n", block_num);
+                            ext2_read_block(disk, partition_offset, superblock,
+                                            block_num, block_buf);
+                            ext2_print_block(block_buf, ext2_block_size(superblock));
+                        }
+                        
+                        if (strcmp(buf, "exit") == 0)
+                        {
+                            fprintf_cyan(stdout, "Goodbye.\n");
+                            fclose(disk);
+                            return EXIT_SUCCESS; 
+                        }
                     }
                 }
             }
