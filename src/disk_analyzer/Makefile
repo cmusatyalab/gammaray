@@ -4,7 +4,7 @@ default:
 	@gcc data_block_explorer.c ext2.c color.c mbr.c -o data_block_explorer -Wall -Werror
 
 test: default
-	@./disk_analyzer /home/wolf/sample_virtual_disks/tinycore_big.img 
+	@./disk_analyzer /home/wolf/Dropbox/Projects/xray/sample/tinycore.raw
 
 bigtest: default
 	@./disk_analyzer /home/wolf/sample_virtual_disks/tinycore_big.img
