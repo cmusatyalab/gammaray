@@ -36,7 +36,7 @@ int64_t parse_write(uint8_t* event_stream, int64_t stream_size, struct qemu_bdrv
         return -1;
 
     parsing = strlen(line);
-    fprintf_light_green(stderr, "line operating on \"%s\"\n", line);
+    fprintf_yellow(stderr, "debug: operating on string '%s'\n", line);
     tokenize_space_split((char *) event_stream, tokens, 11, parsing);
 
     if (strcmp(tokens[0], BDRV_CO_IO_EM) == 0)
@@ -79,7 +79,10 @@ int64_t parse_write(uint8_t* event_stream, int64_t stream_size, struct qemu_bdrv
     }
     else
     {
-        fprintf_light_blue(stderr, "Fatal error, unknown trace message (not %s).\n", BDRV_CO_IO_EM);
+        fprintf_light_blue(stderr, "Fatal error, unknown trace message "
+                                   "(not %s).\n", BDRV_CO_IO_EM);
+        tokenize_space_unsplit(line, parsing);
+        fprintf_light_red(stderr, "attempted to parse line: \'%s\'\n", line);
         exit(EXIT_FAILURE);
     }
 

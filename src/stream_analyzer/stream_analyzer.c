@@ -6,6 +6,10 @@
  *****************************************************************************/
 
 #include <inttypes.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,12 +18,12 @@
 #include "../disk_analyzer/color.h"
 #include "qemu_tracer.h"
 
-#define BLOCK_SIZE 4096
+#define BLOCK_SIZE 128 
 
 /* main thread of execution */
 int main(int argc, char* args[])
 {
-    FILE* index;
+    int fd;
     uint8_t buf[BLOCK_SIZE + 1], buf2[BLOCK_SIZE + 1];
     uint8_t* read_buf = buf;
     int64_t total = 0, parsed = 0, total_parsed = 0, position = 0, offset = 0;
@@ -36,9 +40,16 @@ int main(int argc, char* args[])
 
     fprintf_cyan(stdout, "Loading index: %s\n\n", args[1]);
 
-    index = fopen(args[1], "rb");
+    if (strcmp(args[1], "-") != 0)
+    {
+        fd = open(args[1], O_RDONLY);
+    }
+    else
+    {
+        fd = 0;
+    }
     
-    if (index == NULL)
+    if (fd == -1)
     {
         fprintf_light_red(stderr, "Error opening index file. "
                                   "Does it exist?\n");
@@ -47,19 +58,20 @@ int main(int argc, char* args[])
 
     while (1)
     {
-        total = fread(&read_buf[offset], 1, BLOCK_SIZE - 1 - offset, index);
+        fprintf_light_cyan(stderr, "debug: looping to read...\n");
+        total = read(fd, &read_buf[offset], BLOCK_SIZE - 1 - offset);
+        fprintf_light_cyan(stderr, "debug: got %d bytes\n", total);
 
         /* check for EOF */
-        if (total == 0 && feof(index))
+        if (total == 0)
         {
             fprintf_light_red(stderr, "Total read: %"PRId64".\n", total);
-            fprintf_light_red(stderr, "feof(index) %u.\n", feof(index));
             fprintf_light_red(stderr, "Reading from stream failed, assuming "
                                       "teardown.\n");
             break;
         }
 
-        if (total == 0)
+        if (total < 0)
         {
             fprintf_light_red(stderr, "Unknown fatal error occurred, 0 bytes"
                                        "read from stream.\n");
@@ -82,26 +94,27 @@ int main(int argc, char* args[])
             }
             else if (parsed == -1)
             {
-                fprintf_light_red(stderr, "Token potentially straddling read buffer boundary, backing up.\n");
-                fprintf_light_red(stderr, "DEBUG read_buf[read-parser]: %s\n", &read_buf[position]);
                 offset = strlen((char*) &read_buf[position]);
+                fprintf_light_red(stderr, "Split buffer, copying end to "
+                                          "beginning: \'%s\'.\n",
+                                          &read_buf[position]);
                 /* want current pos to end of buf copied to straddle_buf beginning */
                 /* then want to read into straddle buf from offset */
                 if (read_buf == buf)
                 {
                     read_buf = buf2;
                     memcpy(read_buf, &buf[position], offset+1);
-                    fprintf_light_red(stderr, "DEBUG read_buf copied into: %s\n", read_buf);
-                    fprintf_light_red(stderr, "offset byte -1 is: %c\n", read_buf[offset-1]);
-                    fprintf_light_red(stderr, "offset byte is: %x\n", read_buf[offset]);
+                    fprintf_light_red(stderr, "Split buffer, copyied end to "
+                                              "beginning: \'%s\'.\n",
+                                              read_buf);
                 }
                 else if (read_buf == buf2)
                 {
                     read_buf = buf;
                     memcpy(read_buf, &buf2[position], offset+1);
-                    fprintf_light_red(stderr, "DEBUG read_buf copied into: %s\n", read_buf);
-                    fprintf_light_red(stderr, "offset byte -1 is: %c\n", read_buf[offset-1]);
-                    fprintf_light_red(stderr, "offset byte is: %x\n", read_buf[offset]);
+                    fprintf_light_red(stderr, "Split buffer, copyied end to "
+                                              "beginning: \'%s\'.\n",
+                                              read_buf);
                 }
                 else
                 {
@@ -119,7 +132,7 @@ int main(int argc, char* args[])
         }
     }
 
-    fclose(index);
+    close(fd);
 
     return EXIT_SUCCESS;
 }
