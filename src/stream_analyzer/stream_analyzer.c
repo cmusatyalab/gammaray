@@ -17,6 +17,7 @@
 
 #include "../disk_analyzer/color.h"
 #include "qemu_tracer.h"
+#include "byte_printer.h"
 
 #define BLOCK_SIZE 128 
 
@@ -61,6 +62,7 @@ int main(int argc, char* args[])
         fprintf_light_cyan(stderr, "debug: looping to read...\n");
         total = read(fd, &read_buf[offset], BLOCK_SIZE - 1 - offset);
         fprintf_light_cyan(stderr, "debug: got %d bytes\n", total);
+        print_bytes((char*) read_buf, total+offset);
 
         /* check for EOF */
         if (total == 0)
@@ -129,6 +131,8 @@ int main(int argc, char* args[])
                 qemu_print_write(write);
                 qemu_print_sector_type(qemu_infer_sector_type(write));
             }
+
+            offset = 0;
         }
     }
 
