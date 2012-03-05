@@ -25,10 +25,9 @@
 int main(int argc, char* args[])
 {
     int fd;
-    uint8_t buf[BLOCK_SIZE + 1], buf2[BLOCK_SIZE + 1];
-    uint8_t* read_buf = buf;
-    int64_t total = 0, parsed = 0, total_parsed = 0, position = 0, offset = 0;
-    struct qemu_bdrv_co_io_em write;
+    uint8_t buf[qemu_sizeof_binary_header()];
+    int64_t total = 0, read_ret = 0;
+    struct qemu_bdrv_write write;
     fprintf_blue(stdout, "Virtual Block Write Stream Analyzer -- "
                          "By: Wolfgang Richter "
                          "<wolf@cs.cmu.edu>\n");
@@ -59,81 +58,59 @@ int main(int argc, char* args[])
 
     while (1)
     {
-        fprintf_light_cyan(stderr, "debug: looping to read...\n");
-        total = read(fd, &read_buf[offset], BLOCK_SIZE - 1 - offset);
-        fprintf_light_cyan(stderr, "debug: got %d bytes\n", total);
-        print_bytes((char*) read_buf, total+offset);
+        read_ret = read(fd, buf, qemu_sizeof_binary_header());
+        total = read_ret;
+
+        while (read_ret > 0 && total < qemu_sizeof_binary_header())
+        {
+            read_ret = read(fd, &buf[total], qemu_sizeof_binary_header() - total);
+            total += read_ret;
+        }
 
         /* check for EOF */
-        if (total == 0)
+        if (read_ret == 0)
         {
             fprintf_light_red(stderr, "Total read: %"PRId64".\n", total);
             fprintf_light_red(stderr, "Reading from stream failed, assuming "
                                       "teardown.\n");
-            break;
+            return EXIT_FAILURE;
         }
 
-        if (total < 0)
+        if (read_ret < 0)
         {
             fprintf_light_red(stderr, "Unknown fatal error occurred, 0 bytes"
                                        "read from stream.\n");
             return EXIT_FAILURE;
         }
 
-        total += offset;
-        read_buf[total] = 0; /* make sure final guard byte is 0 for string */
-        position = 0;
+        qemu_parse_binary_header(buf, &write);
+        write.data = (const uint8_t*) malloc(write.nb_sectors*512);
 
-        write.write = 0;
-
-        while (position >= 0 && position < total)
+        if (write.data == NULL)
         {
-            parsed = parse_write(&read_buf[position], total-position, &write);
-            if (parsed > 0)
-            {
-                position += parsed;
-                total_parsed += parsed;
-            }
-            else if (parsed == -1)
-            {
-                offset = strlen((char*) &read_buf[position]);
-                fprintf_light_red(stderr, "Split buffer, copying end to "
-                                          "beginning: \'%s\'.\n",
-                                          &read_buf[position]);
-                /* want current pos to end of buf copied to straddle_buf beginning */
-                /* then want to read into straddle buf from offset */
-                if (read_buf == buf)
-                {
-                    read_buf = buf2;
-                    memcpy(read_buf, &buf[position], offset+1);
-                    fprintf_light_red(stderr, "Split buffer, copyied end to "
-                                              "beginning: \'%s\'.\n",
-                                              read_buf);
-                }
-                else if (read_buf == buf2)
-                {
-                    read_buf = buf;
-                    memcpy(read_buf, &buf2[position], offset+1);
-                    fprintf_light_red(stderr, "Split buffer, copyied end to "
-                                              "beginning: \'%s\'.\n",
-                                              read_buf);
-                }
-                else
-                {
-                    fprintf_light_red(stderr, "Fatal error, read_buf is invalid pointer.\n");
-                    exit(EXIT_FAILURE);
-                }
-                break;
-            }
-
-            if (write.write == 1)
-            {
-                qemu_print_write(write);
-                qemu_print_sector_type(qemu_infer_sector_type(write));
-            }
-
-            offset = 0;
+            fprintf_light_red(stderr, "malloc() failed, assuming OOM.\n");
+            return EXIT_FAILURE;
         }
+
+        read_ret  = read(fd, (uint8_t*) write.data, write.nb_sectors*512);
+        total = read_ret;
+
+        while (read_ret > 0 && total < write.nb_sectors*512)
+        {
+            read_ret  = read(fd, (uint8_t*) &write.data[total], write.nb_sectors*512 - total);
+            total += read_ret;
+        }
+
+        if (read_ret <= 0)
+        {
+            fprintf_light_red(stderr, "Stream ended while reading sector "
+                                       "data.\n");
+            return EXIT_FAILURE;
+        }
+
+        qemu_print_binary_write(write);
+        qemu_print_sector_type(qemu_infer_binary_sector_type(write));
+        free((void*) write.data);
     }
 
     close(fd);

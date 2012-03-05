@@ -6,6 +6,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+int64_t qemu_sizeof_binary_header()
+{
+    return QEMU_BINARY_HEADER_SIZE;
+}
+
 int qemu_print_write(struct qemu_bdrv_co_io_em write)
 {
     fprintf_light_blue(stdout, "brdv_co_io_em event\n");
@@ -14,6 +19,23 @@ int qemu_print_write(struct qemu_bdrv_co_io_em write)
     fprintf_yellow(stdout, "\tsector_count: %"PRIu32"\n", write.sector_count);
     fprintf_yellow(stdout, "\twrite: %"PRIu8"\n", write.write);
     fprintf_yellow(stdout, "\tacb: 0x%"PRIx32"\n", write.acb);
+    return 0;
+}
+
+int qemu_print_binary_write(struct qemu_bdrv_write write)
+{
+    fprintf_light_blue(stdout, "brdv_write event\n");
+    fprintf_yellow(stdout, "\tsector_num: %0."PRId64"\n", write.sector_num);
+    fprintf_yellow(stdout, "\tnb_sectors: %d\n", write.nb_sectors);
+    fprintf_yellow(stdout, "\tdata: %p\n", write.data);
+    return 0;
+}
+
+int64_t qemu_parse_binary_header(uint8_t* event_stream,
+                                 struct qemu_bdrv_write* write)
+{
+    write->sector_num = *((int64_t*) event_stream);
+    write->nb_sectors = *((int*) (event_stream + sizeof(int64_t)));
     return 0;
 }
 
@@ -87,6 +109,19 @@ int64_t parse_write(uint8_t* event_stream, int64_t stream_size, struct qemu_bdrv
     }
 
     return -1;
+}
+
+int qemu_infer_binary_sector_type(struct qemu_bdrv_write write)
+{
+   if (write.sector_num == 0)
+   {
+       return SECTOR_MBR;
+   } 
+   if (write.sector_num > 0x03f && write.sector_num < 0x03f + 0x046a1)
+   {
+       return SECTOR_EXT2_PARTITION;
+   }
+   return SECTOR_UNKNOWN;
 }
 
 int qemu_infer_sector_type(struct qemu_bdrv_co_io_em write)
