@@ -4,7 +4,7 @@
 #include <inttypes.h>
 
 #define BDRV_CO_IO_EM "bdrv_co_io_em"
-#define QEMU_BINARY_HEADER_SIZE sizeof(int64_t) + sizeof(int)
+#define QEMU_BINARY_HEADER_SIZE sizeof(struct qemu_bdrv_write_header)
 
 enum SECTOR_TYPE
 {
@@ -38,10 +38,15 @@ struct qemu_bdrv_co_io_em
     uint32_t acb;
 };
 
-struct qemu_bdrv_write
+struct qemu_bdrv_write_header
 {
     int64_t sector_num;
     int nb_sectors;
+}__attribute__((packed));
+
+struct qemu_bdrv_write
+{
+    struct qemu_bdrv_write_header header;
     const uint8_t* data;
 };
 
