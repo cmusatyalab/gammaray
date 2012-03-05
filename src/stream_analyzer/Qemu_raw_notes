@@ -1,0 +1,50 @@
+Raw Block Device Defined in
+
+block/raw.c
+
+    BlockDriver bdrv_raw
+        .bdrv_co_writev = raw_co_writev
+        raw_co_writev -> bdrv_co_writev
+
+    * Note: .bdrv_co_readv = raw_co_readv thus in bdrv_register .bdrv_co_writev
+            will not be set to bdrv_co_writev_em
+    
+    includes block_int.h
+    block_int.h imports block.h
+
+block.h
+
+    declares bdrv_co_writev (coroutine_fn)
+
+    coroutine_fn --> this is a blank #define in qemu-coroutine.h
+        + meant to mark things as documentation; later static checker maybe
+
+block.c
+
+    defines bdrv_co_writev --> bdrv_co_do_writev
+
+    defines bdrv_co_do_writev --> drv->bdrv_co_writev
+
+    * In this case, drv is a "BlockDriver" struct, presumably a raw registered
+      one.  Thus, we know that for raw bdrv_co_writev was set to
+            raw_co_writev -> bdrv_co_writev
+
+    * This seems circular.  I am confused and do not understand.
+
+block/raw.c
+
+    raw_open --> takes in BlockDriverState bs
+
+--> block/raw.c/raw_open called from raw_posix.c and raw_win32.c
+
+    raw_open_common
+
+
+Investigation shows this ordering:
+
+Step3: bdrv_co_do_writev called
+calling drv->bdrv_co_writev
+Step 1: raw_co_writev called
+Step2: bdrv_co_writev called
+Step3: bdrv_co_do_writev called
+
