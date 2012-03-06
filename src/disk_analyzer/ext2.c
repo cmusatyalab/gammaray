@@ -233,6 +233,8 @@ int ext2_next_block_group_descriptor(FILE* disk,
                               "Descriptor.\n");
             return -1;
         }
+        fprintf_yellow(stdout, "BGD %"PRIu32"\nStart Sector %"PRId64"\n",
+                               i, offset / SECTOR_SIZE);
         i++;
         return 1;
     }
@@ -821,7 +823,6 @@ int ext2_reconstruct_tree(FILE* disk, int64_t partition_offset,
 
     if (root_inode.i_mode & 0x8000) /* file, no dir entries more */
     {
-        /* TODO: reconstruct file */
         strcpy(copy, copy_prefix);
         prefix[strlen(prefix)-1] = '\0'; /* remove trailing slash */
         strcat(copy, prefix);
@@ -832,7 +833,6 @@ int ext2_reconstruct_tree(FILE* disk, int64_t partition_offset,
     }
     else if (root_inode.i_mode & 0x4000)
     {
-        /* TODO: reconstruct dir */
         strcpy(copy, copy_prefix);
         strcat(copy, prefix);
         fprintf_light_red(stdout, "Creating dir: %s\n", copy);
@@ -936,95 +936,222 @@ int ext2_reconstruct_root_fs(FILE* disk, int64_t partition_offset,
     return 0;
 }
 
-/* depth first find */
-int simple_find(uint32_t inode_table_offset,
-                FILE* disk, uint32_t inode_number, char* path_prefix)
+int ext2_print_file_sectors(FILE* disk, int64_t partition_offset,
+                            struct ext2_superblock superblock, 
+                            struct ext2_inode inode, char* copy_path)
 {
-    /* go inode by inode */
-    struct ext2_inode inode;
-    struct ext2_dir_entry dir;
-    char path[4096] = {0}, reconstructed[4096] = {'/','t','m','p','/','\0'};
-    uint16_t dir_entry_offset = 0, total_offset = 0;
-    uint32_t dir_block = 0;
-    uint32_t block_group_offset = 32768*(1024<<2)*((inode_number - 1) / 8192);
-    //fprintf_light_cyan(stdout, "inode table offset: 0x%"PRIx32" inode: %"PRIu32"\n",
-    //                           inode_table_offset, inode_number);
-    
-    /* start crawling root inode */
-    //read_inode(disk, inode_table_offset+block_group_offset, inode_number % 8192,
-    //           &inode);
-    //print_ext2_inode(inode);
-    dir_block = inode.i_block[0];
-    
-    /* create folder */
-    if (inode.i_mode & 0x4000)
-    {
-        if (path_prefix[1])
-        {
-            strcat(reconstructed, &(path_prefix[1]));
-            fprintf_light_red(stdout, "Creating dir: %s\n", reconstructed);
-            mkdir(reconstructed, ext2_inode_mode(inode.i_mode));
-        }
-    }
-    
-    /* reconstruct file for debugging */
-    if (inode.i_mode & 0x8000)
-    {
-        strcat(reconstructed, &(path_prefix[1]));
-        reconstructed[strlen(reconstructed) - 1] = '\0';
-        FILE* dest = fopen(reconstructed, "wb");
+    FILE* copy;
+    uint64_t block_size = ext2_block_size(superblock),
+             file_size = ext2_file_size(inode);
+    uint8_t buf[block_size];
+    uint64_t num_blocks;
+    uint64_t i;
+    int ret_check;
 
-        if (dest == NULL)
+    if (inode.i_mode & 0x4000) /* dir entry, not a file */
+    {
+        fprintf_light_red(stderr, "Refusing to reconstruct dir inode, dir != "
+                                  "file.\n");
+        return -1;
+    }
+
+    if (file_size == 0)
+    {
+        num_blocks = 0;
+    }
+    else
+    {
+        num_blocks = file_size / block_size;
+        if (file_size % block_size != 0)
+            num_blocks += 1;
+    }
+
+    if ((copy = fopen(copy_path, "wb")) == NULL)
+    {
+        fprintf_light_red(stderr, "Error opening copy file for writing.\n");
+        return -1;
+    }
+
+    /* go through each valid block of the inode */
+    for (i = 0; i < num_blocks; i++)
+    {
+        ret_check = ext2_read_file_block(disk, partition_offset, superblock, i,
+                                         inode, (uint32_t*) buf);
+        
+        if (ret_check < 0) /* error reading */
         {
-            fprintf_light_red(stderr, "Failed opening reconstruction file %s."
-                                      "\n", reconstructed);
+            fprintf_light_red(stderr, "Error reading file block.\n");
+            fclose(copy);
+            return -1;
+        }
+        else if (ret_check > 0) /* no more blocks? */
+        {
+            fprintf_light_red(stderr, "Premature ending of file blocks.\n");
+            fclose(copy);
             return -1;
         }
 
-        //if (reconstruct_file(disk, dest, inode, 0x7e00, 1024<<2))
-        //{
-        //   fprintf_light_red(stderr, "Reconstructing file failed.");
-        //    fclose(dest);
-        //    return -1;
-        //}
 
-        fprintf_light_yellow(stdout, "Reconstructed file: %s\n",
-                                     reconstructed);
+        if (file_size >= block_size)
+        {
+            if (fwrite(buf, sizeof(uint8_t), block_size, copy) != block_size)
+            {
+                fprintf_light_red(stderr, "Error could not write expected "
+                                          "number of bytes to copy file.\n");
+                return -1;
+            }
+            file_size -= block_size;
+        }
+        else
+        {
+            if (fwrite(buf, sizeof(uint8_t), file_size, copy) != file_size)
+            {
+                fprintf_light_red(stderr, "Error could not write expected"
+                                          "number of bytes to copy file.\n");
+                return -1;
+            }
+            break;
+        }
 
-        fclose(dest);
-        return 0;
     }
 
-    if (dir_block == 0)
-        return 0;
+    fclose(copy);
 
-    while(total_offset < (1024<<2))
+   return 0;
+}
+
+/* recursive function listing a tree rooted at some directory.
+ * recursion ends at leaf files.
+ * depth-first
+ */
+int ext2_print_tree_sectors(FILE* disk, int64_t partition_offset, 
+                            struct ext2_superblock superblock,
+                            struct ext2_inode root_inode,
+                            char* prefix,
+                            char* copy_prefix)
+{
+    struct ext2_inode child_inode;
+    struct ext2_dir_entry dir;
+    uint64_t block_size = ext2_block_size(superblock), position = 0;
+    uint8_t buf[block_size];
+    uint64_t num_blocks;
+    uint64_t i;
+    int ret_check;
+    char path[8192], copy[8192];
+
+    if (root_inode.i_mode & 0x8000) /* file, no dir entries more */
     {
-        //fprintf_light_red(stdout, "reading data block: %"PRIu32"\n", dir_block);
-        dir_entry_offset = read_dir_entry(0x7e00 + (1024<<2)*(dir_block%32768) +
-                                          total_offset + block_group_offset, disk, &dir);
-        total_offset += dir_entry_offset;
-
-        if (strcmp((const char *) dir.name, ".") == 0 ||
-            strcmp((const char *) dir.name, "..") == 0)
-            continue;
-
-        //print_ext2_dir_entry(0, dir);
-        //fprintf_light_red(stdout, "total_offset: %"PRIu16"\n", total_offset);
-        strcpy(path, path_prefix);
-        strcat(path, (char*) dir.name);
-        fprintf_yellow(stdout, "%s\n", path);
-
-        strcat(path, "/");
-        //fprintf_light_red(stdout, "recursing deeper...inode: %"PRIu32"\n", dir.inode);
-        //read_inode(disk, inode_table_offset+block_group_offset, inode_number % 1136, &inode);
-        //print_ext2_inode(inode);
-
-        simple_find(inode_table_offset, disk, dir.inode, path);
+        strcpy(copy, copy_prefix);
+        prefix[strlen(prefix)-1] = '\0'; /* remove trailing slash */
+        strcat(copy, prefix);
+        fprintf_light_red(stdout, "Creating file: %s\n", copy);
+        ext2_reconstruct_file(disk, partition_offset, superblock, root_inode,
+                              copy);
+        return 0;
     }
-    
+    else if (root_inode.i_mode & 0x4000)
+    {
+        strcpy(copy, copy_prefix);
+        strcat(copy, prefix);
+        fprintf_light_red(stdout, "Creating dir: %s\n", copy);
+        mkdir(copy, ext2_inode_mode(root_inode.i_mode));
+    }
 
-    return 0; 
+    if (ext2_file_size(root_inode) == 0)
+    {
+        num_blocks = 0;
+    }
+    else
+    {
+        num_blocks = ext2_file_size(root_inode) / block_size;
+        if (ext2_file_size(root_inode) % block_size != 0)
+            num_blocks += 1;
+    }
+
+    /* go through each valid block of the inode */
+    for (i = 0; i < num_blocks; i++)
+    {
+        ret_check = ext2_read_file_block(disk, partition_offset, superblock, i, root_inode, (uint32_t*) buf);
+        
+        if (ret_check < 0) /* error reading */
+        {
+            fprintf_light_red(stderr, "Error reading inode dir block.\n");
+            return -1;
+        }
+        else if (ret_check > 0) /* no more blocks? */
+        {
+            return 0;
+        }
+
+        position = 0;
+
+        while (position < block_size)
+        {
+            strcpy(path, prefix);
+
+            if (ext2_read_dir_entry(&buf[position], &dir))
+            {
+                fprintf_light_red(stderr, "Error reading dir entry from block.\n");
+                return -1;
+            }
+
+            if (dir.inode == 0)
+                return 0;
+
+            if (ext2_read_inode(disk, partition_offset, superblock, dir.inode, &child_inode))
+            {
+               fprintf_light_red(stderr, "Error reading child inode.\n");
+               return -1;
+            } 
+
+            dir.name[dir.name_len] = 0;
+            strcat(path, (char*) dir.name);
+            
+            if (strcmp((const char *) dir.name, ".") != 0 &&
+                strcmp((const char *) dir.name, "..") != 0)
+            {
+                if (child_inode.i_mode & 0x4000)
+                {
+                    fprintf_light_yellow(stdout, "%s\n", path);
+                }
+                else if (child_inode.i_mode & 0x8000)
+                {
+                    fprintf_yellow(stdout, "%s\n", path);
+                }
+                else
+                {
+                    fprintf_red(stdout, "%s\n", path);
+                }
+                ext2_reconstruct_tree(disk, partition_offset, superblock,
+                                      child_inode, strcat(path, "/"), copy_prefix); /* recursive call */
+            }
+
+            position += dir.rec_len;
+        }
+    }
+
+    return 0;
+}
+
+int ext2_print_root_fs_sectors(FILE* disk, int64_t partition_offset,
+                               struct ext2_superblock superblock, char* prefix,
+                               char* copy_prefix)
+{
+    struct ext2_inode root;
+    if (ext2_read_inode(disk, partition_offset, superblock, 2, &root))
+    {
+        fprintf(stderr, "Failed getting root fs inode.\n");
+        return -1;
+    }
+
+    if (ext2_print_tree_sectors(disk, partition_offset, superblock, root,
+                              prefix, copy_prefix))
+    {
+        fprintf(stdout, "Error listing fs tree from root inode.\n");
+        return -1;
+    }
+
+    return 0;
 }
 
 int print_inode_mode(uint16_t i_mode)
@@ -1357,7 +1484,7 @@ int ext2_probe(FILE* disk, int64_t partition_offset, struct ext2_superblock* sup
         return -1;
     }
 
-    partition_offset += 1024;
+    partition_offset += EXT2_SUPERBLOCK_OFFSET;
 
     if (fseeko(disk, partition_offset, 0))
     {
@@ -1396,5 +1523,43 @@ int ext2_list_block_groups(FILE* disk, int64_t partition_offset,
            return -1;
        }
     }
+    return 0;
+}
+
+int print_sectors_ext2_block_group_descriptor(int64_t offset, struct ext2_block_group_descriptor bgd, struct ext2_superblock superblock)
+{
+    uint32_t block_size = ext2_block_size(superblock);
+    fprintf_yellow(stdout, "bg_block_bitmap sector %"PRId64"\n",
+                           (bgd.bg_block_bitmap * block_size + offset) / SECTOR_SIZE);
+    fprintf_yellow(stdout, "bg_inode_bitmap sector %"PRIu32"\n",
+                           (bgd.bg_inode_bitmap * block_size + offset) / SECTOR_SIZE);
+    fprintf_yellow(stdout, "bg_inode_table sector start %"PRIu32"\n",
+                           (bgd.bg_inode_table * block_size + offset) / SECTOR_SIZE);
+    fprintf_yellow(stdout, "bg_inode_table sector end %"PRIu32"\n",
+                            (bgd.bg_inode_table * block_size + offset + superblock.s_inodes_per_group * sizeof(struct ext2_inode)) / SECTOR_SIZE);
+    fprintf_yellow(stdout, "BGD end sector %"PRId64"\n",
+                           (bgd.bg_block_bitmap * block_size + offset + superblock.s_blocks_per_group * block_size) / SECTOR_SIZE);
+    return 0;
+}
+
+int ext2_print_sectormap(FILE* disk, int64_t partition_offset,
+                         struct ext2_superblock superblock)
+{
+    /* print superblock sector */
+    fprintf_yellow(stdout, "Superblock sector %"PRId64"\n", (partition_offset + EXT2_SUPERBLOCK_OFFSET) / SECTOR_SIZE);
+
+    /* walk block group descriptor table */
+    struct ext2_block_group_descriptor bgd;
+
+    while (ext2_next_block_group_descriptor(disk, partition_offset, superblock, &bgd) > 0)
+    {
+       if (print_sectors_ext2_block_group_descriptor(partition_offset, bgd, superblock))
+       {
+           fprintf_light_red(stderr, "Failed printing block group descriptor.\n");
+           return -1;
+       }
+    }
+
+    /* walk inode table */
     return 0;
 }

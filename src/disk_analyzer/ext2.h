@@ -7,6 +7,9 @@
 
 #include "color.h"
 
+#define SECTOR_SIZE 512
+#define EXT2_SUPERBLOCK_OFFSET 1024
+
 struct ext2_superblock
 {
     uint32_t s_inodes_count;
@@ -116,5 +119,7 @@ int ext2_read_block(FILE* disk, int64_t partition_offset,
                     uint8_t* buf);
 int ext2_print_block(uint8_t* buf, uint32_t block_size);
 uint32_t ext2_block_size(struct ext2_superblock superblock);
+int ext2_print_sectormap(FILE* disk, int64_t partition_offset,
+                         struct ext2_superblock superblock);
 
 #endif

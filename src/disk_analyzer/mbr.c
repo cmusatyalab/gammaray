@@ -159,9 +159,18 @@ int64_t mbr_partition_offset(struct mbr mbr, int pte)
 
 int print_partition_sectors(struct partition_table_entry pte)
 {
-    fprintf(stdout, "%"PRIu32" %"PRIu32, pte.first_sector_lba,
-                                         pte.first_sector_lba +
-                                         pte.sector_count);
+    fprintf_yellow(stdout, "Partition Sector Start %"
+                            PRIu32"\nPartition Sector End %"PRIu32"\n",
+                            pte.first_sector_lba,
+                            pte.first_sector_lba +
+                            pte.sector_count);
+    return 0;
+}
+
+int mbr_print_numbers(struct mbr mbr)
+{
+    fprintf_yellow(stdout, "MBR Start Sector 0\n");
+    fprintf_yellow(stdout, "MBR End Sector 0\n");
     return 0;
 }
 
