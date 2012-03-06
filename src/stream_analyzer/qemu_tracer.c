@@ -6,23 +6,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-int64_t qemu_sizeof_binary_header()
+int64_t qemu_sizeof_header()
 {
-    return QEMU_BINARY_HEADER_SIZE;
+    return QEMU_HEADER_SIZE;
 }
 
-int qemu_print_write(struct qemu_bdrv_co_io_em write)
-{
-    fprintf_light_blue(stdout, "brdv_co_io_em event\n");
-    fprintf_yellow(stdout, "\tbs: 0x%0.x\n", write.bs);
-    fprintf_yellow(stdout, "\tsector: %"PRId64"\n", write.sector);
-    fprintf_yellow(stdout, "\tsector_count: %"PRIu32"\n", write.sector_count);
-    fprintf_yellow(stdout, "\twrite: %"PRIu8"\n", write.write);
-    fprintf_yellow(stdout, "\tacb: 0x%"PRIx32"\n", write.acb);
-    return 0;
-}
-
-int qemu_print_binary_write(struct qemu_bdrv_write write)
+int qemu_print_write(struct qemu_bdrv_write write)
 {
     fprintf_light_blue(stdout, "brdv_write event\n");
     fprintf_yellow(stdout, "\tsector_num: %0."PRId64"\n",
@@ -34,107 +23,63 @@ int qemu_print_binary_write(struct qemu_bdrv_write write)
     return 0;
 }
 
-int64_t qemu_parse_binary_header(uint8_t* event_stream,
+int64_t qemu_parse_header(uint8_t* event_stream,
                                  struct qemu_bdrv_write* write)
 {
     write->header = *((struct qemu_bdrv_write_header*) event_stream);
     return 0;
 }
 
-/* This function parses a single line of input.
- * It returns either the number of characters consumed,
- * or a -1 to signify a full line could not be parsed or
- * an incomplete message was encountered.
+/*
+ * MBR Start Sector 0
+ * MBR End Sector 0
+ * Partition Sector Start 63
+ * Partition Sector End 18144
+ * Superblock sector 65
+ * BGD 0
+ * Start Sector 4
+ * bg_block_bitmap sector 139
+ * bg_inode_bitmap sector 141
+ * bg_inode_table sector start 143
+ * bg_inode_table sector end 427
+ * BGD end sector 16523
+ * BGD 1
+ * Start Sector 4
+ * bg_block_bitmap sector 16523
+ * bg_inode_bitmap sector 16525
+ * bg_inode_table sector start 16527
+ * bg_inode_table sector end 16811
+ * BGD end sector 32907
  *
- * Incomplete messages should not occur, but if a line can not
- * be read, this means more bytes are needed from the stream
- * for further processing. */
-int64_t parse_write(uint8_t* event_stream, int64_t stream_size, struct qemu_bdrv_co_io_em* write)
-{
-    char* line, *tokens[] = {NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-                             NULL, NULL, NULL};
-    int64_t parsing;
-
-    line = tokenize_line((char*) event_stream, stream_size);
-    if (line == NULL) /* backup to process a full line at a time */
-        return -1;
-
-    parsing = strlen(line);
-    fprintf_yellow(stderr, "debug: operating on string '%s'\n", line);
-    tokenize_space_split((char *) event_stream, tokens, 11, parsing);
-
-    if (strcmp(tokens[0], BDRV_CO_IO_EM) == 0)
-    {
-        if (tokens[2] == NULL)
-        {
-            tokenize_space_unsplit(line, parsing);
-            return -1;
-        }
-        sscanf(tokens[2], "%"PRIx32, &(write->bs));
-        
-        if (tokens[4] == NULL)
-        {
-            tokenize_space_unsplit(line, parsing);
-            return -1;
-        }
-        sscanf(tokens[4], "%"PRId64, &(write->sector));
-        
-        if (tokens[6] == NULL)
-        {
-            tokenize_space_unsplit(line, parsing);
-            return -1;
-        }
-        sscanf(tokens[6], "%"PRIu32, &(write->sector_count));
-        
-        if (tokens[8] == NULL)
-        {
-            tokenize_space_unsplit(line, parsing);
-            return -1;
-        }
-        sscanf(tokens[8], "%"PRIu8, (unsigned int*) &(write->write));
-        
-        if (tokens[10] == NULL)
-        {
-            tokenize_space_unsplit(line, parsing);
-            return -1;
-        }
-        sscanf(tokens[10], "%"PRIx32,   &(write->acb));
-        return parsing + 1; /* +1 for final '\n' char */
-    }
-    else
-    {
-        fprintf_light_blue(stderr, "Fatal error, unknown trace message "
-                                   "(not %s).\n", BDRV_CO_IO_EM);
-        tokenize_space_unsplit(line, parsing);
-        fprintf_light_red(stderr, "attempted to parse line: \'%s\'\n", line);
-        exit(EXIT_FAILURE);
-    }
-
-    return -1;
-}
-
-int qemu_infer_binary_sector_type(struct qemu_bdrv_write write)
+ * */
+int qemu_infer_sector_type(struct qemu_bdrv_write write)
 {
    if (write.header.sector_num == 0)
    {
        return SECTOR_MBR;
    } 
-   if (write.header.sector_num > 0x03f && write.header.sector_num <
-                                          0x03f + 0x046a1)
+   if (write.header.sector_num > 0x03f && write.header.sector_num < 0x03f + 0x046a1)
    {
-       return SECTOR_EXT2_PARTITION;
-   }
-   return SECTOR_UNKNOWN;
-}
-
-int qemu_infer_sector_type(struct qemu_bdrv_co_io_em write)
-{
-   if (write.sector == 0)
-   {
-       return SECTOR_MBR;
-   } 
-   if (write.sector > 0x03f && write.sector < 0x03f + 0x046a1)
-   {
+       if (write.header.sector_num == 65)
+           return SECTOR_EXT2_SUPERBLOCK;
+       if (write.header.sector_num == 4)
+           return SECTOR_EXT2_BLOCK_GROUP_DESCRIPTOR;
+       if (write.header.sector_num == 139)
+           return SECTOR_EXT2_BLOCK_GROUP_BLOCKMAP;
+       if (write.header.sector_num == 141)
+           return SECTOR_EXT2_BLOCK_GROUP_INODEMAP;
+       if (write.header.sector_num >= 143 && write.header.sector_num < 427)
+           return SECTOR_EXT2_INODE;
+       if (write.header.sector_num >= 427 && write.header.sector_num < 16523)
+           return SECTOR_EXT2_DATA;
+       if (write.header.sector_num == 16523)
+           return SECTOR_EXT2_BLOCK_GROUP_BLOCKMAP;
+       if (write.header.sector_num == 16525)
+           return SECTOR_EXT2_BLOCK_GROUP_INODEMAP;
+       if (write.header.sector_num >= 16527 && write.header.sector_num < 16811)
+           return SECTOR_EXT2_INODE;
+       if (write.header.sector_num >= 16811)
+           return SECTOR_EXT2_DATA;
        return SECTOR_EXT2_PARTITION;
    }
    return SECTOR_UNKNOWN;
@@ -147,20 +92,26 @@ int qemu_print_sector_type(int type)
         case SECTOR_MBR:
             fprintf_light_green(stdout, "Write to MBR detected.\n");
             return 0;
-        case SECTOR_EXT2_PARTITION:
-            fprintf_light_green(stdout, "Write to ext2 partition detected.\n");
-            return 0;
         case SECTOR_EXT2_SUPERBLOCK:
             fprintf_light_green(stdout, "Write to ext2 superblock detected.\n");
             return 0;
         case SECTOR_EXT2_BLOCK_GROUP_DESCRIPTOR:
             fprintf_light_green(stdout, "Write to ext2 block group descriptor detected.\n");
             return 0;
+        case SECTOR_EXT2_BLOCK_GROUP_BLOCKMAP:
+            fprintf_light_green(stdout, "Write to ext2 block group block map detected.\n");
+            return 0;
+        case SECTOR_EXT2_BLOCK_GROUP_INODEMAP:
+            fprintf_light_green(stdout, "Write to ext2 block group inode map detected.\n");
+            return 0;
         case SECTOR_EXT2_INODE:
             fprintf_light_green(stdout, "Write to ext2 inode detected.\n");
             return 0;
         case SECTOR_EXT2_DATA:
             fprintf_light_green(stdout, "Write to ext2 data block detected.\n");
+            return 0;
+        case SECTOR_EXT2_PARTITION:
+            fprintf_light_green(stdout, "Write to ext2 partition detected.\n");
             return 0;
         case SECTOR_UNKNOWN:
             fprintf_light_red(stdout, "Unknown sector type.\n");

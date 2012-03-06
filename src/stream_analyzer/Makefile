@@ -9,6 +9,10 @@ default:
 		 -Werror \
 		 #-DNOCOLOR
 
+infer: default
+	@./stream_analyzer \
+		/home/wolf/Dropbox/Projects/xray/sample/file_create_write_65k.log
+
 test: default
 	@./stream_analyzer \
 		/home/wolf/Dropbox/Projects/xray/sample/qemu_tinycore.raw.trace

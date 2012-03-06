@@ -25,7 +25,7 @@
 int main(int argc, char* args[])
 {
     int fd;
-    uint8_t buf[qemu_sizeof_binary_header()];
+    uint8_t buf[qemu_sizeof_header()];
     int64_t total = 0, read_ret = 0;
     struct qemu_bdrv_write write;
     fprintf_blue(stdout, "Virtual Block Write Stream Analyzer -- "
@@ -58,12 +58,12 @@ int main(int argc, char* args[])
 
     while (1)
     {
-        read_ret = read(fd, buf, qemu_sizeof_binary_header());
+        read_ret = read(fd, buf, qemu_sizeof_header());
         total = read_ret;
 
-        while (read_ret > 0 && total < qemu_sizeof_binary_header())
+        while (read_ret > 0 && total < qemu_sizeof_header())
         {
-            read_ret = read(fd, &buf[total], qemu_sizeof_binary_header() - total);
+            read_ret = read(fd, &buf[total], qemu_sizeof_header() - total);
             total += read_ret;
         }
 
@@ -83,7 +83,7 @@ int main(int argc, char* args[])
             return EXIT_FAILURE;
         }
 
-        qemu_parse_binary_header(buf, &write);
+        qemu_parse_header(buf, &write);
         write.data = (const uint8_t*) malloc(write.header.nb_sectors*512);
 
         if (write.data == NULL)
@@ -110,8 +110,8 @@ int main(int argc, char* args[])
             return EXIT_FAILURE;
         }
 
-        qemu_print_binary_write(write);
-        qemu_print_sector_type(qemu_infer_binary_sector_type(write));
+        qemu_print_write(write);
+        qemu_print_sector_type(qemu_infer_sector_type(write));
         free((void*) write.data);
     }
 
