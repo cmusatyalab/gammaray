@@ -22,7 +22,7 @@ char* MBR_PT_LUT[] = { "Empty","","","","","Extended","","HPFS/NTFS","","","","W
 
 int print_partition_type(uint8_t type)
 {
-    fprintf_light_white(stdout, "Partition Type: %s\n", MBR_PT_LUT[type]);
+    fprintf_light_magenta(stdout, "Partition Type: %s\n", MBR_PT_LUT[type]);
     return -1;
 }
 
