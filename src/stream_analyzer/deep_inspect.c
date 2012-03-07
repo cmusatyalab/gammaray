@@ -111,7 +111,7 @@ int qemu_deep_inspect(struct qemu_bdrv_write write)
         {
             if (sector_num == map[i]->sectors[j])
             {
-                fprintf_light_red(stderr, "Write to sector %"PRId64" modifying %s\n", sector_num, map[i]->path);
+                fprintf_light_red(stdout, "Write to sector %"PRId64" modifying %s\n", sector_num, map[i]->path);
             }
             j++;
         }
