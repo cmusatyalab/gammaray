@@ -73,7 +73,7 @@ int main(int argc, char* args[])
                 mbr_print_numbers(mbr);
                 print_partition_sectors(pte);
                 ext2_print_sectormap(disk, partition_offset, ext2_superblock);
-                //ext2_print_superblock(ext2_superblock);
+                ext2_print_superblock(ext2_superblock);
                 //ext2_list_block_groups(disk, partition_offset, ext2_superblock);
                 //ext2_list_root_fs(disk, partition_offset, ext2_superblock, "/");
                 //ext2_reconstruct_root_fs(disk, partition_offset, ext2_superblock,
