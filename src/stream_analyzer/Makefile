@@ -4,6 +4,7 @@ default:
 		 qemu_tracer.c \
 		 tokenizer.c \
 		 byte_printer.c \
+		 deep_inspect.c \
 		 -o stream_analyzer \
 		 -Wall \
 		 -Werror \
@@ -11,7 +12,8 @@ default:
 
 infer: default
 	@./stream_analyzer \
-		/home/wolf/Dropbox/Projects/xray/sample/file_create_write_65k.log
+		/home/wolf/Dropbox/Projects/xray/sample/file_create_write_65k.log \
+		| less -R
 
 test: default
 	@./stream_analyzer \

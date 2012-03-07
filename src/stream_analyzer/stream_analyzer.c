@@ -18,6 +18,7 @@
 #include "../disk_analyzer/color.h"
 #include "qemu_tracer.h"
 #include "byte_printer.h"
+#include "deep_inspect.h"
 
 #define BLOCK_SIZE 128 
 
@@ -89,6 +90,8 @@ int main(int argc, char* args[])
         if (write.data == NULL)
         {
             fprintf_light_red(stderr, "malloc() failed, assuming OOM.\n");
+            fprintf_light_red(stderr, "tried allocating: %d bytes\n",
+                                      write.header.nb_sectors*512);
             return EXIT_FAILURE;
         }
 
@@ -112,6 +115,7 @@ int main(int argc, char* args[])
 
         qemu_print_write(write);
         qemu_print_sector_type(qemu_infer_sector_type(write));
+        qemu_deep_inspect(write);
         free((void*) write.data);
     }
 
