@@ -220,7 +220,7 @@ int ext2_next_block_group_descriptor(FILE* disk,
     {
         if (fseeko(disk, partition_offset + offset + i*sizeof(struct ext2_block_group_descriptor), 0))
         {
-            fprintf_light_red(stderr, "Error seeking to position 0x%lx.\n",
+            fprintf_light_red(stderr, "error seeking to position 0x%lx.\n",
                               offset);
             return -1;
         }
@@ -229,11 +229,44 @@ int ext2_next_block_group_descriptor(FILE* disk,
             sizeof(struct ext2_block_group_descriptor))
         {
             fprintf_light_red(stderr, 
-                              "Error while trying to read ext2 Block Group "
-                              "Descriptor.\n");
+                              "error while trying to read ext2 block group "
+                              "descriptor.\n");
             return -1;
         }
-        fprintf_yellow(stdout, "BGD %"PRIu32"\nStart Sector %"PRId64"\n",
+        i++;
+        return 1;
+    }
+
+    return 0; 
+}
+
+int ext2_next_block_group_descriptor_sectors(FILE* disk,
+                                             int64_t partition_offset,
+                                             struct ext2_superblock superblock,
+                                             struct ext2_block_group_descriptor* bgd)
+{
+    static uint32_t i = 0;
+    uint64_t offset = (superblock.s_first_data_block+1) * ext2_block_size(superblock);
+    uint32_t num_block_groups = ext2_num_block_groups(superblock);
+
+    for (; i < num_block_groups;)
+    {
+        if (fseeko(disk, partition_offset + offset + i*sizeof(struct ext2_block_group_descriptor), 0))
+        {
+            fprintf_light_red(stderr, "error seeking to position 0x%lx.\n",
+                              offset);
+            return -1;
+        }
+
+        if (fread(bgd, 1, sizeof(struct ext2_block_group_descriptor), disk) !=
+            sizeof(struct ext2_block_group_descriptor))
+        {
+            fprintf_light_red(stderr, 
+                              "Error while trying to read ext2 block group "
+                              "descriptor.\n");
+            return -1;
+        }
+        fprintf_yellow(stdout, "BGD %"PRIu32"\nstart sector %"PRIu64"\n",
                                i, offset / SECTOR_SIZE);
         i++;
         return 1;
@@ -816,9 +849,10 @@ int ext2_list_tree(FILE* disk, int64_t partition_offset,
             if (strcmp((const char *) dir.name, ".") != 0 &&
                 strcmp((const char *) dir.name, "..") != 0)
             {
+                fprintf_yellow(stdout, "inode %"PRIu32" ", dir.inode);
                 if (child_inode.i_mode & 0x4000)
                 {
-                    fprintf_light_yellow(stdout, "%s\n", path);
+                    fprintf_light_blue(stdout, "%s\n", path);
                 }
                 else if (child_inode.i_mode & 0x8000)
                 {
@@ -848,6 +882,8 @@ int ext2_list_root_fs(FILE* disk, int64_t partition_offset,
         fprintf(stderr, "Failed getting root fs inode.\n");
         return -1;
     }
+
+    fprintf_yellow(stdout, "inode 2 %s\n", prefix);
 
     if (ext2_list_tree(disk, partition_offset, superblock, root, prefix))
     {
@@ -1707,6 +1743,23 @@ int ext2_list_block_groups(FILE* disk, int64_t partition_offset,
     struct ext2_block_group_descriptor bgd;
 
     while (ext2_next_block_group_descriptor(disk, partition_offset, superblock, &bgd) > 0)
+    {
+       if (print_ext2_block_group_descriptor(bgd))
+       {
+           fprintf_light_red(stderr, "Failed printing block group descriptor.\n");
+           return -1;
+       }
+       fprintf(stdout, "\n");
+    }
+    return 0;
+}
+
+int ext2_list_block_groups_sectors(FILE* disk, int64_t partition_offset,
+                                   struct ext2_superblock superblock)
+{
+    struct ext2_block_group_descriptor bgd;
+
+    while (ext2_next_block_group_descriptor_sectors(disk, partition_offset, superblock, &bgd) > 0)
     {
        if (print_ext2_block_group_descriptor(bgd))
        {
