@@ -20,7 +20,7 @@
 #include "byte_printer.h"
 #include "deep_inspect.h"
 
-#define BLOCK_SIZE 128 
+#define SECTOR_SIZE 512 
 
 /* main thread of execution */
 int main(int argc, char* args[])
@@ -85,24 +85,24 @@ int main(int argc, char* args[])
         }
 
         qemu_parse_header(buf, &write);
-        write.data = (const uint8_t*) malloc(write.header.nb_sectors*512);
+        write.data = (const uint8_t*) malloc(write.header.nb_sectors*SECTOR_SIZE);
 
         if (write.data == NULL)
         {
             fprintf_light_red(stderr, "malloc() failed, assuming OOM.\n");
             fprintf_light_red(stderr, "tried allocating: %d bytes\n",
-                                      write.header.nb_sectors*512);
+                                      write.header.nb_sectors*SECTOR_SIZE);
             return EXIT_FAILURE;
         }
 
         read_ret  = read(fd, (uint8_t*) write.data,
-                         write.header.nb_sectors*512);
+                         write.header.nb_sectors*SECTOR_SIZE);
         total = read_ret;
 
-        while (read_ret > 0 && total < write.header.nb_sectors*512)
+        while (read_ret > 0 && total < write.header.nb_sectors*SECTOR_SIZE)
         {
             read_ret  = read(fd, (uint8_t*) &write.data[total],
-                             write.header.nb_sectors*512 - total);
+                             write.header.nb_sectors*SECTOR_SIZE - total);
             total += read_ret;
         }
 
