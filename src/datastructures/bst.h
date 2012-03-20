@@ -11,9 +11,11 @@ struct bst_node
     void* data;
 };
 
-int bst_init(struct bst_node* tree);
+struct bst_node* bst_init(uint64_t key, void* data);
 int bst_insert(struct bst_node* tree, uint64_t key, void* data);
 void* bst_find(struct bst_node* tree, uint64_t key);
-int bst_delete(struct bst_node* tree, uint64_t key);
+void* bst_delete(struct bst_node* tree, uint64_t key);
+int bst_destruct(struct bst_node* tree);
+void bst_print_tree(struct bst_node* tree);
 
 #endif

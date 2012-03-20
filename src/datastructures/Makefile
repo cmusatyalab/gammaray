@@ -7,6 +7,7 @@ default:
 
 test: default
 	./bst_test
+	valgrind ./bst_test
 
 clean:
 	@rm bst_test 
