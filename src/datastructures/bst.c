@@ -110,72 +110,94 @@ void* bst_find(struct bst_node* tree, uint64_t key)
     return NULL;
 }
 
-void* bst_delete(struct bst_node* tree, uint64_t key)
+/* internal helper to find minimum falue in a BST */
+struct bst_node* __bst_find_min(struct bst_node* tree)
+{
+    if (tree == NULL || tree->left_child == NULL)
+        return tree;
+
+    while (tree->left_child != NULL)
+    {
+        tree = tree->left_child;
+    }
+
+    return tree;
+}
+
+/* internal helper to find minimum falue in a BST */
+struct bst_node* __bst_find_max(struct bst_node* tree)
+{
+    if (tree == NULL || tree->right_child == NULL)
+        return tree;
+
+    while (tree->right_child != NULL)
+    {
+        tree = tree->right_child;
+    }
+
+    return tree;
+}
+
+/* deletes a node, requires knowledge of parent; pass NULL for a root node */
+void* bst_delete(struct bst_node* tree, struct bst_node* parent, uint64_t key)
 {
     void* ret = NULL;
     bool replace_left;
+    struct bst_node* replacement = NULL;
 
     if (tree == NULL)
         return NULL;
 
     replace_left = ((rand() % 100) < 50);
 
-    //fprintf_light_yellow(stderr, "debug: replace_left is %d\n", replace_left);
-    //fprintf_light_yellow(stderr, "debug: deleting with tree=%p key=%"
-                                 //PRIu64"\n", tree, key);
-
     while (1)
     {
         /* found node to delete */
         if (tree->key == key)
         {
-            //fprintf_light_red(stderr, "debug: found node to delete\n");
             ret = tree->data;
 
             if ((replace_left && tree->left_child) ||
                (replace_left == false && tree->right_child == NULL && tree->left_child))
-            { /* replace with predecessor */
-                //fprintf_light_blue(stderr, "debug: replacing with left node\n");
-                tree->key = tree->left_child->key;
-                tree->data = tree->left_child->data;
-
-                if (tree->left_child->left_child == NULL &&
-                    tree->left_child->right_child == NULL)
-                {
-                    free(tree->left_child);
-                    tree->left_child = NULL;
-                }
-                else
-                {
-                    bst_delete(tree->left_child, tree->left_child->key);
-                }
+            { /* replace with in-order predecessor */
+                replacement = __bst_find_max(tree->left_child);
+                tree->key = replacement->key;
+                tree->data = replacement->data;
+                bst_delete(tree->left_child, tree, replacement->key);
             }
             else if (tree->right_child)
-            { /* replace with successor */
-                //fprintf_light_blue(stderr, "debug: replacing with right node\n");
-                tree->key = tree->right_child->key;
-                tree->data = tree->right_child->data;
-
-                if (tree->right_child->left_child == NULL &&
-                    tree->right_child->right_child == NULL)
-                {
-                    free(tree->right_child);
-                    tree->right_child = NULL;
-                }
-                else
-                {
-                    bst_delete(tree->right_child, tree->right_child->key);
-                }
+            { /* replace with in-order successor */
+                replacement = __bst_find_min(tree->right_child);
+                tree->key = replacement->key;
+                tree->data = replacement->data;
+                bst_delete(tree->right_child, tree, replacement->key);
             }
-            else /* root with no children */
+            else /* leaf or root no children */
             {
+                if (parent && parent != tree) /* leaf */
+                {
+                    if (parent->left_child == tree)
+                    {
+                        parent->left_child = NULL;
+                    }
+                    else
+                    {
+                        parent->right_child = NULL;
+                    }
+                    free(tree);
+                    break;
+                }
+
                 tree->key = 0;
                 tree->data = NULL;
             }
             break;
         }
 
-        if (tree->key < key)
+        parent = tree;
+
+        /* still searching for node to delete */
+        if (key < tree->key)
         {
             if (tree->left_child == NULL)
             {
@@ -213,34 +235,35 @@ int bst_destruct(struct bst_node* tree)
     {
         if (tree->left_child)
         {
-            bst_delete(tree, tree->left_child->key);
+            bst_delete(tree, NULL, tree->left_child->key);
         }
         else
         {
-            bst_delete(tree, tree->right_child->key);
+            bst_delete(tree, NULL, tree->right_child->key);
         }
     }
 
-    free(tree);
+    free(tree); /* bst_delete doesn't free root nodes */
     return EXIT_SUCCESS;
 }
 
-void bst_print_tree(struct bst_node* tree)
+void bst_print_tree(struct bst_node* tree, uint64_t parent)
 {
     if (tree == NULL)
         return;
 
-    fprintf(stdout, "node[%"PRIu64"]: %p\n", tree->key, tree->data);
+    fprintf(stdout, "node[%"PRIu64", p=%"PRIu64"]: %p\n", tree->key, parent,
+                                                          tree->data);
     
     if (tree->left_child)
     {
         fprintf(stdout, "\tleft child: ");
-        bst_print_tree(tree->left_child);
+        bst_print_tree(tree->left_child, tree->key);
     }
 
     if (tree->right_child)
     {
         fprintf(stdout, "\tright child: ");
-        bst_print_tree(tree->right_child);
+        bst_print_tree(tree->right_child, tree->key);
     }
 }

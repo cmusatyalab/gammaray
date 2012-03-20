@@ -51,14 +51,15 @@ int test_bst_delete(struct bst_node* tree, uint64_t keys[], void* values[],
     int i;
     for (i = 0; i < num; i++)
     {
-        if (bst_delete(tree, keys[i]) != values[i])
+        if (bst_delete(tree, NULL, keys[i]) != values[i])
         {
             fprintf_light_red(stderr, "test_bst_delete failed values: i=%d "
                                        "tree=%p key=%"PRIu64" value=%p bst_find=%p\n",
                                        i, tree, keys[i], values[i],
-                                       bst_delete(tree, keys[i]));
+                                       bst_delete(tree, NULL, keys[i]));
             return EXIT_FAILURE;
         }
+        bst_print_tree(tree, 0);
     }
     return EXIT_SUCCESS;
 }
@@ -101,7 +102,7 @@ int main(int argc, char* argv[])
         fprintf_light_green(stdout, "bst_insert test passed.\n");
     }
 
-    bst_print_tree(tree);
+    bst_print_tree(tree, 0);
 
     uint64_t keys2[] = {0,1,2,3,4,5,6,7,8,9,10};
 
@@ -127,7 +128,40 @@ int main(int argc, char* argv[])
         fprintf_light_green(stdout, "bst_delete test passed.\n");
     }
 
-    bst_print_tree(tree);
+    /* destruct test */
+    if (test_bst_destruct(tree))
+    {
+        fprintf_light_red(stderr, "bst_destruct test failed.\n");
+        return EXIT_FAILURE;
+    }
+    else
+    {
+        fprintf_light_green(stdout, "bst_destruct test passed.\n");
+    }    
+
+    /* init test */
+    if (test_bst_init(&tree, 0, NULL))
+    {
+        fprintf_light_red(stderr, "bst_init test failed.\n");
+        return EXIT_FAILURE;
+    }
+    else
+    {
+        fprintf_light_green(stdout, "bst_init test passed.\n");
+    }
+
+    /* insert test */
+    if (test_bst_insert(tree, keys, values, total))
+    {
+        fprintf_light_red(stderr, "bst_insert test failed.\n");
+        return EXIT_FAILURE;
+    }
+    else
+    {
+        fprintf_light_green(stdout, "bst_insert test passed.\n");
+    }
+
+    bst_print_tree(tree, 0);
 
     /* destruct test */
     if (test_bst_destruct(tree))
@@ -139,5 +173,6 @@ int main(int argc, char* argv[])
     {
         fprintf_light_green(stdout, "bst_destruct test passed.\n");
     }    
+
     return EXIT_SUCCESS;
 }

@@ -6,7 +6,6 @@ default:
 		 #-DNOCOLOR
 
 test: default
-	./bst_test
 	valgrind ./bst_test
 
 clean:
