@@ -77,16 +77,12 @@ void* bst_find(struct bst_node* tree, uint64_t key)
     while (1)
     {
         if (tree->key == key)
-        {
             return tree->data;
-        }
 
         if (key < tree->key)
         {
             if (tree->left_child == NULL)
-            {
                 return NULL;
-            }
             else
             {
                 tree = tree->left_child;
@@ -96,9 +92,7 @@ void* bst_find(struct bst_node* tree, uint64_t key)
         else
         {
             if (tree->right_child == NULL)
-            {
                 return NULL;
-            }
             else
             {
                 tree = tree->right_child;
@@ -117,9 +111,7 @@ struct bst_node* __bst_find_min(struct bst_node* tree)
         return tree;
 
     while (tree->left_child != NULL)
-    {
         tree = tree->left_child;
-    }
 
     return tree;
 }
@@ -131,9 +123,7 @@ struct bst_node* __bst_find_max(struct bst_node* tree)
         return tree;
 
     while (tree->right_child != NULL)
-    {
         tree = tree->right_child;
-    }
 
     return tree;
 }
@@ -177,13 +167,9 @@ void* bst_delete(struct bst_node* tree, struct bst_node* parent, uint64_t key)
                 if (parent && parent != tree) /* leaf */
                 {
                     if (parent->left_child == tree)
-                    {
                         parent->left_child = NULL;
-                    }
                     else
-                    {
                         parent->right_child = NULL;
-                    }
                     free(tree);
                     break;
                 }
@@ -200,9 +186,7 @@ void* bst_delete(struct bst_node* tree, struct bst_node* parent, uint64_t key)
         if (key < tree->key)
         {
             if (tree->left_child == NULL)
-            {
                 return NULL;
-            }
             else
             {
                 tree = tree->left_child;
@@ -212,9 +196,7 @@ void* bst_delete(struct bst_node* tree, struct bst_node* parent, uint64_t key)
         else
         {
             if (tree->right_child == NULL)
-            {
                 return NULL;
-            }
             else
             {
                 tree = tree->right_child;
@@ -234,13 +216,9 @@ int bst_destruct(struct bst_node* tree)
     while (tree->left_child || tree->right_child)
     {
         if (tree->left_child)
-        {
             bst_delete(tree, NULL, tree->left_child->key);
-        }
         else
-        {
             bst_delete(tree, NULL, tree->right_child->key);
-        }
     }
 
     free(tree); /* bst_delete doesn't free root nodes */
@@ -257,13 +235,13 @@ void bst_print_tree(struct bst_node* tree, uint64_t parent)
     
     if (tree->left_child)
     {
-        fprintf(stdout, "\tleft child: ");
+        fprintf(stdout, "left child: ");
         bst_print_tree(tree->left_child, tree->key);
     }
 
     if (tree->right_child)
     {
-        fprintf(stdout, "\tright child: ");
+        fprintf(stdout, "right child: ");
         bst_print_tree(tree->right_child, tree->key);
     }
 }
