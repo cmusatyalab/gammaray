@@ -10,7 +10,7 @@ default:
 		 -Werror
 
 test: default
-	@./shell ../../sample/file_create_write_65k.log
+	@./shell ../../sample/auth.log.edit.log
 
 clean:
 	@rm shell 
