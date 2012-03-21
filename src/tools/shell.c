@@ -12,6 +12,7 @@
 
 #define SECTOR_SIZE 512
 
+
 int tail(int fd, char* file)
 {
     uint8_t buf[qemu_sizeof_header()];
@@ -20,13 +21,59 @@ int tail(int fd, char* file)
     struct tail_conf configuration;
     struct ext2_inode inode;
 
+    /* TODO: generalize book keeping of metadata */
+    inode.i_mode = 0x81b4;
+    inode.i_uid = 1001;
+    inode.i_size = 13;
+    inode.i_atime = 1332299058;
+    inode.i_ctime = 1332299060;
+    inode.i_mtime = 1332299060;
+    inode.i_dtime = 0;
+    inode.i_gid = 50;
+    inode.i_links_count = 1;
+    inode.i_blocks = 2;
+    inode.i_flags = 0;
+    inode.i_osd1 = 1;
+    inode.i_block[0] = 9035;
+    inode.i_block[1] = 0;
+    inode.i_block[2] = 0;
+    inode.i_block[3] = 0;
+    inode.i_block[4] = 0;
+    inode.i_block[5] = 0;
+    inode.i_block[6] = 0;
+    inode.i_block[7] = 0;
+    inode.i_block[8] = 0;
+    inode.i_block[9] = 0;
+    inode.i_block[10] = 0;
+    inode.i_block[11] = 0;
+    inode.i_block[12] = 0;
+    inode.i_block[13] = 0;
+    inode.i_block[14] = 0;
+    inode.i_generation = 715258079;
+    inode.i_file_acl = 0;
+    inode.i_dir_acl = 0;
+    inode.i_faddr = 0;
+    inode.i_osd2[0] = 0;
+    inode.i_osd2[1] = 0;
+    inode.i_osd2[2] = 0;
+    inode.i_osd2[3] = 0;
+    inode.i_osd2[4] = 0;
+    inode.i_osd2[5] = 0;
+    inode.i_osd2[6] = 0;
+    inode.i_osd2[7] = 0;
+    inode.i_osd2[8] = 0;
+    inode.i_osd2[9] = 0;
+    inode.i_osd2[10] = 0;
+    inode.i_osd2[11] = 0;
+
     /* TODO: generalize, hard-coded configuration */
     configuration.tracked_file = "/mnt/sda1/tce/auth.log";
     configuration.current_file_offset = 0;
     configuration.tracked_inode = inode; /* TODO: fill in inode data */
-    configuration.inode_sector = 0;
-    configuration.inode_offset = 0;
+    configuration.inode_sector = 16529;
+    configuration.inode_offset = 128;
     configuration.stream = fd;
+    configuration.bst = qemu_get_mapping_bst(configuration.tracked_file); 
 
     while (1)
     {

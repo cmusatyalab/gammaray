@@ -3,11 +3,13 @@
 
 #include "../stream_analyzer/qemu_tracer.h"
 #include "../disk_analyzer/ext2.h"
+#include "../datastructures/bst.h"
 
 struct tail_conf
 {
     char* tracked_file;
     int stream;
+    struct bst_node* bst;
     uint64_t current_file_offset;
     struct ext2_inode tracked_inode; 
     uint32_t inode_sector;
