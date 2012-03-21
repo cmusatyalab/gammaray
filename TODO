@@ -1,5 +1,2 @@
-(0) Implement hashtable
-
 (1) dynamic detection of file-level mutations
-    - start with understanding MBR
-    - custom hash table
+    - hard-coded demo of /mnt/sda1/tce/auth.log 
