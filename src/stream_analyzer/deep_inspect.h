@@ -11,7 +11,6 @@ struct file_sector_map
 {
     char* path;
     struct bst_node* tree;
-    int64_t sectors[];
 };
 
 int qemu_init_datastructures();
