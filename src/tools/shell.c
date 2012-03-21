@@ -12,8 +12,6 @@
 
 #define SECTOR_SIZE 512
 
-static struct bst_node* queue;
-
 int tail(int fd, char* file)
 {
     uint8_t buf[qemu_sizeof_header()];
@@ -75,6 +73,8 @@ int tail(int fd, char* file)
     configuration.inode_offset = 128;
     configuration.stream = fd;
     configuration.bst = qemu_get_mapping_bst(configuration.tracked_file); 
+    configuration.queue = bst_init(0, NULL);
+    configuration.last_sector = ext2_sector_from_block(9035);
 
     while (1)
     {
@@ -141,12 +141,18 @@ int tail(int fd, char* file)
         qemu_deep_inspect(write);
         tail_parse_block_write(&configuration, write);
 
+        /* TODO: queueing is dangerous---what if two writes to same guy... */
         if (qemu_infer_sector_type(write) == SECTOR_EXT2_DATA)
-            ; /* TODO: if we already track, don't enter queue; if not queue */
+        {
+            if (!qemu_is_tracked(write))
+            {
+                bst_insert(configuration.queue, write.header.sector_num,
+                           (void*) write.data);
+            }
+        }
 
-        free((void*) write.data);
+        //free((void*) write.data); /* TODO: Free elsewhere... */
     }
-
 }
 
 int main(int argc, char* argv[])
@@ -180,8 +186,6 @@ int main(int argc, char* argv[])
                                   "Does it exist?\n");
         return EXIT_FAILURE;
     }
-
-    queue = bst_init(0, NULL);
 
     while (1)
     {

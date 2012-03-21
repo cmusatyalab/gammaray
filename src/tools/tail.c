@@ -1,6 +1,7 @@
 #include <stdlib.h>
 
 #include "tail.h"
+#include "../disk_analyzer/ext2.h"
 
 int tail_parse_file_update(struct tail_conf* config,
                            struct qemu_bdrv_write write)
@@ -85,26 +86,62 @@ int tail_parse_inode_update(struct tail_conf* config,
      * */
     
     int i;
+    uint32_t additional_bytes = 0;
     struct ext2_inode inode;
+    void* data = NULL;
     inode = *((struct ext2_inode*)(&(write.data[config->inode_offset])));
     inode_print_diff(config->tracked_inode, inode);
     
-    if (config->tracked_inode.i_size != inode.i_size)
-        //config->tracked_inode.i_size = inode2.i_size;
-        ;
+    /* file grew in size; can not detect overwrite and file growth? TODO */
+    /* TODO: maybe place after other metadata updates? */
+    if (config->tracked_inode.i_size < inode.i_size)
+    {
+        additional_bytes = inode.i_size - config->tracked_inode.i_size;
+        if (config->tracked_inode.i_blocks == inode.i_blocks)
+        {
+            /* print the last few bytes from the last block */
+            data = bst_find(config->queue, config->last_sector);
+            if (data)
+                fwrite(data, 1, additional_bytes, stdout);
+        }
+    }
+    else if (inode.i_size == 0) /* new size is lower and 0... */
+    {
+        fprintf_light_red(stderr, "tail: possible file truncation detected."
+                                  "\n");
+    }
 
     /* loop 15 */
     for (i = 0; i < 15; i++)
     {
         if (config->tracked_inode.i_block[i] == 0 && inode.i_block[i] != 0)
-            //fprintf_light_yellow(stdout, "inode block position %d [%"PRIu32"] added.\n", i, inode2.i_block[i]);
-            ;
+        {
+            if (additional_bytes >= SECTOR_SIZE*2)
+            {
+                /* TODO: index on sectors past the lead sector? */
+                /* TODO: maybe when enqueuing queue in by sector num... */
+                data = bst_find(config->queue, ext2_sector_from_block(inode.i_block[i]));
+                if (data)
+                    fwrite(data, 1, SECTOR_SIZE*2, stdout);
+                config->last_sector = ext2_sector_from_block(inode.i_block[i]);
+            }
+        }
         else if (config->tracked_inode.i_block[i] != 0 && inode.i_block[i] == 0)
-            //fprintf_light_yellow(stdout, "inode block position %d [%"PRIu32"] removed.\n", i, inode2.i_block[i]);
-            ;
+        {
+            /* do nothing case -- tail doesn't really understand deletion? */;
+            if (config->last_sector == ext2_sector_from_block(inode.i_block[i]))
+            {
+                config->last_sector = 0;
+            }    
+        }
         else if (config->tracked_inode.i_block[i] != inode.i_block[i])
-            //fprintf_light_yellow(stdout, "inode block position %d [%"PRIu32"->%"PRIu32"] overwritten.\n", i, config->tracked_inode.i_block[i], inode2.i_block[i]);
-            ;
+        {
+            /* do nothing case -- kind of like a delete and replace... */;
+            if (config->last_sector == ext2_sector_from_block(inode.i_block[i]))
+            {
+                config->last_sector = 0;
+            }
+        }
     }
 
     config->tracked_inode = inode;

@@ -10,10 +10,12 @@ struct tail_conf
     char* tracked_file;
     int stream;
     struct bst_node* bst;
+    struct bst_node* queue;
     uint64_t current_file_offset;
     struct ext2_inode tracked_inode; 
     uint32_t inode_sector;
     uint32_t inode_offset;
+    uint32_t last_sector;
     /* struct bst bst; */
 };
 
