@@ -1,6 +1,7 @@
 default:
 	@gcc stream_analyzer.c \
 		 ../disk_analyzer/color.c \
+		 ../datastructures/bst.c \
 		 qemu_tracer.c \
 		 tokenizer.c \
 		 byte_printer.c \

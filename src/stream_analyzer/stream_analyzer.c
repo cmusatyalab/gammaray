@@ -113,6 +113,7 @@ int main(int argc, char* args[])
             return EXIT_FAILURE;
         }
 
+        qemu_init_datastructures();
         qemu_print_write(write);
         qemu_print_sector_type(qemu_infer_sector_type(write));
         qemu_deep_inspect(write);

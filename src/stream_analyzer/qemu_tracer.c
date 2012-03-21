@@ -62,7 +62,7 @@ int qemu_infer_sector_type(struct qemu_bdrv_write write)
    {
        if (write.header.sector_num == 65)
            return SECTOR_EXT2_SUPERBLOCK;
-       if (write.header.sector_num == 4)
+       if (write.header.sector_num <= 67)
            return SECTOR_EXT2_BLOCK_GROUP_DESCRIPTOR;
        if (write.header.sector_num == 139)
            return SECTOR_EXT2_BLOCK_GROUP_BLOCKMAP;
