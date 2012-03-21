@@ -140,6 +140,9 @@ int tail(int fd, char* file)
         qemu_deep_inspect(write);
         tail_parse_block_write(&configuration, write);
 
+        if (qemu_infer_sector_type(write) == SECTOR_EXT2_DATA)
+            ; /* TODO: if we already track, don't enter queue; if not queue */
+
         free((void*) write.data);
     }
 
