@@ -121,5 +121,6 @@ int ext2_print_block(uint8_t* buf, uint32_t block_size);
 uint32_t ext2_block_size(struct ext2_superblock superblock);
 int ext2_print_sectormap(FILE* disk, int64_t partition_offset,
                          struct ext2_superblock superblock);
+uint64_t ext2_sector_from_block(uint32_t block);
 
 #endif

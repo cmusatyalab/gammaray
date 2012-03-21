@@ -503,6 +503,11 @@ int ext2_read_inode(FILE* disk, int64_t partition_offset,
     return 0;
 }
 
+uint64_t ext2_sector_from_block(uint32_t block)
+{
+    return (block * 1024 + 0x07e00) / SECTOR_SIZE;
+}
+
 int ext2_read_file_block(FILE* disk, int64_t partition_offset,
                          struct ext2_superblock superblock, uint32_t block_num,
                          struct ext2_inode inode, uint32_t* buf)
