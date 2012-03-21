@@ -8056,9 +8056,25 @@ int qemu_init_datastructures()
     return EXIT_SUCCESS;
 }
 
+bool qemu_is_tracked(struct qemu_bdrv_write write)
+{
+    int i;
+    int64_t sector_num = write.header.sector_num;
+
+    for (i = 0; i < 19; i++)
+    {
+            if (bst_find(mappings[i]->tree, sector_num))
+            {
+                return true;
+            }
+    }
+
+    return false;
+}
+
 int qemu_deep_inspect(struct qemu_bdrv_write write)
 {
-    int i;//, j;
+    int i;
     int64_t sector_num = write.header.sector_num;
 
     for (i = 0; i < 19; i++)
