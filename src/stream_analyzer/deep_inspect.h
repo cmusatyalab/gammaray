@@ -15,5 +15,6 @@ struct file_sector_map
 
 int qemu_init_datastructures();
 int qemu_deep_inspect(struct qemu_bdrv_write write);
+struct bst_node* qemu_get_mapping_bst(char * path);
 
 #endif

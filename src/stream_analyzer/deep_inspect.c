@@ -1,6 +1,7 @@
 #include "deep_inspect.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 #define COUNT_OF(x) ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
 
@@ -79,6 +80,14 @@ struct file_sector_map tcegistfile1txt = {
 struct file_sector_map tceauthlog = {
          .path = "/tce/auth.log",
 };
+
+static struct file_sector_map* mappings[20] = 
+    {
+        &root, &lost, &tce, &tceboot, &tcebootextlinux, &tcebootextlinuxldlinuxsys,
+        &tcebootextlinuxextlinuxconf, &tceblargh, &tcetestneeraja, &tcetesterrr,
+        &tcemydatatgz, &tceoptional, &tceondemand, &tceonbootlst, &tcexwbarlst,
+        &tcebootcoregz, &tcebootvmlinuz, &tcegistfile1txt, &tceauthlog
+    };
 
 void __init_trees()
 {
@@ -8049,25 +8058,32 @@ int qemu_init_datastructures()
 
 int qemu_deep_inspect(struct qemu_bdrv_write write)
 {
-    int64_t i;//, j;
+    int i;//, j;
     int64_t sector_num = write.header.sector_num;
-
-    struct file_sector_map* map[20] = 
-    {
-        &root, &lost, &tce, &tceboot, &tcebootextlinux, &tcebootextlinuxldlinuxsys,
-        &tcebootextlinuxextlinuxconf, &tceblargh, &tcetestneeraja, &tcetesterrr,
-        &tcemydatatgz, &tceoptional, &tceondemand, &tceonbootlst, &tcexwbarlst,
-        &tcebootcoregz, &tcebootvmlinuz, &tcegistfile1txt, &tceauthlog
-    };
-
 
     for (i = 0; i < 19; i++)
     {
-            if (bst_find(map[i]->tree, sector_num))
+            if (bst_find(mappings[i]->tree, sector_num))
             {
-                fprintf_light_red(stdout, "Write to sector %"PRId64" modifying %s\n", sector_num, map[i]->path);
+                fprintf_light_red(stdout, "Write to sector %"PRId64" modifying"
+                                          " %s\n",
+                                          sector_num,
+                                          mappings[i]->path);
             }
     }
 
     return 0;
+}
+
+struct bst_node* qemu_get_mapping_bst(char* path)
+{
+    int i;
+
+    for (i = 0; i < 19; i++)
+    {
+        if (strcmp(mappings[i]->path, path) == 0)
+            return mappings[i]->tree;
+    }
+
+    return NULL;
 }
