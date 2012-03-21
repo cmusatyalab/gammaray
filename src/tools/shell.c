@@ -12,6 +12,7 @@
 
 #define SECTOR_SIZE 512
 
+static struct bst_node* queue;
 
 int tail(int fd, char* file)
 {
@@ -180,11 +181,12 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
+    queue = bst_init(0, NULL);
+
     while (1)
     {
         fprintf_light_blue(stdout, "> ");
         fscanf(stdin, "%s", buf);
-        fprintf_light_yellow(stderr, "debug: got command string '%s'\n", buf);
         
         if (strcmp(buf, "tail") == 0)
         {
