@@ -495,6 +495,11 @@ int ext2_read_inode(FILE* disk, int64_t partition_offset,
         return -1;
     }
 
+    fprintf_cyan(stdout, "Analyzing inode @sector: %"PRId64" @offset: %"PRId64
+                         ".\n", (partition_offset + inode_table_offset +
+                         inode_offset) / SECTOR_SIZE, (partition_offset +
+                         inode_table_offset + inode_offset) % SECTOR_SIZE);
+
     return 0;
 }
 
