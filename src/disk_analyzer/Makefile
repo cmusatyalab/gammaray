@@ -1,5 +1,5 @@
 default:
-	@gcc disk_analyzer.c color.c ext2.c mbr.c -o disk_analyzer -Wall -Werror -DNOCOLOR
+	@gcc disk_analyzer.c color.c ext2.c mbr.c -o disk_analyzer -Wall -Werror #-DNOCOLOR
 	@gcc inode_explorer.c ext2.c color.c mbr.c -o inode_explorer -Wall -Werror
 	@gcc data_block_explorer.c ext2.c color.c mbr.c -o data_block_explorer -Wall -Werror
 
