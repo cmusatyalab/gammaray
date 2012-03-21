@@ -655,7 +655,7 @@ int ext2_read_file_block_sectors(FILE* disk, int64_t partition_offset,
         if (inode.i_block[block_num] == 0)
             return 1; /* finished */
 
-        fprintf_yellow(stderr, "%"PRId64", ",
+        fprintf_yellow(stderr, "bst_insert(tree, %"PRId64", (void*) 1);\n",
                                 (inode.i_block[block_num] *
                                 ext2_block_size(superblock) +
                                 partition_offset) / SECTOR_SIZE);
@@ -678,7 +678,7 @@ int ext2_read_file_block_sectors(FILE* disk, int64_t partition_offset,
         if (buf[block_num] == 0)
             return 1;
 
-        fprintf_yellow(stderr, "%"PRId64", ",
+        fprintf_yellow(stderr, "bst_insert(tree, %"PRId64", (void*) 1);\n",
                                 (buf[block_num] *
                                 ext2_block_size(superblock) +
                                 partition_offset) / SECTOR_SIZE);
@@ -708,7 +708,7 @@ int ext2_read_file_block_sectors(FILE* disk, int64_t partition_offset,
         if (buf[block_num % addresses_in_block] == 0)
             return 1;
 
-        fprintf_yellow(stderr, "%"PRId64", ",
+        fprintf_yellow(stderr, "bst_insert(tree, %"PRId64", (void*) 1);\n",
                                 (buf[block_num % addresses_in_block] *
                                 ext2_block_size(superblock) +
                                 partition_offset) / SECTOR_SIZE);
@@ -748,7 +748,7 @@ int ext2_read_file_block_sectors(FILE* disk, int64_t partition_offset,
         if (buf[block_num % addresses_in_block] == 0)
             return 1;
 
-        fprintf_yellow(stderr, "%"PRId64", ",
+        fprintf_yellow(stderr, "bst_insert(tree, %"PRId64", (void*) 1);\n",
                                 (buf[block_num % addresses_in_block] *
                                 ext2_block_size(superblock) +
                                 partition_offset) / SECTOR_SIZE);
