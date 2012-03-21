@@ -7,6 +7,7 @@
 struct tail_conf
 {
     char* tracked_file;
+    int stream;
     uint64_t current_file_offset;
     struct ext2_inode tracked_inode; 
     uint32_t inode_sector;

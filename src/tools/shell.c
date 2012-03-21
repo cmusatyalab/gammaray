@@ -8,45 +8,17 @@
 #include "tail.h"
 #include "../disk_analyzer/color.h"
 #include "../stream_analyzer/qemu_tracer.h"
+#include "../stream_analyzer/deep_inspect.h"
 
 #define SECTOR_SIZE 512
 
-int main(int argc, char* argv[])
+int tail(int fd, char* file)
 {
-    int fd;
     uint8_t buf[qemu_sizeof_header()];
     int64_t total = 0, read_ret = 0;
     struct qemu_bdrv_write write;
     struct tail_conf configuration;
     struct ext2_inode inode;
-
-    fprintf_blue(stdout, "Virtual Disk Block Write Stream Shell -- "
-                         "By: Wolfgang Richter "
-                         "<wolf@cs.cmu.edu>\n");
-
-    if (argc < 2)
-    {
-        fprintf_light_red(stderr, "Usage: ./%s <stream>\n", argv[0]);
-        return EXIT_FAILURE;
-    }
-
-    fprintf_cyan(stdout, "Following stream: %s\n\n", argv[1]);
-
-    if (strcmp(argv[1], "-") != 0)
-    {
-        fd = open(argv[1], O_RDONLY);
-    }
-    else
-    {
-        fd = 0;
-    }
-    
-    if (fd == -1)
-    {
-        fprintf_light_red(stderr, "Error opening index file. "
-                                  "Does it exist?\n");
-        return EXIT_FAILURE;
-    }
 
     /* TODO: generalize, hard-coded configuration */
     configuration.tracked_file = "/mnt/sda1/tce/auth.log";
@@ -54,6 +26,7 @@ int main(int argc, char* argv[])
     configuration.tracked_inode = inode; /* TODO: fill in inode data */
     configuration.inode_sector = 0;
     configuration.inode_offset = 0;
+    configuration.stream = fd;
 
     while (1)
     {
@@ -114,9 +87,66 @@ int main(int argc, char* argv[])
             return EXIT_FAILURE;
         }
 
+        qemu_init_datastructures();
+        qemu_print_write(write);
+        qemu_print_sector_type(qemu_infer_sector_type(write));
+        qemu_deep_inspect(write);
         tail_parse_block_write(&configuration, write);
 
         free((void*) write.data);
+    }
+
+}
+
+int main(int argc, char* argv[])
+{
+    int fd;
+    char buf[256];
+    fprintf_blue(stdout, "Virtual Disk Block Write Stream Shell -- "
+                         "By: Wolfgang Richter "
+                         "<wolf@cs.cmu.edu>\n");
+
+    if (argc < 2)
+    {
+        fprintf_light_red(stderr, "Usage: ./%s <stream>\n", argv[0]);
+        return EXIT_FAILURE;
+    }
+
+    fprintf_cyan(stdout, "Following stream: %s\n\n", argv[1]);
+
+    if (strcmp(argv[1], "-") != 0)
+    {
+        fd = open(argv[1], O_RDONLY);
+    }
+    else
+    {
+        fd = 0;
+    }
+    
+    if (fd == -1)
+    {
+        fprintf_light_red(stderr, "Error opening index file. "
+                                  "Does it exist?\n");
+        return EXIT_FAILURE;
+    }
+
+    while (1)
+    {
+        fprintf_light_blue(stdout, "> ");
+        fscanf(stdin, "%s", buf);
+        fprintf_light_yellow(stderr, "debug: got command string '%s'\n", buf);
+        
+        if (strcmp(buf, "tail") == 0)
+        {
+            fprintf_cyan(stdout, "Executing tail command.\n");
+            tail(fd, "/mnt/sda1/tce/auth.log");
+        }
+
+        if (strcmp(buf, "exit") == 0)
+        {
+            fprintf_cyan(stdout, "Goodbye.\n");
+            break;
+        }
     }
 
     close(fd);
