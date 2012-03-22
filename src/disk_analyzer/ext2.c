@@ -503,7 +503,7 @@ int ext2_read_inode(FILE* disk, int64_t partition_offset,
     return 0;
 }
 
-uint64_t ext2_sector_from_block(uint32_t block)
+int64_t ext2_sector_from_block(uint32_t block)
 {
     return (block * 1024 + 0x07e00) / SECTOR_SIZE;
 }
