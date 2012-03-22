@@ -107,16 +107,16 @@ int tail_parse_inode_update(struct tail_conf* config,
     if (config->tracked_inode.i_size < inode.i_size && inode.i_size > config->current_file_offset)
     {
         additional_bytes = inode.i_size - config->tracked_inode.i_size;
-        if (config->tracked_inode.i_blocks == inode.i_blocks)
+        if (config->current_file_offset % 1024)//(config->tracked_inode.i_blocks == inode.i_blocks)
         {
             /* print the last few bytes from the last block */
             data = bst_find(config->queue, config->last_sector);
             if (data)
             {
-                fwrite(&(((uint8_t*)data)[sector_offset]), 1, additional_bytes, stdout);
-                config->current_file_offset += additional_bytes;
+                fwrite(&(((uint8_t*)data)[sector_offset]), 1, additional_bytes < 1024-(sector_offset) ? additional_bytes : 1024-sector_offset, stdout);
+                config->current_file_offset += additional_bytes < 1024-(sector_offset) ? additional_bytes : 1024-sector_offset;
                 //fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32"\n", config->current_file_offset, inode.i_size);
-                additional_bytes -= additional_bytes;
+                additional_bytes -= additional_bytes < 1024-(sector_offset) ? additional_bytes : 1024-sector_offset;
             }
         }
     }
@@ -142,6 +142,8 @@ int tail_parse_inode_update(struct tail_conf* config,
                     additional_bytes -= SECTOR_SIZE*2;
                 }
                 config->last_sector = ext2_sector_from_block(inode.i_block[i]);
+                bst_insert(config->bst, config->last_sector, (void*) 1);
+                bst_insert(config->bst, config->last_sector + 1, (void*) 1);
             }
             else if (inode.i_size > config->current_file_offset)
             {
@@ -154,11 +156,12 @@ int tail_parse_inode_update(struct tail_conf* config,
                     additional_bytes -= additional_bytes;
                 }
                 config->last_sector = ext2_sector_from_block(inode.i_block[i]);
+                bst_insert(config->bst, config->last_sector, (void*) 1);
+                bst_insert(config->bst, config->last_sector + 1, (void*) 1);
             }
         }
         else if (config->tracked_inode.i_block[i] == 0 && inode.i_block[i] != 0 && i == 12)
         {
-            /* TODO: handle indirect block */
             indirect_data = (uint32_t*) bst_find(config->queue, ext2_sector_from_block(inode.i_block[i]));
             if (indirect_data)
             {
@@ -175,6 +178,8 @@ int tail_parse_inode_update(struct tail_conf* config,
                             additional_bytes -= SECTOR_SIZE*2;
                         }
                         config->last_sector = ext2_sector_from_block(*indirect_data);
+                        bst_insert(config->bst, config->last_sector, (void*) 1);
+                        bst_insert(config->bst, config->last_sector + 1, (void*) 1);
                     }
                     else if (inode.i_size > config->current_file_offset)
                     {
@@ -187,6 +192,8 @@ int tail_parse_inode_update(struct tail_conf* config,
                             additional_bytes -= additional_bytes;
                         }
                         config->last_sector = ext2_sector_from_block(*indirect_data);
+                        bst_insert(config->bst, config->last_sector, (void*) 1);
+                        bst_insert(config->bst, config->last_sector + 1, (void*) 1);
                     }
                     indirect_data += 1;
                 }
@@ -243,6 +250,7 @@ int tail_parse_block_write(struct tail_conf* config,
             if (config->last_sector == write.header.sector_num+i)
             {
                 offset = config->current_file_offset % 1024;
+                fprintf_light_red(stdout, "current sector offset: %d\n", offset);
             }
             additional_bytes = config->tracked_inode.i_size - config->current_file_offset;
             /* data write _after_ metadata update... */
