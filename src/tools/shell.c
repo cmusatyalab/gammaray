@@ -76,7 +76,6 @@ int tail(int fd, char* file)
     configuration.inode_offset = 128;
     configuration.stream = fd;
     configuration.bst = qemu_get_mapping_bst(configuration.tracked_file); 
-    fprintf_light_red(stdout, "config.bst == %p\n", configuration.bst);
     configuration.queue = bst_init(0, NULL);
     configuration.last_sector = ext2_sector_from_block(9035);
 
@@ -147,7 +146,7 @@ int tail(int fd, char* file)
         /* TODO: queueing is dangerous---what if two writes to same guy... */
         if (qemu_infer_sector_type(write) == SECTOR_EXT2_DATA)
         {
-            if (!qemu_is_tracked(write))
+            if (1)//!qemu_is_tracked(write))
             {
                 /* insert mod2 sectors for 1024 block size -- TODO hard code fix */
                 for (i = 0; i < write.header.nb_sectors; i += 2)
