@@ -16,6 +16,7 @@ int tail(int fd, char* file)
 {
     uint8_t buf[qemu_sizeof_header()];
     int64_t total = 0, read_ret = 0;
+    int i;
     struct qemu_bdrv_write write;
     struct tail_conf configuration;
     struct ext2_inode inode;
@@ -146,8 +147,15 @@ int tail(int fd, char* file)
         {
             if (!qemu_is_tracked(write))
             {
-                bst_insert(configuration.queue, write.header.sector_num,
-                           (void*) write.data);
+                /* insert mod2 sectors for 1024 block size -- TODO hard code fix */
+                for (i = 0; i < write.header.nb_sectors; i += 2)
+                {
+                    fprintf_cyan(stdout, "enqueueing unknown sector write %"
+                                         PRId64"\n",
+                                         write.header.sector_num+i);
+                    bst_insert(configuration.queue, write.header.sector_num+i,
+                               (void*) (write.data+(i*512)));
+                }
             }
         }
 

@@ -89,6 +89,7 @@ int tail_parse_inode_update(struct tail_conf* config,
     uint32_t additional_bytes = 0;
     struct ext2_inode inode;
     void* data = NULL;
+    uint32_t* indirect_data = NULL;
     inode = *((struct ext2_inode*)(&(write.data[config->inode_offset])));
     inode_print_diff(config->tracked_inode, inode);
     
@@ -102,7 +103,10 @@ int tail_parse_inode_update(struct tail_conf* config,
             /* print the last few bytes from the last block */
             data = bst_find(config->queue, config->last_sector);
             if (data)
+            {
                 fwrite(data, 1, additional_bytes, stdout);
+                additional_bytes -= additional_bytes;
+            }
         }
     }
     else if (inode.i_size == 0) /* new size is lower and 0... */
@@ -114,17 +118,68 @@ int tail_parse_inode_update(struct tail_conf* config,
     /* loop 15 */
     for (i = 0; i < 15; i++)
     {
-        if (config->tracked_inode.i_block[i] == 0 && inode.i_block[i] != 0)
+        if (config->tracked_inode.i_block[i] == 0 && inode.i_block[i] != 0 && i < 12)
         {
             if (additional_bytes >= SECTOR_SIZE*2)
             {
-                /* TODO: index on sectors past the lead sector? */
-                /* TODO: maybe when enqueuing queue in by sector num... */
                 data = bst_find(config->queue, ext2_sector_from_block(inode.i_block[i]));
                 if (data)
+                {
                     fwrite(data, 1, SECTOR_SIZE*2, stdout);
+                    additional_bytes -= SECTOR_SIZE*2;
+                }
                 config->last_sector = ext2_sector_from_block(inode.i_block[i]);
             }
+            else
+            {
+                data = bst_find(config->queue, ext2_sector_from_block(inode.i_block[i]));
+                if (data)
+                {
+                    fwrite(data, 1, additional_bytes, stdout);
+                    additional_bytes -= additional_bytes;
+                }
+                config->last_sector = ext2_sector_from_block(inode.i_block[i]);
+            }
+        }
+        else if (config->tracked_inode.i_block[i] == 0 && inode.i_block[i] != 0 && i == 12)
+        {
+            /* TODO: handle indirect block */
+            indirect_data = (uint32_t*) bst_find(config->queue, ext2_sector_from_block(inode.i_block[i]));
+            if (indirect_data)
+            {
+                while (*(indirect_data))
+                {
+                    if (additional_bytes >= SECTOR_SIZE*2)
+                    {
+                        data = bst_find(config->queue, ext2_sector_from_block(*indirect_data));
+                        if (data)
+                        {
+                            fwrite(data, 1, SECTOR_SIZE*2, stdout);
+                            additional_bytes -= SECTOR_SIZE*2;
+                        }
+                        config->last_sector = ext2_sector_from_block(*indirect_data);
+                    }
+                    else
+                    {
+                        data = bst_find(config->queue, ext2_sector_from_block(*indirect_data));
+                        if (data)
+                        {
+                            fwrite(data, 1, additional_bytes, stdout);
+                            additional_bytes -= additional_bytes;
+                        }
+                        config->last_sector = ext2_sector_from_block(*indirect_data);
+                    }
+                    indirect_data += 1;
+                }
+            }
+        }
+        else if (config->tracked_inode.i_block[i] == 0 && inode.i_block[i] != 0 && i == 13)
+        {
+            /* TODO: handle doubly indirect block */
+        }
+        else if (config->tracked_inode.i_block[i] == 0 && inode.i_block[i] != 0 && i == 14)
+        {
+            /* TODO: handle triply indirect block */
         }
         else if (config->tracked_inode.i_block[i] != 0 && inode.i_block[i] == 0)
         {
