@@ -90,12 +90,21 @@ int tail_parse_inode_update(struct tail_conf* config,
     struct ext2_inode inode;
     void* data = NULL;
     uint32_t* indirect_data = NULL;
-    inode = *((struct ext2_inode*)(&(write.data[config->inode_offset])));
+    uint32_t offset = 0, sector_offset = config->current_file_offset % 1024;
+    
+    /* offset into the write, it doesn't start with our inode sector */
+    if (config->inode_sector > write.header.sector_num)
+    {
+        offset = SECTOR_SIZE*(config->inode_sector - write.header.sector_num);
+    }
+
+    inode = *((struct ext2_inode*)
+             (&(write.data[offset + config->inode_offset])));
     inode_print_diff(config->tracked_inode, inode);
     
     /* file grew in size; can not detect overwrite and file growth? TODO */
     /* TODO: maybe place after other metadata updates? */
-    if (config->tracked_inode.i_size < inode.i_size)
+    if (config->tracked_inode.i_size < inode.i_size && inode.i_size > config->current_file_offset)
     {
         additional_bytes = inode.i_size - config->tracked_inode.i_size;
         if (config->tracked_inode.i_blocks == inode.i_blocks)
@@ -104,12 +113,14 @@ int tail_parse_inode_update(struct tail_conf* config,
             data = bst_find(config->queue, config->last_sector);
             if (data)
             {
-                fwrite(data, 1, additional_bytes, stdout);
+                fwrite(&(((uint8_t*)data)[sector_offset]), 1, additional_bytes, stdout);
+                config->current_file_offset += additional_bytes;
+                fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32"\n", config->current_file_offset, inode.i_size);
                 additional_bytes -= additional_bytes;
             }
         }
     }
-    else if (inode.i_size == 0) /* new size is lower and 0... */
+    else if (config->tracked_inode.i_size > 0 && inode.i_size == 0) /* new size is 0... */
     {
         fprintf_light_red(stderr, "tail: possible file truncation detected."
                                   "\n");
@@ -120,22 +131,26 @@ int tail_parse_inode_update(struct tail_conf* config,
     {
         if (config->tracked_inode.i_block[i] == 0 && inode.i_block[i] != 0 && i < 12)
         {
-            if (additional_bytes >= SECTOR_SIZE*2)
+            if (additional_bytes >= SECTOR_SIZE*2 && inode.i_size > config->current_file_offset)
             {
                 data = bst_find(config->queue, ext2_sector_from_block(inode.i_block[i]));
                 if (data)
                 {
                     fwrite(data, 1, SECTOR_SIZE*2, stdout);
+                    config->current_file_offset += SECTOR_SIZE*2;
+                    fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32"\n", config->current_file_offset, inode.i_size);
                     additional_bytes -= SECTOR_SIZE*2;
                 }
                 config->last_sector = ext2_sector_from_block(inode.i_block[i]);
             }
-            else
+            else if (inode.i_size > config->current_file_offset)
             {
                 data = bst_find(config->queue, ext2_sector_from_block(inode.i_block[i]));
                 if (data)
                 {
                     fwrite(data, 1, additional_bytes, stdout);
+                    config->current_file_offset += additional_bytes;
+                    fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32"\n", config->current_file_offset, inode.i_size);
                     additional_bytes -= additional_bytes;
                 }
                 config->last_sector = ext2_sector_from_block(inode.i_block[i]);
@@ -149,22 +164,26 @@ int tail_parse_inode_update(struct tail_conf* config,
             {
                 while (*(indirect_data))
                 {
-                    if (additional_bytes >= SECTOR_SIZE*2)
+                    if (additional_bytes >= SECTOR_SIZE*2 && inode.i_size > config->current_file_offset)
                     {
                         data = bst_find(config->queue, ext2_sector_from_block(*indirect_data));
                         if (data)
                         {
                             fwrite(data, 1, SECTOR_SIZE*2, stdout);
+                            config->current_file_offset += SECTOR_SIZE*2;
+                            fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32"\n", config->current_file_offset, inode.i_size);
                             additional_bytes -= SECTOR_SIZE*2;
                         }
                         config->last_sector = ext2_sector_from_block(*indirect_data);
                     }
-                    else
+                    else if (inode.i_size > config->current_file_offset)
                     {
                         data = bst_find(config->queue, ext2_sector_from_block(*indirect_data));
                         if (data)
                         {
                             fwrite(data, 1, additional_bytes, stdout);
+                            config->current_file_offset += additional_bytes;
+                            fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32"\n", config->current_file_offset, inode.i_size);
                             additional_bytes -= additional_bytes;
                         }
                         config->last_sector = ext2_sector_from_block(*indirect_data);
@@ -183,7 +202,6 @@ int tail_parse_inode_update(struct tail_conf* config,
         }
         else if (config->tracked_inode.i_block[i] != 0 && inode.i_block[i] == 0)
         {
-            /* do nothing case -- tail doesn't really understand deletion? */;
             if (config->last_sector == ext2_sector_from_block(inode.i_block[i]))
             {
                 config->last_sector = 0;
@@ -191,7 +209,6 @@ int tail_parse_inode_update(struct tail_conf* config,
         }
         else if (config->tracked_inode.i_block[i] != inode.i_block[i])
         {
-            /* do nothing case -- kind of like a delete and replace... */;
             if (config->last_sector == ext2_sector_from_block(inode.i_block[i]))
             {
                 config->last_sector = 0;
@@ -208,6 +225,7 @@ int tail_parse_inode_update(struct tail_conf* config,
 int tail_parse_block_write(struct tail_conf* config,
                            struct qemu_bdrv_write write)
 {
+    int i, additional_bytes = 0, offset = 0;
     if (config->inode_sector >= write.header.sector_num &&
         config->inode_sector <
         write.header.sector_num + write.header.nb_sectors)
@@ -216,9 +234,35 @@ int tail_parse_block_write(struct tail_conf* config,
         tail_parse_inode_update(config, write);
     }
 
-    if (bst_find(config->bst, write.header.sector_num))
+    /* TODO: Hard coded block size... */
+    for (i = 0; i < write.header.nb_sectors; i += 2)
     {
-        //tail_parse_file_update(config, write);
+        if (bst_find(config->bst, write.header.sector_num+i))
+        {
+            offset = 0;
+            if (config->last_sector == write.header.sector_num+i)
+            {
+                offset = config->current_file_offset % 1024;
+            }
+            additional_bytes = config->tracked_inode.i_size - config->current_file_offset;
+            fprintf_cyan(stdout, "tracked data block for file; need to write: %d\n", additional_bytes);
+            /* data write _after_ metadata update... */
+            if (additional_bytes > 0 && additional_bytes >= 1024)
+            {
+                fwrite(&(write.data[i*1024+offset]), 1, 1024, stdout);
+                config->current_file_offset += 1024;
+            }
+            else if (additional_bytes > 0)
+            {
+                fwrite(&(write.data[i*1024+offset]), 1, additional_bytes, stdout);
+                config->current_file_offset += additional_bytes;
+            }
+            else
+            {
+                break;
+            }
+            tail_parse_file_update(config, write); /* --> tail does nothing on prior updates? */
+        }
     }
 
     return EXIT_SUCCESS;

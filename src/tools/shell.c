@@ -66,14 +66,17 @@ int tail(int fd, char* file)
     inode.i_osd2[10] = 0;
     inode.i_osd2[11] = 0;
 
+    qemu_init_datastructures();
+
     /* TODO: generalize, hard-coded configuration */
     configuration.tracked_file = "/mnt/sda1/tce/auth.log";
-    configuration.current_file_offset = 0;
+    configuration.current_file_offset = 1;
     configuration.tracked_inode = inode; /* TODO: fill in inode data */
     configuration.inode_sector = 16529;
     configuration.inode_offset = 128;
     configuration.stream = fd;
     configuration.bst = qemu_get_mapping_bst(configuration.tracked_file); 
+    fprintf_light_red(stdout, "config.bst == %p\n", configuration.bst);
     configuration.queue = bst_init(0, NULL);
     configuration.last_sector = ext2_sector_from_block(9035);
 
@@ -107,24 +110,24 @@ int tail(int fd, char* file)
 
         /* parse the header and allocate memory for data */
         qemu_parse_header(buf, &write);
-        write.data = (const uint8_t*) malloc(write.header.nb_sectors*SECTOR_SIZE);
+        write.data = (uint8_t*) calloc(write.header.nb_sectors*SECTOR_SIZE, 1);
 
         if (write.data == NULL)
         {
-            fprintf_light_red(stderr, "malloc() failed, assuming OOM.\n");
+            fprintf_light_red(stderr, "calloc() failed, assuming OOM.\n");
             fprintf_light_red(stderr, "tried allocating: %d bytes\n",
                                       write.header.nb_sectors*SECTOR_SIZE);
             return EXIT_FAILURE;
         }
 
         /* read data */
-        read_ret = read(fd, (uint8_t*) write.data,
+        read_ret = read(fd, write.data,
                          write.header.nb_sectors*SECTOR_SIZE);
         total = read_ret;
 
         while (read_ret > 0 && total < write.header.nb_sectors*SECTOR_SIZE)
         {
-            read_ret  = read(fd, (uint8_t*) &write.data[total],
+            read_ret  = read(fd, &(write.data[total]),
                              write.header.nb_sectors*SECTOR_SIZE - total);
             total += read_ret;
         }
@@ -136,7 +139,6 @@ int tail(int fd, char* file)
             return EXIT_FAILURE;
         }
 
-        qemu_init_datastructures();
         qemu_print_write(write);
         qemu_print_sector_type(qemu_infer_sector_type(write));
         qemu_deep_inspect(write);
