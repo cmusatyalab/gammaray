@@ -70,7 +70,7 @@ int tail(int fd, char* file)
 
     /* TODO: generalize, hard-coded configuration */
     configuration.tracked_file = "/mnt/sda1/tce/auth.log";
-    configuration.current_file_offset = 1;
+    configuration.current_file_offset = inode.i_size;
     configuration.tracked_inode = inode; /* TODO: fill in inode data */
     configuration.inode_sector = 16529;
     configuration.inode_offset = 128;

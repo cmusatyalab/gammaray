@@ -115,7 +115,7 @@ int tail_parse_inode_update(struct tail_conf* config,
             {
                 fwrite(&(((uint8_t*)data)[sector_offset]), 1, additional_bytes, stdout);
                 config->current_file_offset += additional_bytes;
-                fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32"\n", config->current_file_offset, inode.i_size);
+                //fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32"\n", config->current_file_offset, inode.i_size);
                 additional_bytes -= additional_bytes;
             }
         }
@@ -138,7 +138,7 @@ int tail_parse_inode_update(struct tail_conf* config,
                 {
                     fwrite(data, 1, SECTOR_SIZE*2, stdout);
                     config->current_file_offset += SECTOR_SIZE*2;
-                    fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32"\n", config->current_file_offset, inode.i_size);
+                    //fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32"\n", config->current_file_offset, inode.i_size);
                     additional_bytes -= SECTOR_SIZE*2;
                 }
                 config->last_sector = ext2_sector_from_block(inode.i_block[i]);
@@ -150,7 +150,7 @@ int tail_parse_inode_update(struct tail_conf* config,
                 {
                     fwrite(data, 1, additional_bytes, stdout);
                     config->current_file_offset += additional_bytes;
-                    fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32"\n", config->current_file_offset, inode.i_size);
+                    //fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32"\n", config->current_file_offset, inode.i_size);
                     additional_bytes -= additional_bytes;
                 }
                 config->last_sector = ext2_sector_from_block(inode.i_block[i]);
@@ -171,7 +171,7 @@ int tail_parse_inode_update(struct tail_conf* config,
                         {
                             fwrite(data, 1, SECTOR_SIZE*2, stdout);
                             config->current_file_offset += SECTOR_SIZE*2;
-                            fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32"\n", config->current_file_offset, inode.i_size);
+                            //fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32"\n", config->current_file_offset, inode.i_size);
                             additional_bytes -= SECTOR_SIZE*2;
                         }
                         config->last_sector = ext2_sector_from_block(*indirect_data);
@@ -183,7 +183,7 @@ int tail_parse_inode_update(struct tail_conf* config,
                         {
                             fwrite(data, 1, additional_bytes, stdout);
                             config->current_file_offset += additional_bytes;
-                            fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32"\n", config->current_file_offset, inode.i_size);
+                            //fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32"\n", config->current_file_offset, inode.i_size);
                             additional_bytes -= additional_bytes;
                         }
                         config->last_sector = ext2_sector_from_block(*indirect_data);
@@ -245,7 +245,6 @@ int tail_parse_block_write(struct tail_conf* config,
                 offset = config->current_file_offset % 1024;
             }
             additional_bytes = config->tracked_inode.i_size - config->current_file_offset;
-            fprintf_cyan(stdout, "tracked data block for file; need to write: %d\n", additional_bytes);
             /* data write _after_ metadata update... */
             if (additional_bytes > 0 && additional_bytes >= 1024)
             {
