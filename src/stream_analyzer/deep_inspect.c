@@ -7,78 +7,78 @@
 
 
 struct file_sector_map root = {
-    .path = "/",
+    .path = "/mnt/sda1",
 };
 
 struct file_sector_map lost = {
-    .path = "/lost+found",
+    .path = "/mnt/sda1/lost+found",
 };
 
 struct file_sector_map tce = {
-         .path = "/tce",
+         .path = "/mnt/sda1/tce",
 };
 
 struct file_sector_map tceboot = {
-         .path = "/tce/boot",
+         .path = "/mnt/sda1/tce/boot",
 };
 
 struct file_sector_map tcebootextlinux = {
-         .path = "/tce/boot/extlinux",
+         .path = "/mnt/sda1/tce/boot/extlinux",
 };
 
 struct file_sector_map tcebootextlinuxldlinuxsys = {
-         .path = "/tce/boot/extlinux/ldlinux.sys",
+         .path = "/mnt/sda1/tce/boot/extlinux/ldlinux.sys",
 };
 
 struct file_sector_map tcebootextlinuxextlinuxconf = {
-         .path = "/tce/boot/extlinux/extlinux.conf",
+         .path = "/mnt/sda1/tce/boot/extlinux/extlinux.conf",
 };
 
 struct file_sector_map tceblargh = {
-         .path = "/tce/blargh",
+         .path = "/mnt/sda1/tce/blargh",
 };
 
 struct file_sector_map tcetestneeraja = {
-         .path = "/tce/test.neeraja",
+         .path = "/mnt/sda1/tce/test.neeraja",
 };
 
 struct file_sector_map tcetesterrr = {
-         .path = "/tce/testerrr",
+         .path = "/mnt/sda1/tce/testerrr",
 };
 
 struct file_sector_map tcemydatatgz = {
-         .path = "/tce/mydata.tgz",
+         .path = "/mnt/sda1/tce/mydata.tgz",
 };
 struct file_sector_map tceoptional = {
-         .path = "/tce/optional",
+         .path = "/mnt/sda1/tce/optional",
 };
 
 struct file_sector_map tceondemand = {
-         .path = "/tce/ondemand",
+         .path = "/mnt/sda1/tce/ondemand",
 };
 
 struct file_sector_map tceonbootlst = {
-         .path = "/tce/onboot.lst",
+         .path = "/mnt/sda1/tce/onboot.lst",
 };
 
 struct file_sector_map tcexwbarlst = {
-         .path = "/tce/xwbar.lst",
+         .path = "/mnt/sda1/tce/xwbar.lst",
 };
 
 struct file_sector_map tcebootcoregz = {
-         .path = "/tce/boot/core.gz",
+         .path = "/mnt/sda1/tce/boot/core.gz",
 };
 
 struct file_sector_map tcebootvmlinuz = {
-         .path = "/tce/boot/vmlinuz",
+         .path = "/mnt/sda1/tce/boot/vmlinuz",
 };
 
 struct file_sector_map tcegistfile1txt = {
-         .path = "/tce/gistfile1.txt",
+         .path = "/mnt/sda1/tce/gistfile1.txt",
 };
 
 struct file_sector_map tceauthlog = {
-         .path = "/tce/auth.log",
+         .path = "/mnt/sda1/tce/auth.log",
 };
 
 static struct file_sector_map* mappings[20] = 
@@ -8046,7 +8046,6 @@ void __init_trees()
 
     tceauthlog.tree = bst_init(0, NULL);
     bst_insert(tceauthlog.tree, 18133, (void*) 1);
-
 }
 
 int qemu_init_datastructures()

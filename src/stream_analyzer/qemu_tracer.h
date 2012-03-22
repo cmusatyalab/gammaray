@@ -40,7 +40,7 @@ struct qemu_bdrv_write_header
 struct qemu_bdrv_write
 {
     struct qemu_bdrv_write_header header;
-    const uint8_t* data;
+    uint8_t* data;
 };
 
 int64_t qemu_sizeof_header();
