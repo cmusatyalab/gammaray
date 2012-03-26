@@ -155,6 +155,8 @@ int tail(int fd, char* file)
                                          write.header.sector_num+i);
                     bst_insert(configuration.queue, write.header.sector_num+i,
                                (void*) (write.data+(i*512)));
+                    if (write.header.sector_num+i == 17531)
+                        ext2_print_block(write.data+(i*512), 512);
                 }
             }
         }

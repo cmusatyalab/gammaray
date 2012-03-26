@@ -111,8 +111,11 @@ int tail_parse_inode_update(struct tail_conf* config,
         {
             /* print the last few bytes from the last block */
             data = bst_delete(config->queue, NULL, config->last_sector);
+            fprintf_light_cyan(stdout, "attempting to print bytes from last sector...\n");
             if (data)
             {
+                fprintf_light_cyan(stdout, "printing from last sector=%"PRIu32"\n", config->last_sector);
+                fprintf_light_cyan(stdout, "sector_offset=%"PRIu32" amount=%"PRIu32"\n", sector_offset, additional_bytes < 1024-(sector_offset) ? additional_bytes : 1024-sector_offset);
                 fwrite(((uint8_t*)data) + sector_offset, 1, additional_bytes < 1024-(sector_offset) ? additional_bytes : 1024-sector_offset, stdout);
                 config->current_file_offset += additional_bytes < 1024-(sector_offset) ? additional_bytes : 1024-sector_offset;
                 fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32" last_sector: %"PRIu32"\n", config->current_file_offset, inode.i_size, config->last_sector);
@@ -132,11 +135,14 @@ int tail_parse_inode_update(struct tail_conf* config,
     {
         if (config->tracked_inode.i_block[i] == 0 && inode.i_block[i] != 0 && i < 12)
         {
+            fprintf_light_red(stdout, "additional_bytes: %"PRIu32"\n", additional_bytes);
             if (additional_bytes >= SECTOR_SIZE*2 && inode.i_size > config->current_file_offset)
             {
+                fprintf_light_cyan(stdout, "NEW BLOCK writing full block\n");
                 data = bst_delete(config->queue, NULL, ext2_sector_from_block(inode.i_block[i]));
                 if (data)
                 {
+                    fprintf_light_cyan(stdout, "pulled data for sector: %"PRIu64"\n", ext2_sector_from_block(inode.i_block[i]));
                     fwrite(data, 1, SECTOR_SIZE*2, stdout);
                     config->current_file_offset += SECTOR_SIZE*2;
                     fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32" last_sector: %"PRIu32"\n", config->current_file_offset, inode.i_size, config->last_sector);
@@ -149,9 +155,11 @@ int tail_parse_inode_update(struct tail_conf* config,
             }
             else if (inode.i_size > config->current_file_offset)
             {
+                fprintf_light_cyan(stdout, "NEW BLOCK writing partial block\n");
                 data = bst_delete(config->queue, NULL, ext2_sector_from_block(inode.i_block[i]));
                 if (data)
                 {
+                    fprintf_light_cyan(stdout, "pulled data for sector: %"PRIu64"\n", ext2_sector_from_block(inode.i_block[i]));
                     fwrite(data, 1, additional_bytes, stdout);
                     config->current_file_offset += additional_bytes;
                     fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32" last_sector: %"PRIu32"\n", config->current_file_offset, inode.i_size, config->last_sector);
@@ -366,7 +374,8 @@ int tail_parse_block_write(struct tail_conf* config,
                     {
                         offset = config->current_file_offset % 1024;
                         fprintf_light_cyan(stdout, "checking data block %"PRIu32" or sector %"PRIu32"\n", *indirect_data, ext2_sector_from_block(*indirect_data));
-                        data = bst_delete(config->queue, NULL, ext2_sector_from_block(*indirect_data));
+                        /* TODO: BUG on bst_delete */
+                        data = bst_find(config->queue, ext2_sector_from_block(*indirect_data));
                         if (data == NULL)
                             break; /* the guy we want doesnt exist? */
                         if (data && offset)
@@ -420,7 +429,8 @@ int tail_parse_block_write(struct tail_conf* config,
             }
             else
             {
-                bst_delete(config->queue, NULL, write.header.sector_num+i);
+                /* TODO: BUG on bst_delete */
+                bst_find(config->queue, write.header.sector_num+i);
                 if (config->last_sector == write.header.sector_num+i)
                 {
                     offset = config->current_file_offset % 1024;
