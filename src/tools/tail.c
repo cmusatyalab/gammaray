@@ -111,7 +111,8 @@ int tail_parse_inode_update(struct tail_conf* config,
         {
             /* print the last few bytes from the last block */
             data = bst_delete(config->queue, NULL, config->last_sector);
-            fprintf_light_cyan(stdout, "attempting to print bytes from last sector...\n");
+            fprintf_light_cyan(stdout, "attempting to print bytes from last sector[%"PRIu32"]...\n", config->last_sector);
+            fprintf_light_cyan(stdout, "data=%p\n", data);
             if (data)
             {
                 fprintf_light_cyan(stdout, "printing from last sector=%"PRIu32"\n", config->last_sector);
