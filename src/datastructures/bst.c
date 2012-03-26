@@ -153,17 +153,21 @@ void* bst_delete(struct bst_node* tree, struct bst_node* parent, uint64_t key)
                 replacement = __bst_find_max(tree->left_child);
                 tree->key = replacement->key;
                 tree->data = replacement->data;
-                bst_delete(tree->left_child, tree, replacement->key);
+                if (bst_delete(tree->left_child, tree, replacement->key) == NULL)
+                    tree->left_child = NULL;
             }
             else if (tree->right_child)
             { /* replace with in-order successor */
                 replacement = __bst_find_min(tree->right_child);
                 tree->key = replacement->key;
                 tree->data = replacement->data;
-                bst_delete(tree->right_child, tree, replacement->key);
+                if (bst_delete(tree->right_child, tree, replacement->key) == NULL)
+                    tree->right_child = NULL;
             }
             else /* leaf or root no children */
             {
+                tree->key = 0;
+                tree->data = NULL;
                 if (parent && parent != tree) /* leaf */
                 {
                     if (parent->left_child == tree)
@@ -173,9 +177,6 @@ void* bst_delete(struct bst_node* tree, struct bst_node* parent, uint64_t key)
                     free(tree);
                     break;
                 }
-
-                tree->key = 0;
-                tree->data = NULL;
             }
             break;
         }
