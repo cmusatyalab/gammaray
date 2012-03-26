@@ -141,7 +141,6 @@ int tail(int fd, char* file)
         qemu_print_write(write);
         qemu_print_sector_type(qemu_infer_sector_type(write));
         qemu_deep_inspect(write);
-        tail_parse_block_write(&configuration, write);
 
         /* TODO: queueing is dangerous---what if two writes to same guy... */
         if (qemu_infer_sector_type(write) == SECTOR_EXT2_DATA)
@@ -160,7 +159,7 @@ int tail(int fd, char* file)
             }
         }
 
-        //free((void*) write.data); /* TODO: Free elsewhere... */
+        tail_parse_block_write(&configuration, write);
     }
 }
 

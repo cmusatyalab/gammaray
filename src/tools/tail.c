@@ -106,17 +106,18 @@ int tail_parse_inode_update(struct tail_conf* config,
     /* TODO: maybe place after other metadata updates? */
     if (config->tracked_inode.i_size < inode.i_size && inode.i_size > config->current_file_offset)
     {
-        additional_bytes = inode.i_size - config->tracked_inode.i_size;
+        additional_bytes = inode.i_size - config->current_file_offset;
         if (config->current_file_offset % 1024)//(config->tracked_inode.i_blocks == inode.i_blocks)
         {
             /* print the last few bytes from the last block */
-            data = bst_find(config->queue, config->last_sector);
+            data = bst_delete(config->queue, NULL, config->last_sector);
             if (data)
             {
-                fwrite(&(((uint8_t*)data)[sector_offset]), 1, additional_bytes < 1024-(sector_offset) ? additional_bytes : 1024-sector_offset, stdout);
+                fwrite(((uint8_t*)data) + sector_offset, 1, additional_bytes < 1024-(sector_offset) ? additional_bytes : 1024-sector_offset, stdout);
                 config->current_file_offset += additional_bytes < 1024-(sector_offset) ? additional_bytes : 1024-sector_offset;
-                //fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32"\n", config->current_file_offset, inode.i_size);
+                fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32" last_sector: %"PRIu32"\n", config->current_file_offset, inode.i_size, config->last_sector);
                 additional_bytes -= additional_bytes < 1024-(sector_offset) ? additional_bytes : 1024-sector_offset;
+                //free(data);
             }
         }
     }
@@ -133,13 +134,14 @@ int tail_parse_inode_update(struct tail_conf* config,
         {
             if (additional_bytes >= SECTOR_SIZE*2 && inode.i_size > config->current_file_offset)
             {
-                data = bst_find(config->queue, ext2_sector_from_block(inode.i_block[i]));
+                data = bst_delete(config->queue, NULL, ext2_sector_from_block(inode.i_block[i]));
                 if (data)
                 {
                     fwrite(data, 1, SECTOR_SIZE*2, stdout);
                     config->current_file_offset += SECTOR_SIZE*2;
-                    //fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32"\n", config->current_file_offset, inode.i_size);
+                    fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32" last_sector: %"PRIu32"\n", config->current_file_offset, inode.i_size, config->last_sector);
                     additional_bytes -= SECTOR_SIZE*2;
+                    //free(data);
                 }
                 config->last_sector = ext2_sector_from_block(inode.i_block[i]);
                 bst_insert(config->bst, config->last_sector, (void*) 1);
@@ -147,13 +149,14 @@ int tail_parse_inode_update(struct tail_conf* config,
             }
             else if (inode.i_size > config->current_file_offset)
             {
-                data = bst_find(config->queue, ext2_sector_from_block(inode.i_block[i]));
+                data = bst_delete(config->queue, NULL, ext2_sector_from_block(inode.i_block[i]));
                 if (data)
                 {
                     fwrite(data, 1, additional_bytes, stdout);
                     config->current_file_offset += additional_bytes;
-                    //fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32"\n", config->current_file_offset, inode.i_size);
+                    fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32" last_sector: %"PRIu32"\n", config->current_file_offset, inode.i_size, config->last_sector);
                     additional_bytes -= additional_bytes;
+                    //free(data);
                 }
                 config->last_sector = ext2_sector_from_block(inode.i_block[i]);
                 bst_insert(config->bst, config->last_sector, (void*) 1);
@@ -162,20 +165,23 @@ int tail_parse_inode_update(struct tail_conf* config,
         }
         else if (config->tracked_inode.i_block[i] == 0 && inode.i_block[i] != 0 && i == 12)
         {
+            fprintf_light_cyan(stdout, "indirect block at sector: %"PRIu32"\n",ext2_sector_from_block(inode.i_block[i]) );
             indirect_data = (uint32_t*) bst_find(config->queue, ext2_sector_from_block(inode.i_block[i]));
             if (indirect_data)
             {
+                fprintf_light_cyan(stdout, "checking data block %"PRIu32" or sector %"PRIu32"\n", *indirect_data, ext2_sector_from_block(*indirect_data));
                 while (*(indirect_data))
                 {
                     if (additional_bytes >= SECTOR_SIZE*2 && inode.i_size > config->current_file_offset)
                     {
-                        data = bst_find(config->queue, ext2_sector_from_block(*indirect_data));
+                        data = bst_delete(config->queue, NULL, ext2_sector_from_block(*indirect_data));
                         if (data)
                         {
                             fwrite(data, 1, SECTOR_SIZE*2, stdout);
                             config->current_file_offset += SECTOR_SIZE*2;
-                            //fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32"\n", config->current_file_offset, inode.i_size);
+                            fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32" last_sector: %"PRIu32"\n", config->current_file_offset, inode.i_size, config->last_sector);
                             additional_bytes -= SECTOR_SIZE*2;
+                            //free(data);
                         }
                         config->last_sector = ext2_sector_from_block(*indirect_data);
                         bst_insert(config->bst, config->last_sector, (void*) 1);
@@ -183,13 +189,14 @@ int tail_parse_inode_update(struct tail_conf* config,
                     }
                     else if (inode.i_size > config->current_file_offset)
                     {
-                        data = bst_find(config->queue, ext2_sector_from_block(*indirect_data));
+                        data = bst_delete(config->queue, NULL, ext2_sector_from_block(*indirect_data));
                         if (data)
                         {
                             fwrite(data, 1, additional_bytes, stdout);
                             config->current_file_offset += additional_bytes;
-                            //fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32"\n", config->current_file_offset, inode.i_size);
+                            fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32" last_sector: %"PRIu32"\n", config->current_file_offset, inode.i_size, config->last_sector);
                             additional_bytes -= additional_bytes;
+                           // free(data);
                         }
                         config->last_sector = ext2_sector_from_block(*indirect_data);
                         bst_insert(config->bst, config->last_sector, (void*) 1);
@@ -197,14 +204,18 @@ int tail_parse_inode_update(struct tail_conf* config,
                     }
                     indirect_data += 1;
                 }
+                //free(bst_delete(config->queue, NULL, ext2_sector_from_block(inode.i_block[i])));
             }
+            bst_insert(config->bst, ext2_sector_from_block(inode.i_block[i]), (void*)1);
         }
         else if (config->tracked_inode.i_block[i] == 0 && inode.i_block[i] != 0 && i == 13)
         {
+            fprintf_light_red(stderr, "TODO: handle doubly indirect block.\n");
             /* TODO: handle doubly indirect block */
         }
         else if (config->tracked_inode.i_block[i] == 0 && inode.i_block[i] != 0 && i == 14)
         {
+            fprintf_light_red(stderr, "TODO: handle triply indirect block.\n");
             /* TODO: handle triply indirect block */
         }
         else if (config->tracked_inode.i_block[i] != 0 && inode.i_block[i] == 0)
@@ -223,16 +234,109 @@ int tail_parse_inode_update(struct tail_conf* config,
         }
     }
 
+    /* ugly cleanup tracking indirect block changes */
+    if (inode.i_block[12] && config->current_file_offset < inode.i_size && bst_find(config->queue, ext2_sector_from_block(inode.i_block[12])))
+    {
+        fprintf_light_red(stdout, "UGLY CLEANUP\n");
+        fprintf_light_cyan(stdout, "indirect block at sector: %"PRIu32"\n",ext2_sector_from_block(inode.i_block[12]) );
+        indirect_data = (uint32_t*) bst_find(config->queue, ext2_sector_from_block(inode.i_block[12]));
+        uint32_t num_in_indirect_block = config->current_file_offset / 1024 - 12;
+        indirect_data += num_in_indirect_block;
+        if (indirect_data)
+        {
+            fprintf_light_cyan(stdout, "checking data block %"PRIu32" or sector %"PRIu32"\n", *indirect_data, ext2_sector_from_block(*indirect_data));
+            while (*(indirect_data))
+            {
+                uint64_t offset = config->current_file_offset % 1024;
+                additional_bytes = inode.i_size - config->current_file_offset;
+                data = bst_delete(config->queue, NULL, ext2_sector_from_block(*indirect_data));
+                if (data == NULL)
+                    break;
+                if (data && offset)
+                {
+                    if (additional_bytes == 0)
+                    {
+                        fprintf_light_red(stdout, "reinserting indirect block update into queue\n");
+                        bst_insert(config->queue, ext2_sector_from_block(*indirect_data), data);
+                        break;
+                    }
+                    fwrite(data+offset, 1, additional_bytes > 1024 - offset ? 1024 - offset : additional_bytes, stdout);
+                    additional_bytes -= additional_bytes > 1024 - offset ? 1024 - offset : additional_bytes;
+                    config->current_file_offset += additional_bytes > 1024 - offset ? 1024 - offset : additional_bytes;
+                    fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32" last_sector: %"PRIu32"\n", config->current_file_offset, inode.i_size, config->last_sector);
+                    fprintf_light_cyan(stdout, "jumping to next indirect data block\n");
+                    indirect_data += 1;
+                    continue;
+                }
+                if (additional_bytes >= SECTOR_SIZE*2 && inode.i_size > config->current_file_offset)
+                {
+                    if (data)
+                    {
+                        fwrite(data, 1, SECTOR_SIZE*2, stdout);
+                        config->current_file_offset += SECTOR_SIZE*2;
+                        fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32" last_sector: %"PRIu32"\n", config->current_file_offset, inode.i_size, config->last_sector);
+                        additional_bytes -= SECTOR_SIZE*2;
+                        //free(data);
+                    }
+                    config->last_sector = ext2_sector_from_block(*indirect_data);
+                    bst_insert(config->bst, config->last_sector, (void*) 1);
+                    bst_insert(config->bst, config->last_sector + 1, (void*) 1);
+                }
+                else if (inode.i_size > config->current_file_offset)
+                {
+                    if (data)
+                    {
+                        fwrite(data, 1, additional_bytes, stdout);
+                        config->current_file_offset += additional_bytes;
+                        fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32" last_sector: %"PRIu32"\n", config->current_file_offset, inode.i_size, config->last_sector);
+                        additional_bytes -= additional_bytes;
+                        // free(data);
+                    }
+                    config->last_sector = ext2_sector_from_block(*indirect_data);
+                    bst_insert(config->bst, config->last_sector, (void*) 1);
+                    bst_insert(config->bst, config->last_sector + 1, (void*) 1);
+                }
+                indirect_data += 1;
+            }
+            //free(bst_delete(config->queue, NULL, ext2_sector_from_block(inode.i_block[i])));
+        }
+        bst_insert(config->bst, ext2_sector_from_block(inode.i_block[i]), (void*)1);
+    }
+
     config->tracked_inode = inode;
 
     return EXIT_SUCCESS;
+}
+
+void update_last_sector(struct tail_conf* config)
+{
+    fprintf_light_red(stdout, "UPDATING LAST SECTOR FUN\n");
+    int sector = config->current_file_offset / 1024;
+    uint32_t* indirect_data;
+    if (sector < 12)
+        config->last_sector = config->tracked_inode.i_block[sector];
+    else
+    {
+        indirect_data = (uint32_t*) bst_find(config->queue, ext2_sector_from_block(config->tracked_inode.i_block[12]));
+        if (indirect_data == NULL)
+        {
+            fprintf_light_red(stdout, "indirect_data WAS NULL\n");
+            return;
+        }
+        indirect_data += sector - 12;
+        config->last_sector = *indirect_data;
+    }
 }
 
 /* take in raw write, check what needs to happen */
 int tail_parse_block_write(struct tail_conf* config,
                            struct qemu_bdrv_write write)
 {
-    int i, additional_bytes = 0, offset = 0;
+    int i, additional_bytes = 0, offset = 0, num_in_indirect_block = 0;
+    uint32_t* indirect_data;
+    uint8_t *data;
+    struct ext2_inode inode = config->tracked_inode;
+
     if (config->inode_sector >= write.header.sector_num &&
         config->inode_sector <
         write.header.sector_num + write.header.nb_sectors)
@@ -246,28 +350,106 @@ int tail_parse_block_write(struct tail_conf* config,
     {
         if (bst_find(config->bst, write.header.sector_num+i))
         {
+            fprintf_light_cyan(stdout, "checking data sector: %"PRIu32"\n", write.header.sector_num+i);
             offset = 0;
-            if (config->last_sector == write.header.sector_num+i)
+            if (write.header.sector_num+i == ext2_sector_from_block(config->tracked_inode.i_block[12]))
             {
-                offset = config->current_file_offset % 1024;
-                fprintf_light_red(stdout, "current sector offset: %d\n", offset);
-            }
-            additional_bytes = config->tracked_inode.i_size - config->current_file_offset;
-            /* data write _after_ metadata update... */
-            if (additional_bytes > 0 && additional_bytes >= 1024)
-            {
-                fwrite(&(write.data[i*1024+offset]), 1, 1024, stdout);
-                config->current_file_offset += 1024;
-            }
-            else if (additional_bytes > 0)
-            {
-                fwrite(&(write.data[i*1024+offset]), 1, additional_bytes, stdout);
-                config->current_file_offset += additional_bytes;
+                additional_bytes = inode.i_size - config->current_file_offset;
+                fprintf_light_cyan(stdout, "indirect block _after_ inode update at sector: %"PRIu32"\n",ext2_sector_from_block(inode.i_block[12]));
+                indirect_data = (uint32_t*) bst_find(config->queue, ext2_sector_from_block(inode.i_block[12]));
+                num_in_indirect_block = config->current_file_offset / 1024 - 12;
+                indirect_data += num_in_indirect_block;
+                fprintf_light_cyan(stdout, "offset: %d\n", offset);
+                if (indirect_data)
+                {
+                    while (*(indirect_data))
+                    {
+                        offset = config->current_file_offset % 1024;
+                        fprintf_light_cyan(stdout, "checking data block %"PRIu32" or sector %"PRIu32"\n", *indirect_data, ext2_sector_from_block(*indirect_data));
+                        data = bst_delete(config->queue, NULL, ext2_sector_from_block(*indirect_data));
+                        if (data == NULL)
+                            break; /* the guy we want doesnt exist? */
+                        if (data && offset)
+                        {
+                            if (additional_bytes == 0)
+                            {
+                                fprintf_light_red(stdout, "reinserting indirect block update into queue\n");
+                                bst_insert(config->queue, ext2_sector_from_block(*indirect_data), data);
+                                break;
+                            }
+                            fwrite(data+offset, 1, additional_bytes > 1024 - offset ? 1024 - offset : additional_bytes, stdout);
+                            additional_bytes -= additional_bytes > 1024 - offset ? 1024 - offset : additional_bytes;
+                            config->current_file_offset += additional_bytes > 1024 - offset ? 1024 - offset : additional_bytes;
+                            fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32" last_sector: %"PRIu32"\n", config->current_file_offset, inode.i_size, config->last_sector);
+                            fprintf_light_cyan(stdout, "jumping to next indirect data block\n");
+                            indirect_data += 1;
+                            continue;
+                        }
+                        if (additional_bytes >= SECTOR_SIZE*2 && inode.i_size > config->current_file_offset)
+                        {
+                            if (data)
+                            {
+                                fwrite(data, 1, SECTOR_SIZE*2, stdout);
+                                config->current_file_offset += SECTOR_SIZE*2;
+                                fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32" last_sector: %"PRIu32"\n", config->current_file_offset, inode.i_size, config->last_sector);
+                                additional_bytes -= SECTOR_SIZE*2;
+                                //free(data);
+                            }
+                            config->last_sector = ext2_sector_from_block(*indirect_data);
+                            bst_insert(config->bst, config->last_sector, (void*) 1);
+                            bst_insert(config->bst, config->last_sector + 1, (void*) 1);
+                        }
+                        else if (inode.i_size > config->current_file_offset)
+                        {
+                            if (data)
+                            {
+                                fwrite(data, 1, additional_bytes, stdout);
+                                config->current_file_offset += additional_bytes;
+                                fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32" last_sector: %"PRIu32"\n", config->current_file_offset, inode.i_size, config->last_sector);
+                                additional_bytes -= additional_bytes;
+                               // free(data);
+                            }
+                            config->last_sector = ext2_sector_from_block(*indirect_data);
+                            bst_insert(config->bst, config->last_sector, (void*) 1);
+                            bst_insert(config->bst, config->last_sector + 1, (void*) 1);
+                        }
+                        indirect_data += 1;
+                    }
+                    //free(bst_delete(config->queue, NULL, ext2_sector_from_block(inode.i_block[i])));
+                }
             }
             else
             {
-                break;
+                bst_delete(config->queue, NULL, write.header.sector_num+i);
+                if (config->last_sector == write.header.sector_num+i)
+                {
+                    offset = config->current_file_offset % 1024;
+                    fprintf_light_red(stdout, "current sector offset: %d\n", offset);
+                    additional_bytes = config->tracked_inode.i_size - config->current_file_offset;
+                    additional_bytes = additional_bytes > 1024 - offset ? 1024 - offset : additional_bytes; 
+                 }
+                 /* data write _after_ metadata update... */
+                 if (additional_bytes > 0 && additional_bytes >= 1024)
+                 {
+                     fwrite(&(write.data[i*512+offset]), 1, 1024, stdout);
+                     config->current_file_offset += 1024;
+                     fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32" last_sector: %"PRIu32"\n", config->current_file_offset, config->tracked_inode.i_size, config->last_sector);
+                     //update_last_sector(config);
+                 }
+                 else if (additional_bytes > 0)
+                 {
+                     fwrite(&(write.data[i*512+offset]), 1, additional_bytes, stdout);
+                     config->current_file_offset += additional_bytes;
+                     fprintf_light_cyan(stdout, "current_file_offset: %"PRIu64" i_size: %"PRIu32" last_sector: %"PRIu32"\n", config->current_file_offset, config->tracked_inode.i_size, config->last_sector);
+                     //update_last_sector(config);
+                 }
+                 else if (additional_bytes < 0)
+                 {
+                     fprintf_light_red(stderr, "breaking, as additional_bytes < 0\n");
+                     break;
+                 }
             }
+
             tail_parse_file_update(config, write); /* --> tail does nothing on prior updates? */
         }
     }
