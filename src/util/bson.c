@@ -9,6 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define START_SIZE 4096
+
 /* Basic Types
  *
  * byte     1 byte  (8-bits)
@@ -17,6 +19,19 @@
  * double   8 bytes (64-bit IEEE 754 floating point)
  *
  */
+
+int bson_init(struct bson_info* bson_info)
+{
+    bson_info->buffer = (uint8_t*) malloc(START_SIZE);
+    if (bson_info->buffer)
+    {
+        bson_info->size = START_SIZE;
+        bson_info->position = 0;
+        return EXIT_SUCCESS;
+    }
+
+    return EXIT_FAILURE;
+}
 
 int32_t new_size(int32_t old_size, int32_t needed_size)
 {
@@ -29,13 +44,16 @@ int32_t new_size(int32_t old_size, int32_t needed_size)
 
 int resize(struct bson_info* bson_info, int32_t needed_size)
 {
-    uint8_t* old = bson_info->buffer;
-    bson_info->size = new_size(bson_info->size, needed_size);
-    bson_info->buffer = malloc(bson_info->size);
-    
     if (bson_info->buffer == NULL)
         return EXIT_FAILURE;
 
+    uint8_t* old = bson_info->buffer;
+    int32_t old_size = bson_info->size;
+    bson_info->size = new_size(bson_info->size, needed_size);
+    bson_info->buffer = malloc(bson_info->size);
+
+    memcpy(bson_info->buffer, old, old_size);
+    
     if (old)
         free(old);
     
@@ -52,23 +70,29 @@ int check_size(struct bson_info* bson_info, int32_t added_size)
 
 /* e_name   ::= cstring */
 /* cstring  ::= (byte*) "\x00" */
-int serialize_cstring(struct bson_info* bson_info, char* str)
+int serialize_cstring(struct bson_info* bson_info, char* cstr)
 {
-    int32_t str_size = strlen(str) + 1;
-
-    if (check_size(bson_info, str_size))
+    if (bson_info == NULL || cstr == NULL)
         return EXIT_FAILURE;
 
-    memcpy(&(bson_info->buffer[bson_info->position]), str, str_size);
-    bson_info->position += str_size;
+    int32_t cstr_size = strlen(cstr) + 1;
+
+    if (check_size(bson_info, cstr_size))
+        return EXIT_FAILURE;
+
+    memcpy(&(bson_info->buffer[bson_info->position]), cstr, cstr_size);
+    bson_info->position += cstr_size;
 
     return EXIT_SUCCESS;
 }
 
 /* string   ::= int32 (byte*) "\x00" */
-int serialize_string(struct bson_info* bson_info, char* str)
+int serialize_string(struct bson_info* bson_info, int32_t* len, uint8_t* str)
 {
-    int32_t str_size = strlen(str) + 1;
+    if (bson_info == NULL || len == NULL || str == NULL)
+        return EXIT_FAILURE;
+
+    int32_t str_size = *len + 1;
     int32_t added_size = str_size + sizeof(int32_t);
 
     if (check_size(bson_info, added_size))
@@ -80,49 +104,133 @@ int serialize_string(struct bson_info* bson_info, char* str)
             return EXIT_FAILURE;
     }
 
-    memcpy(&(bson_info->buffer[bson_info->position]), &str_size,  sizeof(str_size));
-    bson_info->position += sizeof(str_size);
-    memcpy(&(bson_info->buffer[bson_info->position]), str, str_size);
-    bson_info->position += str_size;
+    memcpy(&(bson_info->buffer[bson_info->position]), &str_size,
+           4);
+    bson_info->position += 4;
+
+    memcpy(&(bson_info->buffer[bson_info->position]), str, *len);
+    bson_info->position += *len;
+
+    bson_info->buffer[bson_info->position] = 0x00;
+    bson_info->position++;
 
     return EXIT_SUCCESS;
 }
 
 int serialize_double(struct bson_info* bson_info, double* dbl)
 {
-    int32_t added_size = 8;
-
-    if (check_size(bson_info, added_size))
+    if (bson_info == NULL || dbl == NULL)
         return EXIT_FAILURE;
 
-    memcpy(&(bson_info->buffer[bson_info->position]), dbl, added_size);
-    bson_info->position += added_size;
+    if (check_size(bson_info, 8))
+        return EXIT_FAILURE;
+
+    memcpy(&(bson_info->buffer[bson_info->position]), dbl, 8);
+    bson_info->position += 8;
 
     return EXIT_SUCCESS;
 }
 
 int serialize_int32(struct bson_info* bson_info, int32_t* int32)
 {
-    int32_t added_size = 4;
-
-    if (check_size(bson_info, added_size))
+    if (bson_info == NULL || int32 == NULL)
         return EXIT_FAILURE;
 
-    memcpy(&(bson_info->buffer[bson_info->position]), int32, added_size);
-    bson_info->position += added_size;
+    if (check_size(bson_info, 4))
+        return EXIT_FAILURE;
+
+    memcpy(&(bson_info->buffer[bson_info->position]), int32, 4);
+    bson_info->position += 4;
 
     return EXIT_SUCCESS;
 }
 
 int serialize_int64(struct bson_info* bson_info, int64_t* int64)
 {
-    int32_t added_size = 8;
+    if (bson_info == NULL || int64 == NULL)
+        return EXIT_FAILURE;
+
+    if (check_size(bson_info, 8))
+        return EXIT_FAILURE;
+
+    memcpy(&(bson_info->buffer[bson_info->position]), int64, 8);
+    bson_info->position += 8;
+
+    return EXIT_SUCCESS;
+}
+
+int serialize_objectid(struct bson_info* bson_info, uint8_t objectid[12])
+{
+    if (bson_info == NULL || objectid == NULL)
+        return EXIT_FAILURE;
+
+    if (check_size(bson_info, 12))
+        return EXIT_FAILURE;
+
+    memcpy(&(bson_info->buffer[bson_info->position]), objectid, 12);
+    bson_info->position += 12;
+
+    return EXIT_SUCCESS;
+}
+
+int serialize_boolean(struct bson_info* bson_info, bool boolean)
+{
+    if (bson_info == NULL)
+        return EXIT_FAILURE;
+
+    if (check_size(bson_info, 1))
+        return EXIT_FAILURE;
+
+    bson_info->buffer[bson_info->position] = boolean ? 0x01 : 0x00;
+    bson_info->position++;
+
+    return EXIT_SUCCESS;
+}
+
+int serialize_document(struct bson_info* bson_info,
+                       struct bson_info* document)
+{
+    if (bson_info == NULL || document == NULL)
+        return EXIT_FAILURE;
+
+    int32_t added_size = 4 + document->size + 1;
+
+    if (check_size(bson_info, added_size))
+        return EXIT_FAILURE;
+    
+    memcpy(&(bson_info->buffer[bson_info->position]), &added_size,
+           4);
+    bson_info->position += 4;
+
+    memcpy(&(bson_info->buffer[bson_info->position]), document->buffer,
+           document->size);
+    bson_info->position += document->size;
+
+    bson_info->buffer[bson_info->position] = 0x00;
+    bson_info->position++;
+
+    return EXIT_SUCCESS;
+}
+
+int serialize_binary(struct bson_info* bson_info, int32_t* len,
+                     uint8_t subtype, uint8_t* binary)
+{
+    if (bson_info == NULL || len == NULL || binary == NULL)
+        return EXIT_FAILURE;
+
+    int32_t added_size = 4 + 1 + *len;
 
     if (check_size(bson_info, added_size))
         return EXIT_FAILURE;
 
-    memcpy(&(bson_info->buffer[bson_info->position]), int64, added_size);
-    bson_info->position += added_size;
+    memcpy(&(bson_info->buffer[bson_info->position]), len, 4);
+    bson_info->position += 4;
+
+    bson_info->buffer[bson_info->position] = subtype;
+    bson_info->position++;
+
+    memcpy(&(bson_info->buffer[bson_info->position]), binary, *len);
+    bson_info->position += *len;
 
     return EXIT_SUCCESS;
 }
@@ -150,9 +258,9 @@ int serialize_int64(struct bson_info* bson_info, int64_t* int64)
  *         |    "\xFF" e_name Min key
  *         |    "\x7F" e_name Max key
  */
-int serialize_element(struct bson_info* bson_info, char* key, struct bson_value* value)
+int serialize_element(struct bson_info* bson_info, char* key,
+                      struct bson_value* value)
 {
-
     check_size(bson_info, 1); /* every element adds 1 byte */
 
     switch (value->type)
@@ -168,15 +276,52 @@ int serialize_element(struct bson_info* bson_info, char* key, struct bson_value*
             bson_info->buffer[bson_info->position] = BSON_STRING;
             bson_info->position++;
             serialize_cstring(bson_info, key);
-            serialize_string(bson_info, (char*) value->data);
+            serialize_string(bson_info, (int32_t*) value->data,
+                             ((uint8_t*) value->data) + 4);
             break;
 
         case BSON_EMBEDDED_DOCUMENT:
+            bson_info->buffer[bson_info->position] = BSON_EMBEDDED_DOCUMENT;
+            bson_info->position++;
+            serialize_cstring(bson_info, key);
+            serialize_document(bson_info, (struct bson_info *) value->data);
+            break;
+
         case BSON_ARRAY:
-        case BSON_BINARY: 
+            bson_info->buffer[bson_info->position] = BSON_ARRAY;
+            bson_info->position++;
+            serialize_cstring(bson_info, key);
+            serialize_document(bson_info, (struct bson_info *) value->data);
+            break;
+
+        case BSON_BINARY:
+            bson_info->buffer[bson_info->position] = BSON_BINARY;
+            bson_info->position++;
+            serialize_cstring(bson_info, key);
+            serialize_binary(bson_info, (int32_t*) value->data,
+                                        value->subtype,
+                                        (uint8_t*)(value->data) + 4);
+            break; 
+
         case BSON_UNDEFINED:
+            bson_info->buffer[bson_info->position] = BSON_UNDEFINED;
+            bson_info->position++;
+            serialize_cstring(bson_info, key);
+            break;
+
         case BSON_OBJECTID:
+            bson_info->buffer[bson_info->position] = BSON_OBJECTID;
+            bson_info->position++;
+            serialize_cstring(bson_info, key);
+            serialize_objectid(bson_info, (uint8_t*) value->data);
+            break;
+
         case BSON_BOOLEAN:
+            bson_info->buffer[bson_info->position] = BSON_BOOLEAN;
+            bson_info->position++;
+            serialize_cstring(bson_info, key);
+            serialize_boolean(bson_info, (bool*) value->data);
+            break;
 
         case BSON_UTC_DATETIME:
             bson_info->buffer[bson_info->position] = BSON_UTC_DATETIME;
@@ -186,9 +331,45 @@ int serialize_element(struct bson_info* bson_info, char* key, struct bson_value*
             break;
         
         case BSON_NULL:
-        case BSON_REGEX:
-        case BSON_DBPOINTER:
+            bson_info->buffer[bson_info->position] = BSON_NULL;
+            bson_info->position++;
+            serialize_cstring(bson_info, key);
+            break;
+
+        case BSON_REGEX: /* assumes value->data is an array of two char*'s */
+            bson_info->buffer[bson_info->position] = BSON_REGEX;
+            bson_info->position++;
+            serialize_cstring(bson_info, key);
+            serialize_string(bson_info, (int32_t*) value->data,
+                             ((uint8_t*) value->data) + 4);
+            serialize_string(bson_info, (int32_t*) ((uint8_t*) value->data +
+                                                    4 +
+                                                    *((int32_t*) value->data)),
+                                        ((uint8_t*) value->data) + 8 + 
+                                        *((int32_t*) value->data));
+            break;
+
+        case BSON_DBPOINTER: /* assumes value->data is a tuple */
+            bson_info->buffer[bson_info->position] = BSON_DBPOINTER;
+            bson_info->position++;
+            serialize_cstring(bson_info, key);
+            serialize_string(bson_info, (int32_t*) value->data,
+                                        ((uint8_t*) value->data) + 4);
+            serialize_objectid(bson_info,
+                               (uint8_t*)(((uint8_t*) value->data) + 4 +
+                                         *((int32_t*) value->data)));
+            break;
+
         case BSON_JS_CODE:
+            bson_info->buffer[bson_info->position] = BSON_JS_CODE;
+            bson_info->position++;
+            serialize_cstring(bson_info, key);
+            serialize_string(bson_info, (int32_t*) value->data,
+                                        ((uint8_t*) value->data) + 4);
+            serialize_document(bson_info, (struct bson_info*)
+                                          (((uint8_t*) value->data) + 4 +
+                                          *((int32_t*) value->data)));
+            break;
 
         case BSON_INT32:
             bson_info->buffer[bson_info->position] = BSON_INT32;
@@ -212,27 +393,58 @@ int serialize_element(struct bson_info* bson_info, char* key, struct bson_value*
             break;
 
         case BSON_MIN:
+            bson_info->buffer[bson_info->position] = BSON_MIN;
+            bson_info->position++;
+            serialize_cstring(bson_info, key);
+            break;
+
         case BSON_MAX:
+            bson_info->buffer[bson_info->position] = BSON_MAX;
+            bson_info->position++;
+            serialize_cstring(bson_info, key);
             break;
     }
-
 
     return EXIT_SUCCESS;
 }
 
+/* in place finalize data */
 int bson_finalize(struct bson_info* bson_info)
+{
+    if (bson_info == NULL)
+        return EXIT_FAILURE;
+
+    check_size(bson_info, 5);
+
+    memmove(bson_info->buffer + 4, bson_info->buffer, bson_info->position);
+    memcpy(bson_info->buffer, &(bson_info->position), 4);
+    bson_info->position += 4;
+
+    bson_info->buffer[bson_info->position] = 0x00;
+    bson_info->position++;
+
+    return EXIT_SUCCESS;
+}
+
+/* save to a file */
+int bson_writef(struct bson_info* bson_info, FILE* file)
 {
     if (bson_info->buffer)
     {
-        if (fwrite(&(bson_info->size), sizeof(bson_info->size), 1,
-                   bson_info->file) != sizeof(bson_info->size))
+        if (fwrite(bson_info->buffer, bson_info->position, 1, file) !=
+                   bson_info->position)
+        {
+            free(bson_info->buffer);
             return EXIT_FAILURE;
-
-        if (fwrite(bson_info->buffer, bson_info->size, 1, bson_info->file) !=
-                   bson_info->size)
-            return EXIT_FAILURE;
-        
-        free(bson_info->buffer);
+        }
     }
+
     return EXIT_SUCCESS;
+}
+
+void bson_cleanup(struct bson_info* bson_info)
+{
+    free(bson_info->buffer);
+    bson_info->position = 0;
+    bson_info->size = 0;
 }
