@@ -360,6 +360,22 @@ int serialize_element(struct bson_info* bson_info, char* key,
                                          *((int32_t*) value->data)));
             break;
 
+        case BSON_JS:
+            bson_info->buffer[bson_info->position] = BSON_JS;
+            bson_info->position++;
+            serialize_cstring(bson_info, key);
+            serialize_string(bson_info, (int32_t*) value->data,
+                             ((uint8_t*) value->data) + 4);
+            break;
+
+        case BSON_SYMBOL:
+            bson_info->buffer[bson_info->position] = BSON_SYMBOL;
+            bson_info->position++;
+            serialize_cstring(bson_info, key);
+            serialize_string(bson_info, (int32_t*) value->data,
+                             ((uint8_t*) value->data) + 4);
+            break;    
+
         case BSON_JS_CODE:
             bson_info->buffer[bson_info->position] = BSON_JS_CODE;
             bson_info->position++;
