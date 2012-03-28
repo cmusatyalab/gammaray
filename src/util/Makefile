@@ -6,7 +6,7 @@ default:
 		 #-DNOCOLOR
 
 test: default
-	valgrind ./bson_test
+	valgrind --leak-check=full --show-reachable=yes ./bson_test
 
 clean:
 	@rm bson_test

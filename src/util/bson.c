@@ -460,7 +460,11 @@ int bson_writef(struct bson_info* bson_info, FILE* file)
 
 void bson_cleanup(struct bson_info* bson_info)
 {
-    free(bson_info->buffer);
+    if (bson_info->buffer != NULL)
+    {
+        free(bson_info->buffer);
+        bson_info->buffer = NULL;
+    }
     bson_info->position = 0;
     bson_info->size = 0;
 }
