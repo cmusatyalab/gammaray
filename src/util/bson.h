@@ -54,7 +54,7 @@ struct bson_value
 
 int bson_init(struct bson_info* bson_info);
 int bson_serialize(struct bson_info* bson_info, char* key,
-                   struct bson_value value);
+                   struct bson_value* value);
 int bson_finalize(struct bson_info* bson_info);
 int bson_write(struct bson_info* bson_info, FILE* file);
 void bson_cleanup(struct bson_info* bson_info);
