@@ -120,13 +120,13 @@ int tail(int fd, char* file)
         }
 
         /* read data */
-        read_ret = read(fd, write.data,
+        read_ret = read(fd, (void*) write.data,
                          write.header.nb_sectors*SECTOR_SIZE);
         total = read_ret;
 
         while (read_ret > 0 && total < write.header.nb_sectors*SECTOR_SIZE)
         {
-            read_ret  = read(fd, &(write.data[total]),
+            read_ret  = read(fd, (void*) &(write.data[total]),
                              write.header.nb_sectors*SECTOR_SIZE - total);
             total += read_ret;
         }
@@ -156,7 +156,7 @@ int tail(int fd, char* file)
                     bst_insert(configuration.queue, write.header.sector_num+i,
                                (void*) (write.data+(i*512)));
                     if (write.header.sector_num+i == 18123)
-                        ext2_print_block(write.data+(i*512), 512);
+                        ext2_print_block((void*) (write.data+(i*512)), 512);
                 }
             }
         }

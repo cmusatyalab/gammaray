@@ -1,7 +1,7 @@
 default:
-	@gcc disk_analyzer.c color.c ext2.c mbr.c -o disk_analyzer -Wall -Werror #-DNOCOLOR
-	@gcc inode_explorer.c ext2.c color.c mbr.c -o inode_explorer -Wall -Werror
-	@gcc data_block_explorer.c ext2.c color.c mbr.c -o data_block_explorer -Wall -Werror
+	@clang disk_analyzer.c color.c ext2.c mbr.c -o disk_analyzer -Wall -Werror #-DNOCOLOR
+	@clang inode_explorer.c ext2.c color.c mbr.c -o inode_explorer -Wall -Werror
+	@clang data_block_explorer.c ext2.c color.c mbr.c -o data_block_explorer -Wall -Werror
 
 test: default
 	@./disk_analyzer /home/wolf/Dropbox/Projects/xray/sample/tinycore.raw | less -R

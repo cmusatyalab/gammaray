@@ -1,5 +1,5 @@
 default:
-	@gcc bst_test.c bst.c ../disk_analyzer/color.c \
+	@clang bst_test.c bst.c ../disk_analyzer/color.c \
 		 -o bst_test \
 		 -Wall \
 		 -Werror \

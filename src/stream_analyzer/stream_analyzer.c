@@ -85,7 +85,8 @@ int main(int argc, char* args[])
         }
 
         qemu_parse_header(buf, &write);
-        write.data = (const uint8_t*) malloc(write.header.nb_sectors*SECTOR_SIZE);
+        write.data = (const uint8_t*)
+                     malloc(write.header.nb_sectors*SECTOR_SIZE);
 
         if (write.data == NULL)
         {

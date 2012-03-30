@@ -1,5 +1,5 @@
 default:
-	@gcc \
+	@clang \
          bson_test.c bson.c util.c ../disk_analyzer/color.c \
 		 -o bson_test \
 		 -Wall \

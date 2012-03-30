@@ -1,5 +1,5 @@
 default:
-	@gcc shell.c \
+	@clang shell.c \
 		 tail.c \
 		 ../disk_analyzer/color.c \
 		 ../disk_analyzer/ext2.c \
