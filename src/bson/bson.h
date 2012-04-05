@@ -65,8 +65,8 @@ struct bson_kv
  * @return - EXIT_FAILURE if malloc fails, otherwise EXIT_SUCCESS
  *
  */
-int
-bson_init(struct bson_info* bson_info);
+struct bson_info*
+bson_init();
 
 /**
  * bson_serialize
@@ -108,7 +108,7 @@ bson_finalize(struct bson_info* bson_info);
  *
  */
 int
-bson_write(struct bson_info* bson_info, FILE* file);
+bson_writef(struct bson_info* bson_info, FILE* file);
 
 /**
  * bson_cleanup

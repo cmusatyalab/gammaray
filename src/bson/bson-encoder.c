@@ -21,17 +21,25 @@
  *
  */
 
-int bson_init(struct bson_info* bson_info)
+struct bson_info* bson_init()
 {
-    bson_info->buffer = (uint8_t*) malloc(START_SIZE);
-    if (bson_info->buffer)
+    struct bson_info* bson_info = (struct bson_info*)
+                                  malloc(sizeof(struct bson_info));
+    if (bson_info)
     {
-        bson_info->size = START_SIZE;
-        bson_info->position = 0;
-        return EXIT_SUCCESS;
+        bson_info->buffer = (uint8_t*) malloc(START_SIZE);
+        if (bson_info->buffer)
+        {
+            bson_info->size = START_SIZE;
+            bson_info->position = 0;
+        }
+        else
+        {
+            return NULL;
+        }
     }
 
-    return EXIT_FAILURE;
+    return bson_info;
 }
 
 int32_t new_size(int32_t old_size, int32_t needed_size)
@@ -470,4 +478,5 @@ void bson_cleanup(struct bson_info* bson_info)
     }
     bson_info->position = 0;
     bson_info->size = 0;
+    free(bson_info);
 }
