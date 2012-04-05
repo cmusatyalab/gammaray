@@ -1,8 +1,9 @@
 default:
-	@clang bst_test.c bst.c ../disk_analyzer/color.c \
+	@clang bst_test.c bst.c ../util/color.c \
 		 -o bst_test \
 		 -Wall \
 		 -Werror \
+		 -I../util \
 		 #-DNOCOLOR
 
 test: default

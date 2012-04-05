@@ -1,5 +1,5 @@
 #include "qemu_tracer.h"
-#include "../disk_analyzer/color.h"
+#include "color.h"
 #include "tokenizer.h"
 
 #include <stdio.h>

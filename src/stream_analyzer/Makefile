@@ -1,6 +1,6 @@
 default:
 	@clang stream_analyzer.c \
-		 ../disk_analyzer/color.c \
+		 ../util/color.c \
 		 ../datastructures/bst.c \
 		 qemu_tracer.c \
 		 tokenizer.c \
@@ -9,6 +9,7 @@ default:
 		 -o stream_analyzer \
 		 -Wall \
 		 -Werror \
+		 -I../util \
 		 #-DNOCOLOR
 
 test: default

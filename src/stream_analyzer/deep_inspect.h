@@ -3,7 +3,7 @@
 
 #include <stdbool.h>
 #include <inttypes.h>
-#include "../disk_analyzer/color.h"
+#include "color.h"
 #include "../datastructures/bst.h"
 
 #include "qemu_tracer.h"

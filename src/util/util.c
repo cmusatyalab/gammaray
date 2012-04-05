@@ -1,5 +1,5 @@
 #include "util.h"
-#include "../disk_analyzer/color.h"
+#include "color.h"
 
 #include <stdio.h>
 #include <stdlib.h>

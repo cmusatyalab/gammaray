@@ -15,7 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../disk_analyzer/color.h"
+#include "color.h"
 #include "qemu_tracer.h"
 #include "byte_printer.h"
 #include "deep_inspect.h"

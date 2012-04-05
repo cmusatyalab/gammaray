@@ -2,7 +2,7 @@ default:
 	@clang \
          bson_test.c bson-encoder.c bson-decoder.c \
 		 ../util/util.c \
-		 ../disk_analyzer/color.c \
+		 ../util/color.c \
 		 -o bson_test \
 		 -Wall \
 		 -Werror \

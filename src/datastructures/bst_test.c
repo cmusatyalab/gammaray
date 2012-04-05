@@ -1,6 +1,6 @@
 #include <stdlib.h>
 
-#include "../disk_analyzer/color.h"
+#include "color.h"
 #include "bst.h"
 
 int test_bst_init(struct bst_node** tree, uint64_t key, void* data)

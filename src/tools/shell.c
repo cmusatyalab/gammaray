@@ -6,7 +6,7 @@
 #include <string.h>
 
 #include "tail.h"
-#include "../disk_analyzer/color.h"
+#include "color.h"
 #include "../stream_analyzer/qemu_tracer.h"
 #include "../stream_analyzer/deep_inspect.h"
 

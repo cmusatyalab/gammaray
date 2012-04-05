@@ -1,7 +1,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-#include "../disk_analyzer/color.h"
+#include "color.h"
 #include "bst.h"
 
 struct bst_node* bst_init(uint64_t key, void* data)
