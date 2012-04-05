@@ -1,2 +1,10 @@
-(1) dynamic detection of file-level mutations
-    - hard-coded demo of /mnt/sda1/tce/auth.log 
+(0) Implement BSON saving of data structures from static component
+        - Provide 'naming' of VMs
+
+(1) Generalize processing and emitting of file-level events
+
+(2) Generalize tail and tail -f
+
+(3) File system benchmarking -- see performance hit with ext2
+
+(4) Implement ext3 support
