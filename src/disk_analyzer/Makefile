@@ -1,20 +1,28 @@
 default:
 	@clang disk_analyzer.c ../util/color.c ext2.c mbr.c \
+		   ../bson/bson-encoder.c \
 		   -o disk_analyzer \
 		   -Wall \
 		   -Werror \
 		   -I../util \
+		   -I../bson \
 		   #-DNOCOLOR
-	@clang inode_explorer.c ext2.c ../util/color.c mbr.c \
+	@clang inode_explorer.c ext2.c \
+		   ../util/color.c mbr.c \
+		   ../bson/bson-encoder.c \
 		   -o inode_explorer \
 		   -Wall \
 		   -Werror \
-		   -I../util
-	@clang data_block_explorer.c ext2.c ../util/color.c mbr.c \
+		   -I../util \
+		   -I../bson
+	@clang data_block_explorer.c ext2.c \
+		   ../util/color.c mbr.c \
+		   ../bson/bson-encoder.c \
 		   -o data_block_explorer \
 		   -Wall \
 		   -Werror \
-		   -I../util
+		   -I../util \
+		   -I../bson
 
 test: default
 	@./disk_analyzer /home/wolf/Dropbox/Projects/xray/sample/tinycore.raw \

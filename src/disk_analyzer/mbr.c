@@ -1,5 +1,6 @@
 #include <string.h>
 
+#include "bson.h"
 #include "mbr.h"
 
 char* MBR_PT_LUT[] = { "Empty","","","","","Extended","","HPFS/NTFS","","","","W95 FAT32","","","","", /* 0x00 - 0x0f */
@@ -164,6 +165,42 @@ int print_partition_sectors(struct partition_table_entry pte)
                             pte.first_sector_lba,
                             pte.first_sector_lba +
                             pte.sector_count);
+    return 0;
+}
+
+int mbr_serialize_partition(int32_t pte_num, struct partition_table_entry pte,
+                            const char* fname)
+{
+    FILE* f = fopen(fname, "w");
+    struct bson_info* serialized;
+    struct bson_kv value;
+    int32_t final_sector = pte.first_sector_lba + pte.sector_count;
+
+    serialized = bson_init();
+
+    value.type = BSON_INT32;
+    value.key = "pte_num";
+    value.data = &pte_num;
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT32;
+    value.key = "first_sector_lba";
+    value.data = &(pte.first_sector_lba);
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT32;
+    value.key = "final_sector_lba";
+    value.data = &(final_sector);
+
+    bson_serialize(serialized, &value);
+
+    bson_finalize(serialized);
+    bson_writef(serialized, f);
+    bson_cleanup(serialized);
+    fclose(f);
+     
     return 0;
 }
 

@@ -31,9 +31,10 @@ int main(int argc, char* args[])
     fprintf_blue(stdout, "Raw Disk Analyzer -- By: Wolfgang Richter "
                          "<wolf@cs.cmu.edu>\n");
 
-    if (argc < 2)
+    if (argc < 3)
     {
-        fprintf_light_red(stderr, "Usage: %s <raw disk file>\n", args[0]);
+        fprintf_light_red(stderr, "Usage: %s <raw disk file> <VM name>\n", 
+                                  args[0]);
         return EXIT_FAILURE;
     }
 
