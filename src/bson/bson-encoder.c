@@ -2,8 +2,9 @@
  * This file implements the BSON (v1.0) standard as defined here:
  *  http://bsonspec.org/#/specification
  *
- * */
+ */
 #include "bson.h"
+#include "__bson.h"
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -70,7 +71,7 @@ int check_size(struct bson_info* bson_info, int32_t added_size)
 
 /* e_name   ::= cstring */
 /* cstring  ::= (byte*) "\x00" */
-int serialize_cstring(struct bson_info* bson_info, char* cstr)
+int serialize_cstring(struct bson_info* bson_info, const char* cstr)
 {
     if (bson_info == NULL || cstr == NULL)
         return EXIT_FAILURE;
@@ -253,8 +254,7 @@ int serialize_binary(struct bson_info* bson_info, int32_t* len,
  *         |    "\xFF" e_name Min key
  *         |    "\x7F" e_name Max key
  */
-int serialize_element(struct bson_info* bson_info, char* key,
-                      struct bson_value* value)
+int serialize_element(struct bson_info* bson_info, struct bson_kv* value)
 {
     check_size(bson_info, 1); /* every element adds 1 byte */
 
@@ -263,14 +263,14 @@ int serialize_element(struct bson_info* bson_info, char* key,
         case BSON_DOUBLE:
             bson_info->buffer[bson_info->position] = BSON_DOUBLE;
             bson_info->position++;
-            serialize_cstring(bson_info, key);
+            serialize_cstring(bson_info, value->key);
             serialize_double(bson_info, (double*) value->data);
             break;
 
         case BSON_STRING:
             bson_info->buffer[bson_info->position] = BSON_STRING;
             bson_info->position++;
-            serialize_cstring(bson_info, key);
+            serialize_cstring(bson_info, value->key);
             serialize_string(bson_info, (int32_t*) value->data,
                              ((uint8_t*) value->data) + 4);
             break;
@@ -278,21 +278,21 @@ int serialize_element(struct bson_info* bson_info, char* key,
         case BSON_EMBEDDED_DOCUMENT:
             bson_info->buffer[bson_info->position] = BSON_EMBEDDED_DOCUMENT;
             bson_info->position++;
-            serialize_cstring(bson_info, key);
+            serialize_cstring(bson_info, value->key);
             serialize_document(bson_info, (struct bson_info *) value->data);
             break;
 
         case BSON_ARRAY:
             bson_info->buffer[bson_info->position] = BSON_ARRAY;
             bson_info->position++;
-            serialize_cstring(bson_info, key);
+            serialize_cstring(bson_info, value->key);
             serialize_document(bson_info, (struct bson_info *) value->data);
             break;
 
         case BSON_BINARY:
             bson_info->buffer[bson_info->position] = BSON_BINARY;
             bson_info->position++;
-            serialize_cstring(bson_info, key);
+            serialize_cstring(bson_info, value->key);
             serialize_binary(bson_info, (int32_t*) value->data,
                                         value->subtype,
                                         (uint8_t*)(value->data) + 4);
@@ -301,40 +301,40 @@ int serialize_element(struct bson_info* bson_info, char* key,
         case BSON_UNDEFINED:
             bson_info->buffer[bson_info->position] = BSON_UNDEFINED;
             bson_info->position++;
-            serialize_cstring(bson_info, key);
+            serialize_cstring(bson_info, value->key);
             break;
 
         case BSON_OBJECTID:
             bson_info->buffer[bson_info->position] = BSON_OBJECTID;
             bson_info->position++;
-            serialize_cstring(bson_info, key);
+            serialize_cstring(bson_info, value->key);
             serialize_objectid(bson_info, (uint8_t*) value->data);
             break;
 
         case BSON_BOOLEAN:
             bson_info->buffer[bson_info->position] = BSON_BOOLEAN;
             bson_info->position++;
-            serialize_cstring(bson_info, key);
+            serialize_cstring(bson_info, value->key);
             serialize_boolean(bson_info, (bool*) value->data);
             break;
 
         case BSON_UTC_DATETIME:
             bson_info->buffer[bson_info->position] = BSON_UTC_DATETIME;
             bson_info->position++;
-            serialize_cstring(bson_info, key);
+            serialize_cstring(bson_info, value->key);
             serialize_int64(bson_info, (int64_t*) value->data);
             break;
         
         case BSON_NULL:
             bson_info->buffer[bson_info->position] = BSON_NULL;
             bson_info->position++;
-            serialize_cstring(bson_info, key);
+            serialize_cstring(bson_info, value->key);
             break;
 
         case BSON_REGEX: /* assumes value->data is an array of two char*'s */
             bson_info->buffer[bson_info->position] = BSON_REGEX;
             bson_info->position++;
-            serialize_cstring(bson_info, key);
+            serialize_cstring(bson_info, value->key);
             serialize_string(bson_info, (int32_t*) value->data,
                              ((uint8_t*) value->data) + 4);
             serialize_string(bson_info, (int32_t*) ((uint8_t*) value->data +
@@ -347,7 +347,7 @@ int serialize_element(struct bson_info* bson_info, char* key,
         case BSON_DBPOINTER: /* assumes value->data is a tuple */
             bson_info->buffer[bson_info->position] = BSON_DBPOINTER;
             bson_info->position++;
-            serialize_cstring(bson_info, key);
+            serialize_cstring(bson_info, value->key);
             serialize_string(bson_info, (int32_t*) value->data,
                                         ((uint8_t*) value->data) + 4);
             serialize_objectid(bson_info,
@@ -358,7 +358,7 @@ int serialize_element(struct bson_info* bson_info, char* key,
         case BSON_JS:
             bson_info->buffer[bson_info->position] = BSON_JS;
             bson_info->position++;
-            serialize_cstring(bson_info, key);
+            serialize_cstring(bson_info, value->key);
             serialize_string(bson_info, (int32_t*) value->data,
                              ((uint8_t*) value->data) + 4);
             break;
@@ -366,7 +366,7 @@ int serialize_element(struct bson_info* bson_info, char* key,
         case BSON_SYMBOL:
             bson_info->buffer[bson_info->position] = BSON_SYMBOL;
             bson_info->position++;
-            serialize_cstring(bson_info, key);
+            serialize_cstring(bson_info, value->key);
             serialize_string(bson_info, (int32_t*) value->data,
                              ((uint8_t*) value->data) + 4);
             break;    
@@ -374,7 +374,7 @@ int serialize_element(struct bson_info* bson_info, char* key,
         case BSON_JS_CODE:
             bson_info->buffer[bson_info->position] = BSON_JS_CODE;
             bson_info->position++;
-            serialize_cstring(bson_info, key);
+            serialize_cstring(bson_info, value->key);
             serialize_string(bson_info, (int32_t*) value->data,
                                         ((uint8_t*) value->data) + 4);
             serialize_document(bson_info, (struct bson_info*)
@@ -385,44 +385,43 @@ int serialize_element(struct bson_info* bson_info, char* key,
         case BSON_INT32:
             bson_info->buffer[bson_info->position] = BSON_INT32;
             bson_info->position++;
-            serialize_cstring(bson_info, key);
+            serialize_cstring(bson_info, value->key);
             serialize_int32(bson_info, (int32_t*) value->data);
             break;
 
         case BSON_TIMESTAMP:
             bson_info->buffer[bson_info->position] = BSON_TIMESTAMP;
             bson_info->position++;
-            serialize_cstring(bson_info, key);
+            serialize_cstring(bson_info, value->key);
             serialize_int64(bson_info, (int64_t*) value->data);
             break;
 
         case BSON_INT64:
             bson_info->buffer[bson_info->position] = BSON_INT64;
             bson_info->position++;
-            serialize_cstring(bson_info, key);
+            serialize_cstring(bson_info, value->key);
             serialize_int64(bson_info, (int64_t*) value->data);
             break;
 
         case BSON_MIN:
             bson_info->buffer[bson_info->position] = BSON_MIN;
             bson_info->position++;
-            serialize_cstring(bson_info, key);
+            serialize_cstring(bson_info, value->key);
             break;
 
         case BSON_MAX:
             bson_info->buffer[bson_info->position] = BSON_MAX;
             bson_info->position++;
-            serialize_cstring(bson_info, key);
+            serialize_cstring(bson_info, value->key);
             break;
     }
 
     return EXIT_SUCCESS;
 }
 
-int bson_serialize(struct bson_info* bson_info, char* key,
-                   struct bson_value* value)
+int bson_serialize(struct bson_info* bson_info, struct bson_kv* value)
 {
-    return serialize_element(bson_info, key, value);
+    return serialize_element(bson_info, value);
 }
 
 /* in place finalize data */

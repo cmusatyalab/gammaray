@@ -1,9 +1,12 @@
 default:
 	@clang \
-         bson_test.c bson.c util.c ../disk_analyzer/color.c \
+         bson_test.c bson-encoder.c bson-decoder.c \
+		 ../util/util.c \
+		 ../disk_analyzer/color.c \
 		 -o bson_test \
 		 -Wall \
 		 -Werror \
+		 -I../util \
 		 #-DNOCOLOR
 
 test: default
