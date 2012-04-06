@@ -1,7 +1,8 @@
-#include <string.h>
-
 #include "bson.h"
 #include "mbr.h"
+
+#include <string.h>
+#include <stdlib.h>
 
 char* MBR_PT_LUT[] = { "Empty","","","","","Extended","","HPFS/NTFS","","","","W95 FAT32","","","","", /* 0x00 - 0x0f */
                        "","","","","","","","","","","","","","","","", /* 0x10 - 0x1f */
@@ -197,7 +198,8 @@ int mbr_serialize_partition(uint32_t pte_num, struct partition_table_entry pte,
     bson_serialize(serialized, &value);
 
     bson_finalize(serialized);
-    bson_writef(serialized, f);
+    if (bson_writef(serialized, f))
+        return EXIT_FAILURE;
     bson_cleanup(serialized);
     fclose(f);
      

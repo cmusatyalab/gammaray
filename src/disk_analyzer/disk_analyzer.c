@@ -84,7 +84,12 @@ int main(int argc, char* args[])
                 snprintf(buf, 4096, "/tmp/%s.%d.pte", vm_name, i);
                 fprintf_light_red(stdout, "Serializing Partition Data to: "
                                           "%s\n", buf);
-                mbr_serialize_partition(i, pte, buf);
+                if (mbr_serialize_partition(i, pte, buf))
+                {
+                    fprintf_light_red(stderr, "Error writing serialized "
+                                              "partition table entry.\n");
+                    return EXIT_FAILURE;
+                }
                 print_partition_sectors(pte);
                 //ext2_print_sectormap(disk, partition_offset, ext2_superblock);
                 //ext2_print_superblock(ext2_superblock);
