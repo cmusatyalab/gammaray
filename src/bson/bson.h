@@ -166,6 +166,19 @@ int
 bson_deserialize(struct bson_info* bson_info, struct bson_kv* value,
                  struct bson_kv* value2);
 
+/**
+ * bson_print
+ *
+ * This function prints a BSON stream as a set of key-value pairs.
+ *
+ * @param bson_info - the BSON stream to print
+ * @param FILE* - the stream to print to
+ * @return - EXIT_SUCCESS on success, EXIT_FAILURE otherwise
+ *
+ */
+int
+bson_print(FILE* stream, struct bson_info* bson);
+
 #ifdef __cplusplus
 }
 #endif
