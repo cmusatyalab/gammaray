@@ -36,6 +36,9 @@ int bson_read(struct bson_info* bson_info, const char* fname)
     if (file == NULL)
         return EXIT_FAILURE;
 
+    if (bson_info->buffer != NULL)
+        free(bson_info->buffer);
+
     bson_info->buffer = malloc(size);
     if (bson_info->buffer)
     {
