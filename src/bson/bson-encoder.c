@@ -456,13 +456,22 @@ int bson_finalize(struct bson_info* bson_info)
 /* save to a file */
 int bson_writef(struct bson_info* bson_info, FILE* file)
 {
+    size_t to_write = bson_info->position;
+    size_t written = 0;
     if (bson_info->buffer)
     {
-        if (fwrite(bson_info->buffer, bson_info->position, 1, file) !=
-                   bson_info->position)
+        while (to_write)
         {
-            free(bson_info->buffer);
-            return EXIT_FAILURE;
+            written = fwrite(&(bson_info->buffer[written]), 1, to_write, file);
+            if (written != to_write)
+            {
+                if (feof(file) || ferror(file))
+                {
+                    free(bson_info->buffer);
+                    return EXIT_FAILURE;
+                }
+            }
+            to_write -= written;
         }
     }
 
