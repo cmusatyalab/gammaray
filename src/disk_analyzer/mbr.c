@@ -168,7 +168,7 @@ int print_partition_sectors(struct partition_table_entry pte)
     return 0;
 }
 
-int mbr_serialize_partition(int32_t pte_num, struct partition_table_entry pte,
+int mbr_serialize_partition(uint32_t pte_num, struct partition_table_entry pte,
                             const char* fname)
 {
     FILE* f = fopen(fname, "w");

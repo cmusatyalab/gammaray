@@ -36,5 +36,7 @@ int64_t mbr_partition_offset(struct mbr mbr, int pte);
 int mbr_get_partition_table_entry(struct mbr mbr, int pte_num,
                                   struct partition_table_entry* pte);
 int mbr_print_numbers(struct mbr mbr);
+int mbr_serialize_partition(uint32_t pte_num, struct partition_table_entry pte,
+                            const char* fname);
 
 #endif
