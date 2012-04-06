@@ -1,6 +1,8 @@
 #ifndef __BSON___BSON_H
 #define __BSON___BSON_H
 
+#include <inttypes.h>
+
 struct bson_info
 {
     uint64_t size;
