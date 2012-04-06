@@ -1,5 +1,6 @@
+#include "__bson.h" /* internal lib header */
 #include "bson.h"
-#include "__bson.h"
+#include "color.h"
 #include "util.h"
 
 #include <assert.h>
@@ -91,7 +92,7 @@ void test_encoding()
 
 
     test_bson_init(&bson);
-    fprintf(stderr, "Passed test_bson_init.\n");
+    fprintf_light_green(stderr, "Passed test_bson_init.\n");
 
 
     double val1d = 3.1415926;
@@ -104,7 +105,7 @@ void test_encoding()
 
     test_bson_serialize(bson, &val1);
     hexdump(bson->buffer, bson->position);
-    fprintf(stderr, "Passed test_bson_serialize1.\n");
+    fprintf_light_green(stderr, "Passed test_bson_serialize1.\n");
     
     
     int32_t val2i32 = 37684;
@@ -117,7 +118,7 @@ void test_encoding()
 
     test_bson_serialize(bson, &val2);
     hexdump(bson->buffer, bson->position);
-    fprintf(stderr, "Passed test_bson_serialize2.\n");
+    fprintf_light_green(stderr, "Passed test_bson_serialize2.\n");
     
     
     int64_t val3i64 = 3768400;
@@ -130,7 +131,7 @@ void test_encoding()
 
     test_bson_serialize(bson, &val3);
     hexdump(bson->buffer, bson->position);
-    fprintf(stderr, "Passed test_bson_serialize3.\n");
+    fprintf_light_green(stderr, "Passed test_bson_serialize3.\n");
     
 
     char* val4str = "testerrrrrstring";
@@ -147,7 +148,7 @@ void test_encoding()
 
     test_bson_serialize(bson, &val4);
     hexdump(bson->buffer, bson->position);
-    fprintf(stderr, "Passed test_bson_serialize4.\n");
+    fprintf_light_green(stderr, "Passed test_bson_serialize4.\n");
     
 
     int32_t len5 = 6;
@@ -163,7 +164,7 @@ void test_encoding()
                               };
     test_bson_serialize(bson, &val5);
     hexdump(bson->buffer, bson->position);
-    fprintf(stderr, "Passed test_bson_serialize5.\n");
+    fprintf_light_green(stderr, "Passed test_bson_serialize5.\n");
 
     bool true6 = true;
     struct bson_kv val6 = {
@@ -175,7 +176,7 @@ void test_encoding()
 
     test_bson_serialize(bson, &val6);
     hexdump(bson->buffer, bson->position);
-    fprintf(stderr, "Passed test_bson_serialize6.\n");
+    fprintf_light_green(stderr, "Passed test_bson_serialize6.\n");
 
     bool true7 = false;
     struct bson_kv val7 = {
@@ -187,7 +188,7 @@ void test_encoding()
 
     test_bson_serialize(bson, &val7);
     hexdump(bson->buffer, bson->position);
-    fprintf(stderr, "Passed test_bson_serialize7.\n");
+    fprintf_light_green(stderr, "Passed test_bson_serialize7.\n");
 
     struct bson_kv val8 = {
                                 .type = BSON_NULL,
@@ -198,7 +199,7 @@ void test_encoding()
 
     test_bson_serialize(bson, &val8);
     hexdump(bson->buffer, bson->position);
-    fprintf(stderr, "Passed test_bson_serialize8.\n");
+    fprintf_light_green(stderr, "Passed test_bson_serialize8.\n");
 
     struct bson_kv val9 = {
                                 .type = BSON_ARRAY,
@@ -209,14 +210,14 @@ void test_encoding()
 
     test_bson_serialize(bson, &val9);
     hexdump(bson->buffer, bson->position);
-    fprintf(stderr, "Passed test_bson_serialize9.\n");
+    fprintf_light_green(stderr, "Passed test_bson_serialize9.\n");
 
     test_bson_finalize(bson);
     hexdump(bson->buffer, bson->position);
-    fprintf(stderr, "Passed test_bson_finalize.\n");
+    fprintf_light_green(stderr, "Passed test_bson_finalize.\n");
 
     test_bson_cleanup(bson);
-    fprintf(stderr, "Passed test_bson_cleanup.\n");
+    fprintf_light_green(stderr, "Passed test_bson_cleanup.\n");
 }
 
 void test_decoding()
@@ -225,7 +226,7 @@ void test_decoding()
 
 
     test_bson_init(&bson);
-    fprintf(stderr, "Passed test_bson_init.\n");
+    fprintf_light_green(stderr, "Passed test_bson_init.\n");
 
 
     double val1d = 3.1415926;
@@ -238,7 +239,7 @@ void test_decoding()
 
     test_bson_serialize(bson, &val1);
     hexdump(bson->buffer, bson->position);
-    fprintf(stderr, "Passed test_bson_serialize1.\n");
+    fprintf_light_green(stderr, "Passed test_bson_serialize1.\n");
     
     
     int32_t val2i32 = 37684;
@@ -251,7 +252,7 @@ void test_decoding()
 
     test_bson_serialize(bson, &val2);
     hexdump(bson->buffer, bson->position);
-    fprintf(stderr, "Passed test_bson_serialize2.\n");
+    fprintf_light_green(stderr, "Passed test_bson_serialize2.\n");
     
     
     int64_t val3i64 = 3768400;
@@ -264,7 +265,7 @@ void test_decoding()
 
     test_bson_serialize(bson, &val3);
     hexdump(bson->buffer, bson->position);
-    fprintf(stderr, "Passed test_bson_serialize3.\n");
+    fprintf_light_green(stderr, "Passed test_bson_serialize3.\n");
     
 
     char* val4str = "testerrrrrstring";
@@ -281,7 +282,7 @@ void test_decoding()
 
     test_bson_serialize(bson, &val4);
     hexdump(bson->buffer, bson->position);
-    fprintf(stderr, "Passed test_bson_serialize4.\n");
+    fprintf_light_green(stderr, "Passed test_bson_serialize4.\n");
     
 
     int32_t len5 = 6;
@@ -297,7 +298,7 @@ void test_decoding()
                               };
     test_bson_serialize(bson, &val5);
     hexdump(bson->buffer, bson->position);
-    fprintf(stderr, "Passed test_bson_serialize5.\n");
+    fprintf_light_green(stderr, "Passed test_bson_serialize5.\n");
 
     bool true6 = true;
     struct bson_kv val6 = {
@@ -309,7 +310,7 @@ void test_decoding()
 
     test_bson_serialize(bson, &val6);
     hexdump(bson->buffer, bson->position);
-    fprintf(stderr, "Passed test_bson_serialize6.\n");
+    fprintf_light_green(stderr, "Passed test_bson_serialize6.\n");
 
     bool true7 = false;
     struct bson_kv val7 = {
@@ -321,7 +322,7 @@ void test_decoding()
 
     test_bson_serialize(bson, &val7);
     hexdump(bson->buffer, bson->position);
-    fprintf(stderr, "Passed test_bson_serialize7.\n");
+    fprintf_light_green(stderr, "Passed test_bson_serialize7.\n");
 
     struct bson_kv val8 = {
                                 .type = BSON_NULL,
@@ -332,11 +333,11 @@ void test_decoding()
 
     test_bson_serialize(bson, &val8);
     hexdump(bson->buffer, bson->position);
-    fprintf(stderr, "Passed test_bson_serialize8.\n");
+    fprintf_light_green(stderr, "Passed test_bson_serialize8.\n");
 
     test_bson_finalize(bson);
     hexdump(bson->buffer, bson->position);
-    fprintf(stderr, "Passed test_bson_finalize.\n");
+    fprintf_light_green(stderr, "Passed test_bson_finalize.\n");
     
     test_bson_make_readable(bson);
 
@@ -466,10 +467,10 @@ void test_decoding()
     assert(bson->position == old_position + parsed);
     assert(bson->size == old_size - parsed);
 
-    fprintf(stderr, "Passed all deserialization tests\n");
+    fprintf_light_green(stderr, "Passed all deserialization tests\n");
 
     test_bson_cleanup(bson);
-    fprintf(stderr, "Passed test_bson_cleanup.\n");
+    fprintf_light_green(stderr, "Passed test_bson_cleanup.\n");
 }
 
 int main(int argc, char* argv[])
