@@ -21,7 +21,7 @@ int main(int argc, char* argv[])
 
     if (argc < 2)
     {
-        fprintf_light_red(stderr, "Usage: ./%s <raw disk file>\n", argv[0]);
+        fprintf_light_red(stderr, "Usage: %s <raw disk file>\n", argv[0]);
         return EXIT_FAILURE;
     }
 
