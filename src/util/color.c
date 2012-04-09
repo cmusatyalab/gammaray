@@ -1,35 +1,35 @@
 #include "color.h"
 
-const char* CONTROL = "\x1b";
-const char* RESET = "[0m";
-const char* BOLD = "[1m";
-const char* ITALICS = "[3m";
-const char* UNDERLINE = "[4m";
-const char* INVERSE = "[7m";
-const char* STRIKETHROUGH = "[9m";
-const char* BOLD_OFF = "[22m";
-const char* ITALICS_OFF = "[23m";
-const char* UNDERLINE_OFF = "[24m";
-const char* INVERSE_OFF = "[25m";
-const char* STRIKETHROUGH_OFF = "[29m";
-const char* BLACK = "[30m";
-const char* RED = "[31m";
-const char* GREEN = "[32m";
-const char* YELLOW = "[33m";
-const char* BLUE = "[34m";
-const char* MAGENTA = "[35m";
-const char* CYAN = "[36m";
-const char* WHITE = "[37m";
-const char* DEFAULT = "[39m";
-const char* BACKGROUND_BLACK = "[40m";
-const char* BACKGROUND_RED = "[41m";
-const char* BACKGROUND_GREEN = "[42m";
-const char* BACKGROUND_YELLOW = "[43m";
-const char* BACKGROUND_BLUE = "[44m";
-const char* BACKGROUND_MAGENTA = "[45m";
-const char* BACKGROUND_CYAN = "[46m";
-const char* BACKGROUND_WHITE = "[47m";
-const char* BACKGROUND_DEFAULT = "[49m";
+#define CONTROL "\x1b"
+#define RESET "[0m"
+#define BOLD "[1m"
+#define ITALICS "[3m"
+#define UNDERLINE "[4m"
+#define INVERSE "[7m"
+#define STRIKETHROUGH "[9m"
+#define BOLD_OFF "[22m"
+#define ITALICS_OFF "[23m"
+#define UNDERLINE_OFF "[24m"
+#define INVERSE_OFF "[25m"
+#define STRIKETHROUGH_OFF "[29m"
+#define BLACK "[30m"
+#define RED "[31m"
+#define GREEN "[32m"
+#define YELLOW "[33m"
+#define BLUE "[34m"
+#define MAGENTA "[35m"
+#define CYAN "[36m"
+#define WHITE "[37m"
+#define DEFAULT "[39m"
+#define BACKGROUND_BLACK "[40m"
+#define BACKGROUND_RED "[41m"
+#define BACKGROUND_GREEN "[42m"
+#define BACKGROUND_YELLOW "[43m"
+#define BACKGROUND_BLUE "[44m"
+#define BACKGROUND_MAGENTA "[45m"
+#define BACKGROUND_CYAN "[46m"
+#define BACKGROUND_WHITE "[47m"
+#define BACKGROUND_DEFAULT "[49m"
 
 int fprintf_light_mode(const char* mode, FILE * stream, const char * format,
                        va_list args)
