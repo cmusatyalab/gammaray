@@ -1,10 +1,7 @@
-(0) Implement BSON saving of data structures from static component
-        - Provide 'naming' of VMs
+(0) Generalize processing and emitting of file-level events
 
-(1) Generalize processing and emitting of file-level events
+(1) Generalize tail and tail -f
 
-(2) Generalize tail and tail -f
+(2) File system benchmarking -- see performance hit with ext2
 
-(3) File system benchmarking -- see performance hit with ext2
-
-(4) Implement ext3 support
+(3) Implement ext3 support
