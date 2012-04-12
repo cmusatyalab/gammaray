@@ -29,12 +29,15 @@ int bson_readf(struct bson_info* bson_info, FILE* file)
 {
     int32_t size;
     if (bson_info == NULL)
-        return EXIT_FAILURE;
+        return 0;
 
     if (file == NULL)
-        return EXIT_FAILURE;
+        return 0;
 
-    fread(&(size), 4, 1, file);
+    if (fread(&(size), 4, 1, file) != 1)
+    {
+        return 0;
+    }
 
     size -= 4;
 
@@ -53,14 +56,14 @@ int bson_readf(struct bson_info* bson_info, FILE* file)
     {
         if(fread(bson_info->buffer, 1, size, file) != size)
         {
-            return EXIT_FAILURE;
+            return -1;
         }
         bson_info->size = size;
         bson_info->position = 0;
-        return EXIT_SUCCESS;
+        return 1;
     }
 
-    return EXIT_FAILURE;
+    return -1;
 }
 
 int bson_read(struct bson_info* bson_info, const char* fname)
