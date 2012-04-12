@@ -279,8 +279,8 @@ int serialize_element(struct bson_info* bson_info, struct bson_kv* value)
             bson_info->buffer[bson_info->position] = BSON_STRING;
             bson_info->position++;
             serialize_cstring(bson_info, value->key);
-            serialize_string(bson_info, (int32_t*) value->data,
-                             ((uint8_t*) value->data) + 4);
+            serialize_string(bson_info, &(value->size),
+                             ((uint8_t*) value->data));
             break;
 
         case BSON_EMBEDDED_DOCUMENT:
