@@ -1820,3 +1820,8 @@ int ext2_print_sectormap(FILE* disk, int64_t partition_offset,
     ext2_print_root_fs_sectors(disk, partition_offset, superblock, "/", ""); 
     return 0;
 }
+
+char* ext2_last_mount_point(struct ext2_superblock* superblock)
+{
+    return (char *) (superblock->s_last_mounted);
+}
