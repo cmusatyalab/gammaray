@@ -196,7 +196,7 @@ int mbr_serialize_mbr(struct mbr mbr, FILE* serializef)
 }
 
 int mbr_serialize_partition(uint32_t pte_num, struct partition_table_entry pte,
-                            FILE* serializef)
+                            char* mount_point, FILE* serializef)
 {
     struct bson_info* serialized;
     struct bson_kv value;
@@ -227,6 +227,13 @@ int mbr_serialize_partition(uint32_t pte_num, struct partition_table_entry pte,
     value.type = BSON_INT32;
     value.key = "final_sector_lba";
     value.data = &(final_sector);
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_STRING;
+    value.key = "mount_point";
+    value.size = strlen(mount_point);
+    value.data = mount_point;
 
     bson_serialize(serialized, &value);
 
