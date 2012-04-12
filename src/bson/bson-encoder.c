@@ -478,6 +478,11 @@ int bson_writef(struct bson_info* bson_info, FILE* file)
     return EXIT_SUCCESS;
 }
 
+void bson_reset(struct bson_info* bson_info)
+{
+    bson_info->position = 0;
+}
+
 void bson_cleanup(struct bson_info* bson_info)
 {
     if (bson_info->buffer != NULL)

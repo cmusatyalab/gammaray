@@ -123,13 +123,24 @@ void
 bson_cleanup(struct bson_info* bson_info);
 
 /**
+ * bson_reset
+ *
+ * This function resets a bson_info datastructure to contain nothing.
+ *
+ * @param bson_info - the metadata structure to reset
+ *
+ */
+void
+bson_reset(struct bson_info* bson_info);
+
+/**
  * bson_read
  *
  * This function reads an entire file into memory and stores it into a buffer
  * maintained by the bson_info metadata structure.
  *
  * @param bson_info - the metadata structure to read into
- * @param file - the file to read from on disk
+ * @param fname - the file name to read from on disk
  * @return EXIT_SUCCESS on success, EXIT_FAILURE otherwise
  *
  */
@@ -137,16 +148,32 @@ int
 bson_read(struct bson_info* bson_info, const char* fname);
 
 /**
- * bson_make_readable
+ * bson_readf
  *
- * This function makes a bson_info struct ready to be deserialized.  Useful for
- * in-memory passing that is not hitting disk (bson_read does the requisite
- * work).
+ * This function reads an single BSON document into memory and stores it into a
+ * buffer maintained by the bson_info metadata structure.
  *
- * @param bson_info - the metadata structure to prepare for deserialization
+ * @param bson_info - the metadata structure to read into
+ * @param file - the file to read from on disk
  * @return EXIT_SUCCESS on success, EXIT_FAILURE otherwise
  *
  */
+int
+bson_readf(struct bson_info* bson_info, FILE* file);
+
+ /**
+  * bson_make_readable
+  *
+  * This function makes a bson_info struct ready to be deserialized.  Useful for
+  * in-memory passing that is not hitting disk (bson_read does the requisite
+  * work).
+  * 
+  *
+  * @param bson_info - the metadata structure to read into
+  * @param file - the file to read from on disk
+  * @return EXIT_SUCCESS on success, EXIT_FAILURE otherwise
+  *
+   */
 int
 bson_make_readable(struct bson_info* bson_info);
 
@@ -159,7 +186,7 @@ bson_make_readable(struct bson_info* bson_info);
  *
  * @param bson_info - the metadata structure to deserialize from
  * @param value - pointer to bson_kv struct to deserialize data into
- * @return EXIT_SUCCESS on success, EXIT_FAILURE otherwise
+ * @return 0 when nothing more to process, 1 on success, -1 on failure 
  *
  */
 int

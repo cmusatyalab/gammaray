@@ -25,6 +25,44 @@ int bson_make_readable(struct bson_info* bson_info)
     return EXIT_SUCCESS;
 }
 
+int bson_readf(struct bson_info* bson_info, FILE* file)
+{
+    int32_t size;
+    if (bson_info == NULL)
+        return EXIT_FAILURE;
+
+    if (file == NULL)
+        return EXIT_FAILURE;
+
+    fread(&(size), 4, 1, file);
+
+    size -= 4;
+
+    if (bson_info->size < size && bson_info->buffer != NULL)
+    {
+        free(bson_info->buffer);
+        bson_info->buffer = NULL;
+        bson_info->buffer = malloc(size);
+    }
+    else if (bson_info->buffer == NULL)
+    {
+        bson_info->buffer = malloc(size);
+    }
+
+    if (bson_info->buffer)
+    {
+        if(fread(bson_info->buffer, 1, size, file) != size)
+        {
+            return EXIT_FAILURE;
+        }
+        bson_info->size = size;
+        bson_info->position = 0;
+        return EXIT_SUCCESS;
+    }
+
+    return EXIT_FAILURE;
+}
+
 int bson_read(struct bson_info* bson_info, const char* fname)
 {
     if (bson_info == NULL)
@@ -47,6 +85,7 @@ int bson_read(struct bson_info* bson_info, const char* fname)
             fclose(file);
             return EXIT_FAILURE;
         }
+        bson_make_readable(bson_info);
         fclose(file);
         return EXIT_SUCCESS;
     }
