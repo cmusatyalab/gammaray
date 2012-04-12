@@ -13,8 +13,6 @@ int bson_print(FILE* stream, struct bson_info* bson)
     struct bson_kv v2;
     time_t utctime;
 
-    bson_make_readable(bson);
-    
     fprintf(stream, "{\n");
 
     while (bson_deserialize(bson, &v1, &v2) == 1) 
