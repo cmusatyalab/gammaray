@@ -100,7 +100,12 @@ int main(int argc, char* args[])
                 fprintf_light_red(stdout, "Serializing Partition Data to: "
                                           "%s\n", args[2]);
 
-                if (mbr_serialize_partition(i, pte, serializef))
+                fprintf_light_green(stdout, "mount_point: %s\n",
+                        ext2_last_mount_point(&ext2_superblock));
+
+                if (mbr_serialize_partition(i, pte,
+                                       ext2_last_mount_point(&ext2_superblock),
+                                       serializef))
                 {
                     fprintf_light_red(stderr, "Error writing serialized "
                                               "partition table entry.\n");
