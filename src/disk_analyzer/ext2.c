@@ -135,7 +135,7 @@ int ext2_print_superblock(struct ext2_superblock superblock)
     fprintf_yellow(stdout, "s_errors: %"PRIu16"\n",
                            superblock.s_errors);
     fprintf_light_yellow(stdout, "Error State: %s\n",
-                                 s_errors_LUT[superblock.s_state]);
+                                 s_errors_LUT[superblock.s_errors]);
     fprintf_yellow(stdout, "s_minor_rev_level: %"PRIu16"\n",
                            superblock.s_minor_rev_level);
     fprintf_yellow(stdout, "s_lastcheck: %"PRIu32"\n",
@@ -168,6 +168,8 @@ int ext2_print_superblock(struct ext2_superblock superblock)
                            superblock.s_feature_ro_compat);
     //uint8_t s_uuid[16];
     //uint8_t s_volume_name[16];
+    fprintf_light_yellow(stdout, "Last mounted as: '%s'\n",
+                                superblock.s_last_mounted);
     //uint8_t s_last_mounted[64];
     fprintf_yellow(stdout, "s_algo_bitmap: %"PRIu32"\n",
                            superblock.s_algo_bitmap);
