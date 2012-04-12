@@ -1,0 +1,56 @@
+The serialization format is to a single file, named after the VM disk image.
+This file is actually a collection of BSON documents.  They are detailed below.
+
+Keys are named exactly as presented below, and values range across permitted
+values given their type.
+
+ - Example: VMXXXXX.bson
+
+        MBR Document
+        ------------
+        Repeated: once
+            {
+                'gpt' : BSON_BOOLEAN;
+            }
+
+        Partition Table Entry Document
+        ------------------------------
+        Repeated: [0,128] times
+            {
+                'pte_num' : BSON_INT32;
+                'parition_type' : BSON_INT32;
+                'first_sector_lba' : BSON_INT32;
+                'final_sector_lba' : BSON_INT32;
+                /* 'mount_point' : BSON_STRING; --> future expansion */
+            }  
+
+            /* Next section tailored to file system type. 
+             * Only ext2 considered here */
+
+            File System Document 
+            --------------------
+            Repeated: 1 time (one per partition expected)
+            {
+                'fs_type' : BSON_INT32;
+                'num_block_groups' : BSON_INT32;
+                'superblock' : BSON_BINARY : BSON_GENERIC_BINARY;
+                'sectors' : BSON_ARRAY; /* array of sector BSON_INT32's */
+            }
+
+            Block Group Descriptor
+            ----------------------
+            Repeated: 'num_block_groups' times
+            {
+               'bgd' : BSON_BINARY : BSON_GENERIC_BINARY;
+               'sectors'  : BSON_ARRAY; /* array of sector BSON_INT32's */
+            }
+
+            File Entry Document
+            -------------------
+            Repeated: n times, where n is the number of file objects observable
+            {
+                'path' : BSON_STRING;
+                'is_dir' : BSON_BOOLEAN;
+                'inode' : BSON_BINARY : BSON_GENERIC_BINARY;
+                'sectors' : BSON_ARRAY; /* array of sector BSON_INT32's */
+            }
