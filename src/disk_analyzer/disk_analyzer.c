@@ -22,14 +22,13 @@
 /* main thread of execution */
 int main(int argc, char* args[])
 {
-    FILE* disk;
+    FILE* disk, *serializef;
     struct mbr mbr;
     struct ext2_superblock ext2_superblock;
     struct partition_table_entry pte;
     int64_t partition_offset;
     int i;
     char buf[4096];
-    char* vm_name = NULL;
 
     fprintf_blue(stdout, "Raw Disk Analyzer -- By: Wolfgang Richter "
                          "<wolf@cs.cmu.edu>\n");
@@ -45,24 +44,41 @@ int main(int argc, char* args[])
 
     disk = fopen(args[1], "r");
 
-    vm_name = args[2];
+    serializef = fopen(args[2], "w");
     
     if (disk == NULL)
     {
-        fprintf_light_red(stderr, "Error opening raw disk file. "
-                                  "Does it exist?\n");
+        fprintf_light_red(stderr, "Error opening raw disk file '%s'. "
+                                  "Does it exist?\n", args[2]);
+        return EXIT_FAILURE;
+    }
+
+    if (serializef == NULL)
+    {
+        fclose(disk);
+        fprintf_light_red(stderr, "Error opening serialization file '%s'. "
+                                  "Does it exist?\n", args[2]);
         return EXIT_FAILURE;
     }
 
     if (parse_mbr(disk, &mbr))
     {
-        fprintf_light_red(stdout, "Error reading MBR from disk.  Aborting\n");
+        fclose(disk);
+        fclose(serializef);
+        fprintf_light_red(stderr, "Error reading MBR from disk. Aborting\n");
         return EXIT_FAILURE;
     }
+
 
     memset(buf, 0, sizeof(buf));
 
     print_mbr(mbr);
+    if (mbr_serialize_mbr(mbr, serializef))
+    {
+        fprintf_light_red(stderr, "Error serializing MBR.\n");
+        return EXIT_FAILURE;
+    }
+
     for (i = 0; i < 4; i++)
     {
         if ((partition_offset = mbr_partition_offset(mbr, i)) >= 0)
@@ -81,18 +97,19 @@ int main(int argc, char* args[])
                 mbr_get_partition_table_entry(mbr, i, &pte);
                 mbr_print_numbers(mbr);
 
-                snprintf(buf, 4096, "/tmp/%s.%d.pte", vm_name, i);
                 fprintf_light_red(stdout, "Serializing Partition Data to: "
-                                          "%s\n", buf);
-                if (mbr_serialize_partition(i, pte, buf))
+                                          "%s\n", args[2]);
+
+                if (mbr_serialize_partition(i, pte, serializef))
                 {
                     fprintf_light_red(stderr, "Error writing serialized "
                                               "partition table entry.\n");
                     return EXIT_FAILURE;
                 }
+                
                 print_partition_sectors(pte);
                 //ext2_print_sectormap(disk, partition_offset, ext2_superblock);
-                //ext2_print_superblock(ext2_superblock);
+                ext2_print_superblock(ext2_superblock);
                 ext2_list_block_groups(disk, partition_offset, ext2_superblock);
                 ext2_list_root_fs(disk, partition_offset, ext2_superblock, "/mnt/sda1/");
                 //ext2_reconstruct_root_fs(disk, partition_offset, ext2_superblock,
@@ -101,6 +118,7 @@ int main(int argc, char* args[])
         }
     }
 
+    fclose(serializef);
     fclose(disk);
 
     return EXIT_SUCCESS;

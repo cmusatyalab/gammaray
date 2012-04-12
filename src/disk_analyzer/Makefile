@@ -27,7 +27,7 @@ default:
 test: default
 	@valgrind ./disk_analyzer \
 		/home/wolf/Dropbox/Projects/xray/sample/tinycore.raw \
-		tinycore
+		/tmp/tinycore.bson
 
 bigtest: default
 	@./disk_analyzer /home/wolf/sample_virtual_disks/tinycore_big.img

@@ -1,8 +1,9 @@
 #include "bson.h"
 #include "mbr.h"
 
-#include <string.h>
+#include <stdbool.h>
 #include <stdlib.h>
+#include <string.h>
 
 char* MBR_PT_LUT[] = { "Empty","","","","","Extended","","HPFS/NTFS","","","","W95 FAT32","","","","", /* 0x00 - 0x0f */
                        "","","","","","","","","","","","","","","","", /* 0x10 - 0x1f */
@@ -169,14 +170,39 @@ int print_partition_sectors(struct partition_table_entry pte)
     return 0;
 }
 
-int mbr_serialize_partition(uint32_t pte_num, struct partition_table_entry pte,
-                            const char* fname)
+int mbr_serialize_mbr(struct mbr mbr, FILE* serializef)
 {
-    FILE* f = fopen(fname, "w");
+    struct bson_info* serialized;
+    struct bson_kv value;
+    bool has_gpt = false;
+    int ret;
+
+    if (mbr.pt[0].partition_type == 0xee)
+        has_gpt = true;
+
+    serialized = bson_init();
+
+    value.type = BSON_BOOLEAN;
+    value.key = "gpt";
+    value.data = &(has_gpt);
+
+    bson_serialize(serialized, &value);
+
+    bson_finalize(serialized);
+    ret = bson_writef(serialized, serializef);
+    bson_cleanup(serialized);
+    
+    return ret;
+}
+
+int mbr_serialize_partition(uint32_t pte_num, struct partition_table_entry pte,
+                            FILE* serializef)
+{
     struct bson_info* serialized;
     struct bson_kv value;
     int32_t partition_type = pte.partition_type;
     int32_t final_sector = pte.first_sector_lba + pte.sector_count;
+    int ret;
 
     serialized = bson_init();
 
@@ -205,10 +231,8 @@ int mbr_serialize_partition(uint32_t pte_num, struct partition_table_entry pte,
     bson_serialize(serialized, &value);
 
     bson_finalize(serialized);
-    if (bson_writef(serialized, f))
-        return EXIT_FAILURE;
+    ret = bson_writef(serialized, serializef);
     bson_cleanup(serialized);
-    fclose(f);
      
     return 0;
 }
