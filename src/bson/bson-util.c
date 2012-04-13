@@ -9,6 +9,7 @@
 
 int bson_print(FILE* stream, struct bson_info* bson)
 {
+    struct bson_info* embedded;
     struct bson_kv v1;
     struct bson_kv v2;
     time_t utctime;
@@ -31,7 +32,12 @@ int bson_print(FILE* stream, struct bson_info* bson)
                 fprintf(stream, "BSON_EMBEDDED_DOCUMENT\n");
                 break;
             case BSON_ARRAY:
-                fprintf(stream, "BSON_ARRAY\n");
+                embedded = bson_init();
+                embedded->buffer = malloc(v2.size);
+                memcpy(embedded->buffer, v2.data, v2.size);
+                bson_make_readable(embedded);
+                bson_print(stream, embedded);
+                bson_cleanup(embedded);
                 break;
             case BSON_BINARY:
                 hexdump((uint8_t *) v1.data, v1.size);
