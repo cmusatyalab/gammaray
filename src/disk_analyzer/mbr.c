@@ -199,12 +199,14 @@ int mbr_serialize_partition(uint32_t pte_num, struct partition_table_entry pte,
                             char* mount_point, FILE* serializef)
 {
     struct bson_info* serialized;
+    struct bson_info* sectors;
     struct bson_kv value;
     int32_t partition_type = pte.partition_type;
     int32_t final_sector = pte.first_sector_lba + pte.sector_count;
     int ret;
 
     serialized = bson_init();
+    sectors = bson_init();
 
     value.type = BSON_INT32;
     value.key = "pte_num";
@@ -237,9 +239,24 @@ int mbr_serialize_partition(uint32_t pte_num, struct partition_table_entry pte,
 
     bson_serialize(serialized, &value);
 
+    value.type = BSON_INT32;
+    value.key = "0";
+    value.data = 0;
+
+    bson_serialize(sectors, &value);
+
+    bson_finalize(sectors);
+
+    value.type = BSON_ARRAY;
+    value.key = "sectors";
+    value.data = sectors;
+
+    bson_serialize(serialized, &value);
+
     bson_finalize(serialized);
     ret = bson_writef(serialized, serializef);
     bson_cleanup(serialized);
+    bson_cleanup(sectors);
      
     return 0;
 }

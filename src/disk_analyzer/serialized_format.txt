@@ -11,6 +11,7 @@ values given their type.
         Repeated: once
             {
                 'gpt' : BSON_BOOLEAN;
+                'sectors' : BSON_ARRAY;
             }
 
         Partition Table Entry Document
@@ -18,10 +19,11 @@ values given their type.
         Repeated: [0,128] times
             {
                 'pte_num' : BSON_INT32;
-                'parition_type' : BSON_INT32;
+                'partition_type' : BSON_INT32;
                 'first_sector_lba' : BSON_INT32;
                 'final_sector_lba' : BSON_INT32;
-                /* 'mount_point' : BSON_STRING; --> future expansion */
+                'mount_point' : BSON_STRING;
+                'sectors' : BSON_ARRAY;
             }  
 
             /* Next section tailored to file system type. 
