@@ -301,7 +301,7 @@ int serialize_element(struct bson_info* bson_info, struct bson_kv* value)
             bson_info->buffer[bson_info->position] = BSON_BINARY;
             bson_info->position++;
             serialize_cstring(bson_info, value->key);
-            serialize_binary(bson_info, (int32_t*) value->data,
+            serialize_binary(bson_info, &(value->size),
                                         value->subtype,
                                         (uint8_t*)(value->data) + 4);
             break; 
