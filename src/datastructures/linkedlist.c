@@ -81,9 +81,11 @@ void* linkedlist_get(struct linkedlist* ll, uint64_t i)
     for (counter = 0; counter < i && e != NULL; counter++)
     {
         e = e->next;
+        if (e == NULL)
+            return NULL; 
     }
 
-    fprintf_light_red(stderr, "_get returning e=%p val=%p real=%d i=%d\n",
+    fprintf_light_red(stderr, "_get returning e=%p val=%p real=%d i=%"PRIu64"\n",
                               e, e->value, *((int*) (e->value)), i);
     return e->value;
 }

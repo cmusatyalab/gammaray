@@ -8,7 +8,7 @@
 int main(int argc, char* argv[])
 {
     struct linkedlist* ll = linkedlist_init();
-    int i;
+    int i, *val;
 
     for (i = 0; i < 10; i++)
     {
@@ -18,10 +18,17 @@ int main(int argc, char* argv[])
 
     for (i = 0; i < 10; i++)
     {
-        fprintf_light_green(stdout, "element[%d] = %d\n", i,
-                                     * ((int*) linkedlist_get(ll, i)));
+        if ((val = linkedlist_get(ll, i)))
+            fprintf_light_green(stdout, "element[%d] = %d\n", i, *val);
+    }
+
+    for (i = 10; i > 0; i--)
+    {
+        if ((val = linkedlist_get(ll, i)))
+            fprintf_light_green(stdout, "element[%d] = %d\n", i, *val);
     }
 
     linkedlist_cleanup(ll);
+
     return EXIT_SUCCESS;
 }
