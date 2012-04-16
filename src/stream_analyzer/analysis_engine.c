@@ -16,54 +16,24 @@
 #include <string.h>
 
 #include "color.h"
-#include "qemu_tracer.h"
-#include "deep_inspect.h"
+#include "deep_inspection.h"
 
 #define SECTOR_SIZE 512 
 
-/* main thread of execution */
-int main(int argc, char* args[])
+int read_loop(int fd, struct mbr* mbr)
 {
-    int fd;
-    uint8_t buf[qemu_sizeof_header()];
+    uint8_t buf[QEMU_HEADER_SIZE];
     int64_t total = 0, read_ret = 0;
     struct qemu_bdrv_write write;
-    fprintf_blue(stdout, "VM Disk Analysis Engine -- "
-                         "By: Wolfgang Richter "
-                         "<wolf@cs.cmu.edu>\n");
-
-    if (argc < 2)
-    {
-        fprintf_light_red(stderr, "Usage: %s <disk index file>\n", args[0]);
-        return EXIT_FAILURE;
-    }
-
-    fprintf_cyan(stdout, "Loading index: %s\n\n", args[1]);
-
-    if (strcmp(args[1], "-") != 0)
-    {
-        fd = open(args[1], O_RDONLY);
-    }
-    else
-    {
-        fd = STDIN_FILENO;
-    }
-    
-    if (fd == -1)
-    {
-        fprintf_light_red(stderr, "Error opening index file. "
-                                  "Does it exist?\n");
-        return EXIT_FAILURE;
-    }
 
     while (1)
     {
-        read_ret = read(fd, buf, qemu_sizeof_header());
+        read_ret = read(fd, buf, QEMU_HEADER_SIZE);
         total = read_ret;
 
-        while (read_ret > 0 && total < qemu_sizeof_header())
+        while (read_ret > 0 && total < QEMU_HEADER_SIZE)
         {
-            read_ret = read(fd, &buf[total], qemu_sizeof_header() - total);
+            read_ret = read(fd, &buf[total], QEMU_HEADER_SIZE - total);
             total += read_ret;
         }
 
@@ -73,7 +43,7 @@ int main(int argc, char* args[])
             fprintf_light_red(stderr, "Total read: %"PRId64".\n", total);
             fprintf_light_red(stderr, "Reading from stream failed, assuming "
                                       "teardown.\n");
-            return EXIT_FAILURE;
+            return EXIT_SUCCESS;
         }
 
         if (read_ret < 0)
@@ -113,14 +83,76 @@ int main(int argc, char* args[])
             return EXIT_FAILURE;
         }
 
-        qemu_init_datastructures();
-        qemu_print_write(write);
-        qemu_print_sector_type(qemu_infer_sector_type(write));
-        qemu_deep_inspect(write);
-        free((void*) write.data);
+        //qemu_init_datastructures();
+        //qemu_print_write(write);
+        //qemu_print_sector_type(qemu_infer_sector_type(write));
+        //qemu_deep_inspect(write);
+        //free((void*) write.data);
     }
 
+    return EXIT_SUCCESS;
+}
+
+
+/* main thread of execution */
+int main(int argc, char* args[])
+{
+    int fd, ret;
+    char* index, *stream;
+    struct mbr mbr;
+    FILE* indexf;
+    fprintf_blue(stdout, "VM Disk Analysis Engine -- "
+                         "By: Wolfgang Richter "
+                         "<wolf@cs.cmu.edu>\n");
+
+    if (argc < 3)
+    {
+        fprintf_light_red(stderr, "Usage: %s <disk index file> <stream file>"
+                                  "\n", args[0]);
+        return EXIT_FAILURE;
+    }
+
+    index = args[1];
+    stream = args[2];
+
+    fprintf_cyan(stdout, "Loading index: %s\n\n", index);
+
+    indexf = fopen(index, "r");
+
+    if (indexf == NULL)
+    {
+        fprintf_light_red(stderr, "Error opening index file. "
+                                  "Does it exist?\n");
+        return EXIT_FAILURE;
+    }
+
+    if (qemu_load_index(indexf, &mbr))
+    {
+        fprintf_light_red(stderr, "Error deserializing index.\n");
+        return EXIT_FAILURE;
+    }
+
+    fprintf_cyan(stdout, "Attaching to stream: %s\n\n", stream);
+
+    if (strcmp(stream, "-") != 0)
+    {
+        fd = open(stream, O_RDONLY);
+    }
+    else
+    {
+        fd = STDIN_FILENO;
+    }
+    
+    if (fd == -1)
+    {
+        fprintf_light_red(stderr, "Error opening stream file. "
+                                  "Does it exist?\n");
+        return EXIT_FAILURE;
+    }
+
+    ret = read_loop(fd, &mbr);
     close(fd);
+    fclose(indexf);
 
     return EXIT_SUCCESS;
 }
