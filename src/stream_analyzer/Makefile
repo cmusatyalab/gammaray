@@ -4,7 +4,6 @@ default:
 		 ../datastructures/bst.c \
 		 qemu_tracer.c \
 		 tokenizer.c \
-		 byte_printer.c \
 		 deep_inspect.c \
 		 -o stream_analyzer \
 		 -Wall \

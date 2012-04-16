@@ -17,7 +17,6 @@
 
 #include "color.h"
 #include "qemu_tracer.h"
-#include "byte_printer.h"
 #include "deep_inspect.h"
 
 #define SECTOR_SIZE 512 
