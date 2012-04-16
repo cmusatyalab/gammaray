@@ -27,7 +27,7 @@ int main(int argc, char* args[])
     struct ext2_superblock ext2_superblock;
     struct partition_table_entry pte;
     int64_t partition_offset;
-    int i;
+    int i, active_count = 0;
     char buf[4096];
 
     fprintf_blue(stdout, "Raw Disk Analyzer -- By: Wolfgang Richter "
@@ -72,8 +72,23 @@ int main(int argc, char* args[])
 
     memset(buf, 0, sizeof(buf));
 
-    print_mbr(mbr);
-    if (mbr_serialize_mbr(mbr, serializef))
+    /* active partitions count */
+    for (i = 0; i < 4; i++)
+    {
+        if ((partition_offset = mbr_partition_offset(mbr, i)) >= 0)
+        {
+            if (ext2_probe(disk, partition_offset, &ext2_superblock))
+            {
+                continue;
+            }
+            else
+            {
+                active_count++;
+            }
+        }
+    }
+
+    if (mbr_serialize_mbr(mbr, active_count, serializef))
     {
         fprintf_light_red(stderr, "Error serializing MBR.\n");
         return EXIT_FAILURE;
@@ -99,16 +114,15 @@ int main(int argc, char* args[])
                 fprintf_light_blue(stdout, "Serializing Partition Data to: "
                                           "%s\n\n", args[2]);
 
-                if (mbr_serialize_partition(i, pte,
-                                       ext2_last_mount_point(&ext2_superblock),
-                                       serializef))
+                if (mbr_serialize_partition(i, pte, serializef))
                 {
                     fprintf_light_red(stderr, "Error writing serialized "
                                               "partition table entry.\n");
                     return EXIT_FAILURE;
                 }
                 
-                if (ext2_serialize_fs(&ext2_superblock, pte.first_sector_lba,
+                if (ext2_serialize_fs(&ext2_superblock, 
+                                      ext2_last_mount_point(&ext2_superblock),
                                       serializef))
                 {
                     fprintf_light_red(stderr, "Error writing serialized fs "

@@ -170,7 +170,7 @@ int print_partition_sectors(struct partition_table_entry pte)
     return 0;
 }
 
-int mbr_serialize_mbr(struct mbr mbr, FILE* serializef)
+int mbr_serialize_mbr(struct mbr mbr, uint32_t active, FILE* serializef)
 {
     struct bson_info* serialized;
     struct bson_kv value;
@@ -194,6 +194,12 @@ int mbr_serialize_mbr(struct mbr mbr, FILE* serializef)
 
     bson_serialize(serialized, &value);
 
+    value.type = BSON_INT32;
+    value.key = "active_partitions";
+    value.data = &active;
+
+    bson_serialize(serialized, &value);
+
     bson_finalize(serialized);
     ret = bson_writef(serialized, serializef);
     bson_cleanup(serialized);
@@ -202,7 +208,7 @@ int mbr_serialize_mbr(struct mbr mbr, FILE* serializef)
 }
 
 int mbr_serialize_partition(uint32_t pte_num, struct partition_table_entry pte,
-                            char* mount_point, FILE* serializef)
+                            FILE* serializef)
 {
     struct bson_info* serialized;
     struct bson_kv value;
@@ -233,13 +239,6 @@ int mbr_serialize_partition(uint32_t pte_num, struct partition_table_entry pte,
     value.type = BSON_INT32;
     value.key = "final_sector_lba";
     value.data = &(final_sector);
-
-    bson_serialize(serialized, &value);
-
-    value.type = BSON_STRING;
-    value.key = "mount_point";
-    value.size = strlen(mount_point);
-    value.data = mount_point;
 
     bson_serialize(serialized, &value);
 

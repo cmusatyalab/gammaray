@@ -29,7 +29,7 @@ test: default
 		/home/wolf/Dropbox/Projects/xray/sample/tinycore.raw \
 		/tmp/tinycore.bson
 
-	#@../bson/bson_printer /tmp/tinycore.bson | less -R
+	@../bson/bson_printer /tmp/tinycore.bson | less -R
 
 bigtest: default
 	@./disk_analyzer /home/wolf/sample_virtual_disks/tinycore_big.img

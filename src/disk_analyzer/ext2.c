@@ -1884,7 +1884,7 @@ char* ext2_last_mount_point(struct ext2_superblock* superblock)
 }
 
 int ext2_serialize_fs(struct ext2_superblock* superblock,
-                      uint32_t sector_start,
+                      char* mount_point, 
                       FILE* serializedf)
 {
     int32_t fs_type = MBR_FS_TYPE_EXT2;
@@ -1892,11 +1892,6 @@ int ext2_serialize_fs(struct ext2_superblock* superblock,
     int32_t num_block_groups = (superblock->s_blocks_count +
                                 (superblock->s_blocks_per_group - 1)) /
                                 superblock->s_blocks_per_group;
-
-    /* on 1KiB block systems, first data block starts at 1 */
-    uint32_t num_sectors = ((superblock->s_blocks_count +
-                             superblock->s_first_data_block) *
-                             ext2_block_size(*superblock)) / SECTOR_SIZE; 
     struct bson_info* serialized;
     struct bson_info* sectors;
     struct bson_kv value;
@@ -1907,6 +1902,13 @@ int ext2_serialize_fs(struct ext2_superblock* superblock,
     value.type = BSON_INT32;
     value.key = "fs_type";
     value.data = &(fs_type);
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_STRING;
+    value.key = "mount_point";
+    value.size = strlen(mount_point);
+    value.data = mount_point;
 
     bson_serialize(serialized, &value);
 
@@ -1921,19 +1923,6 @@ int ext2_serialize_fs(struct ext2_superblock* superblock,
     value.size = sizeof(struct ext2_superblock);
     value.subtype = BSON_BINARY_GENERIC;
     value.data = superblock;
-
-    bson_serialize(serialized, &value);
-
-    value.type = BSON_INT32;
-    value.key = "start_sector";
-    value.data = &sector_start;
-
-    bson_serialize(serialized, &value);
-
-    value.type = BSON_INT32;
-    value.key = "end_sector";
-    sector_start += num_sectors - 1; /* don't count start sector */
-    value.data = &sector_start;
 
     bson_serialize(serialized, &value);
 
