@@ -71,6 +71,14 @@ int linkedlist_append(struct linkedlist* ll, void* value, size_t size)
     return EXIT_SUCCESS;
 }
 
+void* linkedlist_tail(struct linkedlist* ll)
+{
+    if (ll == NULL || ll->tail == NULL)
+        return NULL;
+
+    return ll->tail->value;
+}
+
 struct element* __linkedlist_get(struct linkedlist* ll, uint64_t i)
 {
     if (ll == NULL)

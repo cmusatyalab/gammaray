@@ -9,6 +9,7 @@ struct linkedlist;
 
 struct linkedlist* linkedlist_init();
 int linkedlist_append(struct linkedlist* ll, void* value, size_t size);
+void* linkedlist_tail(struct linkedlist* ll);
 void* linkedlist_get(struct linkedlist* linkedlist, uint64_t i);
 int linkedlist_delete(struct linkedlist* linkedlist, uint64_t i);
 int linkedlist_clear(struct linkedlist* ll);
