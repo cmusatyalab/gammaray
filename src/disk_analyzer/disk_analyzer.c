@@ -96,8 +96,8 @@ int main(int argc, char* args[])
                                             partition_offset);
                 mbr_get_partition_table_entry(mbr, i, &pte);
 
-                fprintf_light_red(stdout, "Serializing Partition Data to: "
-                                          "%s\n", args[2]);
+                fprintf_light_blue(stdout, "Serializing Partition Data to: "
+                                          "%s\n\n", args[2]);
 
                 if (mbr_serialize_partition(i, pte,
                                        ext2_last_mount_point(&ext2_superblock),
