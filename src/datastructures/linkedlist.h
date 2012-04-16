@@ -13,5 +13,6 @@ void* linkedlist_get(struct linkedlist* linkedlist, uint64_t i);
 int linkedlist_delete(struct linkedlist* linkedlist, uint64_t i);
 int linkedlist_clear(struct linkedlist* ll);
 int linkedlist_cleanup(struct linkedlist* linkedlist);
+uint64_t linkedlist_size(struct linkedlist* linkedlist);
 
 #endif

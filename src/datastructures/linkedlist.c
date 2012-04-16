@@ -12,6 +12,7 @@ struct element
 
 struct linkedlist
 {
+    uint64_t size;
     struct element* head;
     struct element* tail;
     struct element* curr;
@@ -20,6 +21,7 @@ struct linkedlist
 struct linkedlist* linkedlist_init()
 {
     struct linkedlist* ll = malloc(sizeof(struct linkedlist));
+    ll->size = 0;
     ll->head = NULL;
     ll->tail = NULL;
     ll->curr = NULL;
@@ -64,6 +66,8 @@ int linkedlist_append(struct linkedlist* ll, void* value, size_t size)
         return EXIT_FAILURE;
     }
 
+    ll->size++;
+
     return EXIT_SUCCESS;
 }
 
@@ -89,7 +93,7 @@ void* linkedlist_get(struct linkedlist* ll, uint64_t i)
 {
     struct element* e = __linkedlist_get(ll, i);
 
-    if (e == NULL)
+    if (e == NULL || i > ll->size)
         return NULL;
 
     return e->value;
@@ -130,12 +134,13 @@ int __linkedlist_delete(struct linkedlist* ll, struct element* element)
     free(element->value);
     element->value = NULL;
     free(element);
+    ll->size--;
     return EXIT_SUCCESS;
 }
 
 int linkedlist_delete(struct linkedlist* ll, uint64_t i)
 {
-    if (ll == NULL)
+    if (ll == NULL || i > ll->size)
         return EXIT_FAILURE;
 
     struct element* e = __linkedlist_get(ll, i);
@@ -174,6 +179,7 @@ int linkedlist_clear(struct linkedlist* ll)
     ll->head = NULL;
     ll->tail = NULL;
     ll->curr = NULL;
+    ll->size = 0;
 
     return EXIT_SUCCESS;
 }
@@ -183,4 +189,9 @@ int linkedlist_cleanup(struct linkedlist* ll)
     int ret = linkedlist_clear(ll);
     free(ll);
     return ret; 
+}
+
+uint64_t linkedlist_size(struct linkedlist* ll)
+{
+    return ll->size;
 }
