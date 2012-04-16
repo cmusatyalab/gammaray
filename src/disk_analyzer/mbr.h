@@ -28,6 +28,11 @@ struct mbr
     uint8_t signature[2];
 }__attribute__((packed));
 
+enum MBR_FS_TYPES
+{
+    MBR_FS_TYPE_EXT2
+};
+
 int print_mbr(struct mbr mbr);
 int print_partition(struct partition_table_entry pte);
 int print_partition_sectors(struct partition_table_entry pte);
