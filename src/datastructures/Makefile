@@ -5,7 +5,7 @@ default:
 		 -Werror \
 		 -I../util \
 		 #-DNOCOLOR
-	@clang linkedlist_test.c linkedlist.c ../util/color.c \
+	@clang linkedlist_test.c linkedlist.c ../util/color.c -g\
 		 -o linkedlist_test \
 		 -Wall \
 		 -Werror \
@@ -13,7 +13,7 @@ default:
 		 #-DNOCOLOR
 
 test: default
-	valgrind --leak-check=full --show-reachable=yes ./linkedlist_test
+	valgrind --leak-check=full --show-reachable=yes -v ./linkedlist_test
 
 clean:
 	@rm bst_test 

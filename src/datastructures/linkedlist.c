@@ -1,8 +1,5 @@
 #include "linkedlist.h"
 
-#include "util.c"
-
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -29,7 +26,7 @@ struct linkedlist* linkedlist_init()
     return ll;
 }
 
-int linkedlist_append(struct linkedlist* ll, void* value, int bytes)
+int linkedlist_append(struct linkedlist* ll, void* value, size_t size)
 {
     if (value == NULL || ll == NULL)
         return EXIT_FAILURE;
@@ -39,12 +36,12 @@ int linkedlist_append(struct linkedlist* ll, void* value, int bytes)
     if (new_e == NULL)
         return EXIT_FAILURE;
 
-    new_e->value = malloc(bytes);
+    new_e->value = malloc(size);
 
     if (new_e->value == NULL)
         return EXIT_FAILURE;
 
-    memcpy(new_e->value, value, bytes);
+    memcpy(new_e->value, value, size);
 
     if (ll->head == NULL) /* new ll or cleared ll */
     {
@@ -52,8 +49,8 @@ int linkedlist_append(struct linkedlist* ll, void* value, int bytes)
         ll->tail = new_e;
         ll->curr = new_e;
 
-        new_e->next = new_e;
-        new_e->prev = new_e;        
+        new_e->next = NULL;
+        new_e->prev = NULL;     
     }
     else if (ll->tail)
     {
@@ -70,7 +67,7 @@ int linkedlist_append(struct linkedlist* ll, void* value, int bytes)
     return EXIT_SUCCESS;
 }
 
-void* linkedlist_get(struct linkedlist* ll, uint64_t i)
+struct element* __linkedlist_get(struct linkedlist* ll, uint64_t i)
 {
     if (ll == NULL)
         return NULL;
@@ -85,12 +82,20 @@ void* linkedlist_get(struct linkedlist* ll, uint64_t i)
             return NULL; 
     }
 
-    fprintf_light_red(stderr, "_get returning e=%p val=%p real=%d i=%"PRIu64"\n",
-                              e, e->value, *((int*) (e->value)), i);
+    return e;
+}
+
+void* linkedlist_get(struct linkedlist* ll, uint64_t i)
+{
+    struct element* e = __linkedlist_get(ll, i);
+
+    if (e == NULL)
+        return NULL;
+
     return e->value;
 }
 
-int linkedlist_delete(struct linkedlist* ll, struct element* element)
+int __linkedlist_delete(struct linkedlist* ll, struct element* element)
 {
     if (ll == NULL || element == NULL)
         return EXIT_FAILURE;
@@ -104,6 +109,12 @@ int linkedlist_delete(struct linkedlist* ll, struct element* element)
     if (next)
         next->prev = prev;
 
+    if (element == next)
+        next = NULL;
+
+    if (element == prev)
+        prev = NULL;
+
     if (element == ll->head)
             ll->head = next;
 
@@ -115,14 +126,28 @@ int linkedlist_delete(struct linkedlist* ll, struct element* element)
 
     element->next = NULL;
     element->prev = NULL;
-    element->value = NULL;
 
     free(element->value);
+    element->value = NULL;
     free(element);
     return EXIT_SUCCESS;
 }
 
-struct element* linkedlist_next(struct linkedlist* ll)
+int linkedlist_delete(struct linkedlist* ll, uint64_t i)
+{
+    if (ll == NULL)
+        return EXIT_FAILURE;
+
+    struct element* e = __linkedlist_get(ll, i);
+
+    if (e == NULL)
+        return EXIT_FAILURE;
+
+    return __linkedlist_delete(ll, e);
+}
+
+
+struct element* __linkedlist_next(struct linkedlist* ll)
 {
     if (ll == NULL || ll->curr == NULL)
         return NULL;
@@ -134,19 +159,28 @@ struct element* linkedlist_next(struct linkedlist* ll)
     return e;
 }
 
-int linkedlist_cleanup(struct linkedlist* ll)
+int linkedlist_clear(struct linkedlist* ll)
 {
     if (ll == NULL)
         return EXIT_FAILURE;
 
     struct element* e;
 
-    while ((e = linkedlist_next(ll)))
+    while ((e = __linkedlist_next(ll)))
     {
-       linkedlist_delete(ll, e); 
+       __linkedlist_delete(ll, e); 
     }
 
-    free(ll);
+    ll->head = NULL;
+    ll->tail = NULL;
+    ll->curr = NULL;
 
     return EXIT_SUCCESS;
+}
+
+int linkedlist_cleanup(struct linkedlist* ll)
+{
+    int ret = linkedlist_clear(ll);
+    free(ll);
+    return ret; 
 }
