@@ -175,7 +175,7 @@ int mbr_serialize_mbr(struct mbr mbr, FILE* serializef)
     struct bson_info* serialized;
     struct bson_kv value;
     bool has_gpt = false;
-    int ret;
+    int ret, sector = 0;
 
     if (mbr.pt[0].partition_type == 0xee)
         has_gpt = true;
@@ -185,6 +185,12 @@ int mbr_serialize_mbr(struct mbr mbr, FILE* serializef)
     value.type = BSON_BOOLEAN;
     value.key = "gpt";
     value.data = &(has_gpt);
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT32;
+    value.key = "sector";
+    value.data = &sector;
 
     bson_serialize(serialized, &value);
 
@@ -199,14 +205,12 @@ int mbr_serialize_partition(uint32_t pte_num, struct partition_table_entry pte,
                             char* mount_point, FILE* serializef)
 {
     struct bson_info* serialized;
-    struct bson_info* sectors;
     struct bson_kv value;
     int32_t partition_type = pte.partition_type;
     int32_t final_sector = pte.first_sector_lba + pte.sector_count;
-    int ret;
+    int ret, sector = 0;
 
     serialized = bson_init();
-    sectors = bson_init();
 
     value.type = BSON_INT32;
     value.key = "pte_num";
@@ -240,23 +244,14 @@ int mbr_serialize_partition(uint32_t pte_num, struct partition_table_entry pte,
     bson_serialize(serialized, &value);
 
     value.type = BSON_INT32;
-    value.key = "0";
-    value.data = 0;
-
-    bson_serialize(sectors, &value);
-
-    bson_finalize(sectors);
-
-    value.type = BSON_ARRAY;
-    value.key = "sectors";
-    value.data = sectors;
+    value.key = "sector";
+    value.data = &sector;
 
     bson_serialize(serialized, &value);
 
     bson_finalize(serialized);
     ret = bson_writef(serialized, serializef);
     bson_cleanup(serialized);
-    bson_cleanup(sectors);
      
     return 0;
 }
