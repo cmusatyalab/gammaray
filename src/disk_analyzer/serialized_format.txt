@@ -60,6 +60,7 @@ values given their type.
             {
                 'path' : BSON_STRING;
                 'is_dir' : BSON_BOOLEAN;
+                'data' : BSON_BINARY : BSON_GENERIC_BINARY; /* if dir */
                 'inode' : BSON_BINARY : BSON_GENERIC_BINARY;
                 'sectors' : BSON_ARRAY; /* array of sector BSON_INT32's */
             }

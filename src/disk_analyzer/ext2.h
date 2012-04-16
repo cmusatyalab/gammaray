@@ -127,4 +127,6 @@ int ext2_serialize_fs(struct ext2_superblock* superblock,
                       uint32_t start_sector, FILE* serializef);
 int ext2_serialize_bgds(FILE* disk, int64_t partition_offset,
                         struct ext2_superblock* superblock, FILE* serializef);
+int ext2_serialize_fs_tree(FILE* disk, int64_t partition_offset,
+                            struct ext2_superblock* superblock, char* prefix, FILE* serializef);
 #endif

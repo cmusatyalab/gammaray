@@ -127,7 +127,11 @@ int main(int argc, char* args[])
                     return EXIT_FAILURE;
                 }
 
-                ext2_list_root_fs(disk, partition_offset, ext2_superblock, "/mnt/sda1/");
+                ext2_serialize_fs_tree(disk, partition_offset, 
+                                       &ext2_superblock,
+                                       ext2_last_mount_point(&ext2_superblock),
+                                       serializef);
+                //ext2_list_root_fs(disk, partition_offset, ext2_superblock, "/mnt/sda1/");
                 //ext2_reconstruct_root_fs(disk, partition_offset, ext2_superblock,
                 //                         "", "/home/wolf/copydisk/");
             }

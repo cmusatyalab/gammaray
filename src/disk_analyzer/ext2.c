@@ -4,6 +4,7 @@
 #include "mbr.h"
 #include "ext2.h"
 
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -1987,4 +1988,198 @@ int ext2_serialize_bgds(FILE* disk, int64_t partition_offset,
     bson_cleanup(serialized);
 
     return EXIT_SUCCESS;
+}
+
+int ext2_serialize_tree(FILE* disk, int64_t partition_offset, 
+                        struct ext2_superblock superblock,
+                        struct ext2_inode root_inode,
+                        char* prefix,
+                        FILE* serializef)
+{
+    struct ext2_inode child_inode;
+    struct ext2_dir_entry dir;
+    uint64_t block_size = ext2_block_size(superblock), position = 0;
+    uint8_t buf[block_size];
+    uint64_t num_blocks;
+    uint64_t i;
+    int ret_check;
+    char path[8192];
+
+    struct bson_info* serialized;
+    struct bson_kv value;
+    bool is_dir = root_inode.i_mode & 0x4000;
+
+    serialized = bson_init();
+    
+
+    if (root_inode.i_mode & 0x8000)
+    {
+        prefix[strlen(prefix) - 1] = '\0';
+        value.type = BSON_STRING;
+        value.size = strlen(prefix);
+        value.key = "path";
+        value.data = prefix;
+
+        bson_serialize(serialized, &value);
+
+        value.type = BSON_BOOLEAN;
+        value.key = "is_dir";
+        value.data = &is_dir;
+
+        bson_serialize(serialized, &value);
+
+        value.type = BSON_BINARY;
+        value.subtype = BSON_BINARY_GENERIC;
+        value.size = sizeof(struct ext2_inode);
+        value.key = "inode";
+        value.data = &root_inode;
+
+        bson_serialize(serialized, &value);
+        bson_finalize(serialized);
+        bson_writef(serialized, serializef);
+        bson_cleanup(serialized);
+
+        return 0;
+    }
+    else if (root_inode.i_mode & 0x4000)
+    {
+        value.type = BSON_STRING;
+        value.size = strlen(prefix);
+        value.key = "path";
+        value.data = prefix;
+
+        bson_serialize(serialized, &value);
+
+        value.type = BSON_BOOLEAN;
+        value.key = "is_dir";
+        value.data = &is_dir;
+
+        bson_serialize(serialized, &value);
+
+        value.type = BSON_BINARY;
+        value.subtype = BSON_BINARY_GENERIC;
+        value.size = sizeof(struct ext2_inode);
+        value.key = "inode";
+        value.data = &root_inode;
+
+        bson_serialize(serialized, &value);
+        bson_finalize(serialized);
+        bson_writef(serialized, serializef);
+        bson_cleanup(serialized);    
+    }
+
+    if (ext2_file_size(root_inode) == 0)
+    {
+        num_blocks = 0;
+    }
+    else
+    {
+        num_blocks = ext2_file_size(root_inode) / block_size;
+        if (ext2_file_size(root_inode) % block_size != 0)
+            num_blocks += 1;
+    }
+
+    /* go through each valid block of the inode */
+    for (i = 0; i < num_blocks; i++)
+    {
+        ret_check = ext2_read_file_block(disk, partition_offset, superblock, i, root_inode, (uint32_t*) buf);
+        
+        if (ret_check < 0) /* error reading */
+        {
+            fprintf_light_red(stderr, "Error reading inode dir block.\n");
+            return -1;
+        }
+        else if (ret_check > 0) /* no more blocks? */
+        {
+            return 0;
+        }
+
+        position = 0;
+
+        while (position < block_size)
+        {
+            strcpy(path, prefix);
+
+            if (ext2_read_dir_entry(&buf[position], &dir))
+            {
+                fprintf_light_red(stderr, "Error reading dir entry from block.\n");
+                return -1;
+            }
+
+            if (dir.inode == 0)
+                return 0;
+
+            if (ext2_read_inode(disk, partition_offset, superblock, dir.inode, &child_inode))
+            {
+               fprintf_light_red(stderr, "Error reading child inode.\n");
+               return -1;
+            } 
+
+            dir.name[dir.name_len] = 0;
+            strcat(path, (char*) dir.name);
+            
+            if (strcmp((const char *) dir.name, ".") != 0 &&
+                strcmp((const char *) dir.name, "..") != 0)
+            {
+                fprintf_yellow(stdout, "inode %"PRIu32" ", dir.inode);
+                if (child_inode.i_mode & 0x4000)
+                {
+                    fprintf_light_blue(stdout, "%s\n", path);
+                }
+                else if (child_inode.i_mode & 0x8000)
+                {
+                    fprintf_yellow(stdout, "%s\n", path);
+                }
+                else
+                {
+                    fprintf_red(stdout, "%s\n", path);
+                }
+                ext2_serialize_tree(disk, partition_offset, superblock, child_inode,
+                                    strcat(path, "/"), serializef); /* recursive call */
+            }
+
+            position += dir.rec_len;
+        }
+    }
+
+    return 0;
+}
+
+int ext2_serialize_fs_tree(FILE* disk, int64_t partition_offset,
+                           struct ext2_superblock* superblock, char* mount,
+                           FILE* serializef)
+{
+    struct ext2_inode root;
+    char* buf = malloc(strlen(mount) + 2);
+
+    if (buf == NULL)
+    {
+        fprintf_light_red(stderr, "Error allocating root dir path string.\n");
+        return -1;
+    }
+
+    memcpy(buf, mount, strlen(mount));
+    buf[strlen(mount)] = '/';
+    buf[strlen(mount) + 1] = '\0';
+
+    if (ext2_read_inode(disk, partition_offset, *superblock, 2, &root))
+    {
+        free(buf);
+        fprintf_light_red(stderr, "Failed getting root fs inode.\n");
+        return -1;
+    }
+
+    fprintf_yellow(stdout, "inode 2 %s\n", buf);
+
+    if (ext2_serialize_tree(disk, partition_offset, *superblock, root, buf,
+                            serializef))
+    {
+        free(buf);
+        fprintf_light_red(stdout, "Error listing fs tree from root inode.\n");
+        return -1;
+    }
+
+    free(buf);
+
+    return 0;
 }
