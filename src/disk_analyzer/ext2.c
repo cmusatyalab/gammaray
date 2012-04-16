@@ -500,10 +500,10 @@ int ext2_read_inode(FILE* disk, int64_t partition_offset,
         return -1;
     }
 
-    fprintf_cyan(stdout, "Analyzing inode @sector: %"PRId64" @offset: %"PRId64
-                         ".\n", (partition_offset + inode_table_offset +
-                         inode_offset) / SECTOR_SIZE, (partition_offset +
-                         inode_table_offset + inode_offset) % SECTOR_SIZE);
+    //fprintf_cyan(stdout, "Analyzing inode @sector: %"PRId64" @offset: %"PRId64
+    //                     ".\n", (partition_offset + inode_table_offset +
+    //                     inode_offset) / SECTOR_SIZE, (partition_offset +
+    //                     inode_table_offset + inode_offset) % SECTOR_SIZE);
 
     return 0;
 }
@@ -1970,7 +1970,6 @@ int ext2_serialize_bgds(FILE* disk, int64_t partition_offset,
                                                      &bgd)) > 0)
     {
         v_bgd.data = &bgd;
-        print_ext2_block_group_descriptor(bgd);
         bson_serialize(serialized, &v_bgd);
 
         v_sector.data = &sector;
@@ -1990,11 +1989,233 @@ int ext2_serialize_bgds(FILE* disk, int64_t partition_offset,
     return EXIT_SUCCESS;
 }
 
+int ext2_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
+                                 struct ext2_superblock superblock, uint32_t block_num,
+                                 struct ext2_inode inode, struct bson_info* sectors)
+{
+    uint32_t block_size = ext2_block_size(superblock);
+    uint32_t addresses_in_block = block_size / 4;
+    uint32_t buf[addresses_in_block];
+    uint32_t sectors_per_block = block_size / SECTOR_SIZE;
+    uint32_t i;
+    
+    /* ranges for lookup */
+    uint32_t direct_low = 0;
+    uint32_t direct_high = 11;
+    uint32_t indirect_low = direct_high + 1;
+    uint32_t indirect_high = direct_high + (addresses_in_block);
+    uint32_t double_low = indirect_high + 1;
+    uint32_t double_high = indirect_high + (addresses_in_block)*
+                                           (addresses_in_block);
+    uint32_t triple_low = double_high + 1;
+    uint32_t triple_high = double_high + (addresses_in_block)*
+                                         (addresses_in_block)*
+                                         (addresses_in_block);
+
+    struct bson_kv value;
+    char count[11];
+    int64_t sector;
+    value.type = BSON_INT32;
+    value.key = count;
+
+    if (block_num < direct_low || block_num > triple_high)
+    {
+        fprintf_light_red(stderr, "File block outside of range of inode.\n");
+        return -1;
+    }
+
+    /* figure out type of block lookup (direct, indirect, double, treble) */
+    /* DIRECT */
+    if (block_num <= direct_high)
+    {
+        if (inode.i_block[block_num] == 0)
+            return 1; /* finished */
+
+        sector = (inode.i_block[block_num] * ext2_block_size(superblock) +
+                  partition_offset) / SECTOR_SIZE;
+
+        for (i = 0; i < sectors_per_block; i++)
+        {
+            snprintf(count, 11, "%"PRIu32, (block_num * sectors_per_block) + i);
+            sector += i;
+            value.data = &sector;
+            bson_serialize(sectors, &value);
+        }
+
+        return 0;
+    }
+
+    /* INDIRECT */
+    if (block_num <= indirect_high)
+    {
+        block_num -= indirect_low; /* rebase, 0 is beginning indirect block range */
+        
+        if (inode.i_block[12] == 0)
+            return 1; /* finished */
+
+        ext2_read_block(disk, partition_offset, superblock, inode.i_block[12],
+                        (uint8_t*) buf);
+
+        if (buf[block_num] == 0)
+            return 1;
+
+        sector = (buf[block_num] * ext2_block_size(superblock) +
+                  partition_offset) / SECTOR_SIZE;
+
+        for (i = 0; i < sectors_per_block; i++)
+        {
+            snprintf(count, 11, "%"PRIu32, ((block_num + indirect_low) * sectors_per_block) + i);
+            sector += i;
+            value.data = &sector;
+            bson_serialize(sectors, &value);
+        }
+
+        return 0;
+    }
+
+    /* DOUBLE */
+    if (block_num <= double_high)
+    {
+        block_num -= double_low;
+
+        if (inode.i_block[13] == 0)
+            return 1;
+
+        ext2_read_block(disk, partition_offset, /* double */
+                        superblock, inode.i_block[13], (uint8_t*) buf);
+
+        if (buf[block_num / addresses_in_block] == 0)
+            return 1;
+
+        ext2_read_block(disk, partition_offset, /* indirect */
+                        superblock, buf[block_num / addresses_in_block],
+                        (uint8_t*) buf);
+
+        if (buf[block_num % addresses_in_block] == 0)
+            return 1;
+
+        sector = (buf[block_num % addresses_in_block] *
+                  ext2_block_size(superblock) + partition_offset) /
+                  SECTOR_SIZE;
+
+        for (i = 0; i < sectors_per_block; i++)
+        {
+            snprintf(count, 11, "%"PRIu32, ((block_num + double_low) * sectors_per_block) + i);
+            sector += i;
+            value.data = &sector;
+            bson_serialize(sectors, &value);
+        }
+
+        return 0;
+    }
+
+    /* TRIPLE */
+    if (block_num <= triple_high)
+    {
+        block_num -= triple_low;
+
+        if (inode.i_block[14] == 0)
+            return 1;
+
+        ext2_read_block(disk, partition_offset, /* triple */
+                        superblock, inode.i_block[14], (uint8_t*) buf);
+
+        if (buf[block_num / (addresses_in_block*addresses_in_block)] == 0)
+            return 1;
+        
+        ext2_read_block(disk, partition_offset, /* double */
+                        superblock,
+                        buf[block_num / (addresses_in_block*addresses_in_block)],
+                        (uint8_t*) buf);
+
+        if (buf[block_num / addresses_in_block] == 0)
+            return 1;
+
+        ext2_read_block(disk, partition_offset, /* indirect */
+                        superblock, buf[block_num / addresses_in_block],
+                        (uint8_t*) buf);
+
+        if (buf[block_num % addresses_in_block] == 0)
+            return 1;
+
+        sector = (buf[block_num % addresses_in_block] *
+                  ext2_block_size(superblock) + partition_offset) /
+                  SECTOR_SIZE;
+
+        for (i = 0; i < sectors_per_block; i++)
+        {
+            snprintf(count, 11, "%"PRIu32, ((block_num + triple_low) * sectors_per_block) + i);
+            sector += i;
+            value.data = &sector;
+            bson_serialize(sectors, &value);
+        }
+
+        return 0;
+    }
+
+    return -1;
+}
+
+int ext2_serialize_file_sectors(FILE* disk, int64_t partition_offset,
+                                  struct ext2_superblock superblock, 
+                                  struct ext2_inode inode, struct bson_info* serialized)
+{
+    uint64_t block_size = ext2_block_size(superblock),
+             file_size = ext2_file_size(inode);
+    struct bson_info* sectors;
+    struct bson_kv value;
+    uint64_t num_blocks;
+    uint64_t i;
+    int ret_check;
+
+    if (file_size == 0)
+    {
+        num_blocks = 0;
+    }
+    else
+    {
+        num_blocks = file_size / block_size;
+        if (file_size % block_size != 0)
+            num_blocks += 1;
+    }
+
+    value.type = BSON_ARRAY;
+    value.key = "sectors";
+    
+    sectors = bson_init();
+
+    /* go through each valid block of the inode */
+    for (i = 0; i < num_blocks; i++)
+    {
+        ret_check = ext2_serialize_file_block_sectors(disk, partition_offset, superblock, i,
+                                                 inode, sectors);
+        
+        if (ret_check < 0) /* error reading */
+        {
+            fprintf_light_red(stderr, "Error reading file block.\n");
+            return -1;
+        }
+        else if (ret_check > 0) /* no more blocks? */
+        {
+            fprintf_light_red(stderr, "Premature ending of file blocks.\n");
+            return -1;
+        }
+    }
+
+    bson_finalize(sectors);
+    value.data = sectors;
+
+    bson_serialize(serialized, &value);
+    bson_cleanup(sectors);
+
+   return 0;
+}
+
 int ext2_serialize_tree(FILE* disk, int64_t partition_offset, 
-                        struct ext2_superblock superblock,
-                        struct ext2_inode root_inode,
-                        char* prefix,
-                        FILE* serializef)
+                            struct ext2_superblock superblock,
+                            struct ext2_inode root_inode,
+                            char* prefix,
+                            FILE* serializef)
 {
     struct ext2_inode child_inode;
     struct ext2_dir_entry dir;
@@ -2011,8 +2232,7 @@ int ext2_serialize_tree(FILE* disk, int64_t partition_offset,
 
     serialized = bson_init();
     
-
-    if (root_inode.i_mode & 0x8000)
+    if (root_inode.i_mode & 0x8000) /* file, no dir entries more */
     {
         prefix[strlen(prefix) - 1] = '\0';
         value.type = BSON_STRING;
@@ -2035,10 +2255,16 @@ int ext2_serialize_tree(FILE* disk, int64_t partition_offset,
         value.data = &root_inode;
 
         bson_serialize(serialized, &value);
+
+        ext2_serialize_file_sectors(disk, partition_offset, superblock, root_inode,
+                                    serialized);
+        //
+        //ext2_serialize_file_sectors(disk, partition_offset,
+        //                            superblock, root_inode, serialized);
+        
         bson_finalize(serialized);
         bson_writef(serialized, serializef);
-        bson_cleanup(serialized);
-
+        bson_cleanup(serialized);        
         return 0;
     }
     else if (root_inode.i_mode & 0x4000)
@@ -2063,9 +2289,13 @@ int ext2_serialize_tree(FILE* disk, int64_t partition_offset,
         value.data = &root_inode;
 
         bson_serialize(serialized, &value);
+
+        ext2_serialize_file_sectors(disk, partition_offset,
+                                    superblock, root_inode, serialized);
+        
         bson_finalize(serialized);
         bson_writef(serialized, serializef);
-        bson_cleanup(serialized);    
+        bson_cleanup(serialized);
     }
 
     if (ext2_file_size(root_inode) == 0)
@@ -2121,21 +2351,18 @@ int ext2_serialize_tree(FILE* disk, int64_t partition_offset,
             if (strcmp((const char *) dir.name, ".") != 0 &&
                 strcmp((const char *) dir.name, "..") != 0)
             {
-                fprintf_yellow(stdout, "inode %"PRIu32" ", dir.inode);
                 if (child_inode.i_mode & 0x4000)
                 {
-                    fprintf_light_blue(stdout, "%s\n", path);
                 }
                 else if (child_inode.i_mode & 0x8000)
                 {
-                    fprintf_yellow(stdout, "%s\n", path);
                 }
                 else
                 {
-                    fprintf_red(stdout, "%s\n", path);
+                    fprintf_red(stderr, "%s\n", path);
                 }
-                ext2_serialize_tree(disk, partition_offset, superblock, child_inode,
-                                    strcat(path, "/"), serializef); /* recursive call */
+                ext2_serialize_tree(disk, partition_offset, superblock,
+                                      child_inode, strcat(path, "/"), serializef); /* recursive call */
             }
 
             position += dir.rec_len;
@@ -2146,8 +2373,8 @@ int ext2_serialize_tree(FILE* disk, int64_t partition_offset,
 }
 
 int ext2_serialize_fs_tree(FILE* disk, int64_t partition_offset,
-                           struct ext2_superblock* superblock, char* mount,
-                           FILE* serializef)
+                               struct ext2_superblock* superblock, char* mount,
+                               FILE* serializef)
 {
     struct ext2_inode root;
     char* buf = malloc(strlen(mount) + 2);
@@ -2165,17 +2392,15 @@ int ext2_serialize_fs_tree(FILE* disk, int64_t partition_offset,
     if (ext2_read_inode(disk, partition_offset, *superblock, 2, &root))
     {
         free(buf);
-        fprintf_light_red(stderr, "Failed getting root fs inode.\n");
+        fprintf(stderr, "Failed getting root fs inode.\n");
         return -1;
     }
 
-    fprintf_yellow(stdout, "inode 2 %s\n", buf);
-
-    if (ext2_serialize_tree(disk, partition_offset, *superblock, root, buf,
-                            serializef))
+    if (ext2_serialize_tree(disk, partition_offset, *superblock, root,
+                                buf, serializef))
     {
         free(buf);
-        fprintf_light_red(stdout, "Error listing fs tree from root inode.\n");
+        fprintf(stdout, "Error listing fs tree from root inode.\n");
         return -1;
     }
 
