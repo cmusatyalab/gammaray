@@ -25,9 +25,11 @@ default:
 		   -I../bson
 
 test: default
-	@valgrind ./disk_analyzer \
+	@valgrind --track-origins=yes ./disk_analyzer \
 		/home/wolf/Dropbox/Projects/xray/sample/tinycore.raw \
 		/tmp/tinycore.bson
+
+	@../bson/bson_printer /tmp/tinycore.bson | less -R
 
 bigtest: default
 	@./disk_analyzer /home/wolf/sample_virtual_disks/tinycore_big.img
