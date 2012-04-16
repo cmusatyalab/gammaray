@@ -95,7 +95,6 @@ int main(int argc, char* args[])
                                             "Offset 0x%.16"PRIx64" ---\n",
                                             partition_offset);
                 mbr_get_partition_table_entry(mbr, i, &pte);
-                mbr_print_numbers(mbr);
 
                 fprintf_light_red(stdout, "Serializing Partition Data to: "
                                           "%s\n", args[2]);
@@ -112,10 +111,22 @@ int main(int argc, char* args[])
                     return EXIT_FAILURE;
                 }
                 
-                print_partition_sectors(pte);
-                //ext2_print_sectormap(disk, partition_offset, ext2_superblock);
-                ext2_print_superblock(ext2_superblock);
-                ext2_list_block_groups(disk, partition_offset, ext2_superblock);
+                if (ext2_serialize_fs(&ext2_superblock, pte.first_sector_lba,
+                                      serializef))
+                {
+                    fprintf_light_red(stderr, "Error writing serialized fs "
+                                              "entry.\n");
+                    return EXIT_FAILURE;
+                }
+
+                if (ext2_serialize_bgds(disk, partition_offset,
+                                        &ext2_superblock, serializef))
+                {
+                    fprintf_light_red(stderr, "Error writing serialized "
+                                              "BGDs\n");
+                    return EXIT_FAILURE;
+                }
+
                 ext2_list_root_fs(disk, partition_offset, ext2_superblock, "/mnt/sda1/");
                 //ext2_reconstruct_root_fs(disk, partition_offset, ext2_superblock,
                 //                         "", "/home/wolf/copydisk/");

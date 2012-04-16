@@ -123,5 +123,8 @@ int ext2_print_sectormap(FILE* disk, int64_t partition_offset,
                          struct ext2_superblock superblock);
 int64_t ext2_sector_from_block(uint32_t block);
 char* ext2_last_mount_point(struct ext2_superblock* superblock);
-
+int ext2_serialize_fs(struct ext2_superblock* superblock,
+                      uint32_t start_sector, FILE* serializef);
+int ext2_serialize_bgds(FILE* disk, int64_t partition_offset,
+                        struct ext2_superblock* superblock, FILE* serializef);
 #endif

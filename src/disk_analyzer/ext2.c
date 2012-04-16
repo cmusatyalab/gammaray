@@ -1,7 +1,10 @@
 #define _FILE_OFFSET_BITS 64
 
+#include "bson.h"
+#include "mbr.h"
 #include "ext2.h"
 
+#include <stdlib.h>
 #include <string.h>
 
 #include <sys/stat.h> 
@@ -209,7 +212,7 @@ uint32_t ext2_num_block_groups(struct ext2_superblock superblock)
     return (blocks + blocks_per_group - 1) / blocks_per_group;
 }
 
-int ext2_next_block_group_descriptor(FILE* disk,
+uint32_t ext2_next_block_group_descriptor(FILE* disk,
                                      int64_t partition_offset,
                                      struct ext2_superblock superblock,
                                      struct ext2_block_group_descriptor* bgd)
@@ -224,7 +227,7 @@ int ext2_next_block_group_descriptor(FILE* disk,
         {
             fprintf_light_red(stderr, "error seeking to position 0x%lx.\n",
                               offset);
-            return -1;
+            return 0;
         }
 
         if (fread(bgd, 1, sizeof(struct ext2_block_group_descriptor), disk) !=
@@ -233,10 +236,10 @@ int ext2_next_block_group_descriptor(FILE* disk,
             fprintf_light_red(stderr, 
                               "error while trying to read ext2 block group "
                               "descriptor.\n");
-            return -1;
+            return 0;
         }
         i++;
-        return 1;
+        return (partition_offset + offset + i*sizeof(struct ext2_block_group_descriptor)) / SECTOR_SIZE;
     }
 
     return 0; 
@@ -330,7 +333,6 @@ int ext2_print_dir_entries(uint8_t* bytes, uint32_t len)
                                   (bytes + i*sizeof(struct ext2_dir_entry))));
     return 0;
 }
-
 
 int read_dir_entry(uint32_t offset, FILE* disk, struct ext2_dir_entry* dir)
 {
@@ -1798,6 +1800,60 @@ int print_sectors_ext2_block_group_descriptor(int64_t offset, struct ext2_block_
     return 0;
 }
 
+int ext2_serialize_bgd_sectors(struct bson_info* serialized,
+                               struct ext2_block_group_descriptor bgd,
+                               struct ext2_superblock* superblock,
+                               int64_t offset)
+{
+    uint32_t block_size = ext2_block_size(*superblock);
+    uint32_t sector;
+    struct bson_kv value;
+
+    value.type = BSON_INT32;
+
+    sector = (bgd.bg_block_bitmap * block_size + offset) / SECTOR_SIZE;
+    value.key = "block_bitmap_sector_start";
+    value.data = &sector; 
+
+    bson_serialize(serialized, &value);
+
+    sector = (bgd.bg_block_bitmap * block_size + offset + block_size) /
+             SECTOR_SIZE - 1;
+    value.key = "block_bitmap_sector_end";
+    value.data = &sector; 
+
+    bson_serialize(serialized, &value);
+
+    sector = (bgd.bg_inode_bitmap * block_size + offset) / SECTOR_SIZE;
+    value.key = "inode_bitmap_sector_start";
+    value.data = &sector; 
+
+    bson_serialize(serialized, &value);
+    
+    sector = (bgd.bg_inode_bitmap * block_size + offset + block_size) / 
+             SECTOR_SIZE - 1;
+    value.key = "inode_bitmap_sector_end";
+    value.data = &sector; 
+
+    bson_serialize(serialized, &value);
+    
+    sector = (bgd.bg_inode_table * block_size + offset) / SECTOR_SIZE;
+    value.key = "inode_table_sector_start";
+    value.data = &sector; 
+
+    bson_serialize(serialized, &value);
+    
+    sector = (bgd.bg_inode_table * block_size + offset + 
+              superblock->s_inodes_per_group * 
+              sizeof(struct ext2_inode)) / SECTOR_SIZE - 1;
+    value.key = "inode_table_sector_end";
+    value.data = &sector; 
+
+    bson_serialize(serialized, &value);
+    
+    return EXIT_SUCCESS;
+}
+
 int ext2_print_sectormap(FILE* disk, int64_t partition_offset,
                          struct ext2_superblock superblock)
 {
@@ -1824,4 +1880,111 @@ int ext2_print_sectormap(FILE* disk, int64_t partition_offset,
 char* ext2_last_mount_point(struct ext2_superblock* superblock)
 {
     return (char *) (superblock->s_last_mounted);
+}
+
+int ext2_serialize_fs(struct ext2_superblock* superblock,
+                      uint32_t sector_start,
+                      FILE* serializedf)
+{
+    int32_t fs_type = MBR_FS_TYPE_EXT2;
+    /* round up integer arithmetic */
+    int32_t num_block_groups = (superblock->s_blocks_count +
+                                (superblock->s_blocks_per_group - 1)) /
+                                superblock->s_blocks_per_group;
+
+    /* on 1KiB block systems, first data block starts at 1 */
+    uint32_t num_sectors = ((superblock->s_blocks_count +
+                             superblock->s_first_data_block) *
+                             ext2_block_size(*superblock)) / SECTOR_SIZE; 
+    struct bson_info* serialized;
+    struct bson_info* sectors;
+    struct bson_kv value;
+
+    serialized = bson_init();
+    sectors = bson_init();
+
+    value.type = BSON_INT32;
+    value.key = "fs_type";
+    value.data = &(fs_type);
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT32;
+    value.key = "num_block_groups";
+    value.data = &(num_block_groups);
+
+    bson_serialize(serialized, &value);
+
+    value.key = "superblock";
+    value.type = BSON_BINARY;
+    value.size = sizeof(struct ext2_superblock);
+    value.subtype = BSON_BINARY_GENERIC;
+    value.data = superblock;
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT32;
+    value.key = "start_sector";
+    value.data = &sector_start;
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT32;
+    value.key = "end_sector";
+    sector_start += num_sectors - 1; /* don't count start sector */
+    value.data = &sector_start;
+
+    bson_serialize(serialized, &value);
+
+    bson_finalize(serialized);
+    bson_writef(serialized, serializedf);
+    bson_cleanup(sectors);
+    bson_cleanup(serialized);
+
+    return EXIT_SUCCESS;
+}
+
+int ext2_serialize_bgds(FILE* disk, int64_t partition_offset,
+                        struct ext2_superblock* superblock, FILE* serializef)
+{
+    struct ext2_block_group_descriptor bgd;
+    struct bson_info* serialized;
+    struct bson_kv v_bgd, v_sector;
+    uint32_t sector = 0;
+
+
+    serialized = bson_init();
+    
+    v_bgd.type = BSON_BINARY;
+    v_bgd.key = "bgd";
+    v_bgd.subtype = BSON_BINARY_GENERIC;
+    v_bgd.size = sizeof(struct ext2_block_group_descriptor);
+    
+    v_sector.type = BSON_INT32;
+    v_sector.key = "sector";
+
+    while ((sector = ext2_next_block_group_descriptor(disk,
+                                                     partition_offset,
+                                                     *superblock,
+                                                     &bgd)) > 0)
+    {
+        v_bgd.data = &bgd;
+        print_ext2_block_group_descriptor(bgd);
+        bson_serialize(serialized, &v_bgd);
+
+        v_sector.data = &sector;
+        bson_serialize(serialized, &v_sector);
+
+        ext2_serialize_bgd_sectors(serialized, bgd, superblock,
+                                   partition_offset);
+
+        bson_finalize(serialized);
+        bson_writef(serialized, serializef);
+
+        bson_reset(serialized);
+    }
+
+    bson_cleanup(serialized);
+
+    return EXIT_SUCCESS;
 }
