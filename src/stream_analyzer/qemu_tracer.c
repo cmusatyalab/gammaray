@@ -1,6 +1,5 @@
 #include "qemu_tracer.h"
 #include "color.h"
-#include "tokenizer.h"
 
 #include <stdio.h>
 #include <stdlib.h>
