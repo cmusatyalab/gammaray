@@ -13,7 +13,7 @@ default:
 		 #-DNOCOLOR
 
 test: default
-	valgrind --leak-check=yes ./linkedlist_test
+	valgrind --leak-check=full --show-reachable=yes ./linkedlist_test
 
 clean:
 	@rm bst_test 
