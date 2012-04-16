@@ -11,7 +11,7 @@ values given their type.
         Repeated: once
             {
                 'gpt' : BSON_BOOLEAN;
-                'sectors' : BSON_ARRAY;
+                'sector' : BSON_INT32;
             }
 
         Partition Table Entry Document
@@ -23,7 +23,7 @@ values given their type.
                 'first_sector_lba' : BSON_INT32;
                 'final_sector_lba' : BSON_INT32;
                 'mount_point' : BSON_STRING;
-                'sectors' : BSON_ARRAY;
+                'sector' : BSON_INT32;
             }  
 
             /* Next section tailored to file system type. 
@@ -36,7 +36,8 @@ values given their type.
                 'fs_type' : BSON_INT32;
                 'num_block_groups' : BSON_INT32;
                 'superblock' : BSON_BINARY : BSON_GENERIC_BINARY;
-                'sectors' : BSON_ARRAY; /* array of sector BSON_INT32's */
+                'start_sector' : BSON_INT32;
+                'end_sector' : BSON_INT32;
             }
 
             Block Group Descriptor
@@ -44,7 +45,13 @@ values given their type.
             Repeated: 'num_block_groups' times
             {
                'bgd' : BSON_BINARY : BSON_GENERIC_BINARY;
-               'sectors'  : BSON_ARRAY; /* array of sector BSON_INT32's */
+               'sector' : BSON_INT32;
+               'block_bitmap_sector_start' : BSON_INT32;
+               'block_bitmap_sector_end' : BSON_INT32;
+               'inode_bitmap_sector_start' : BSON_INT32;
+               'inode_bitmap_sector_end' : BSON_INT32;
+               'inode_table_sector_start' : BSON_INT32;
+               'inode_table_sector_end' : BSON_INT32;
             }
 
             File Entry Document
