@@ -1,24 +1,15 @@
 #ifndef __XRAY_LINKEDLIST_H
 #define __XRAY_LINKEDLIST_H
 
-struct element
-{
-    struct element* next;
-    struct element* prev;
-    void* value;
-};
+#include <inttypes.h>
 
-struct linkedlist
-{
-    struct element* head;
-    struct element* tail;
-    struct element* curr; /* only used when traversing */
-};
+struct element;
+struct linkedlist;
 
-int init(struct linkedlist* linkedlist);
-void* get_head(struct linkedlist* linkedlist);
-int push(struct linkedlist* linkedlist);
-void* peek(struct linkedlist* linkedlist, void* value);
-int destruct(struct linkedlist* linkedlist);
+struct linkedlist* linkedlist_init();
+int linkedlist_append(struct linkedlist* ll, void* value, int bytes);
+void* linkedlist_get(struct linkedlist* linkedlist, uint64_t i);
+int linkedlist_delete(struct linkedlist* linkedlist, struct element* element);
+int linkedlist_cleanup(struct linkedlist* linkedlist);
 
 #endif
