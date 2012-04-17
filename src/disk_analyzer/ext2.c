@@ -1892,6 +1892,8 @@ int ext2_serialize_fs(struct ext2_superblock* superblock,
     int32_t num_block_groups = (superblock->s_blocks_count +
                                 (superblock->s_blocks_per_group - 1)) /
                                 superblock->s_blocks_per_group;
+    int32_t num_files = superblock->s_inodes_count -
+                        superblock->s_free_inodes_count;
     struct bson_info* serialized;
     struct bson_info* sectors;
     struct bson_kv value;
@@ -1915,6 +1917,12 @@ int ext2_serialize_fs(struct ext2_superblock* superblock,
     value.type = BSON_INT32;
     value.key = "num_block_groups";
     value.data = &(num_block_groups);
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT32;
+    value.key = "num_files";
+    value.data = &(num_files);
 
     bson_serialize(serialized, &value);
 
