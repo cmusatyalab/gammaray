@@ -1892,8 +1892,11 @@ int ext2_serialize_fs(struct ext2_superblock* superblock,
     int32_t num_block_groups = (superblock->s_blocks_count +
                                 (superblock->s_blocks_per_group - 1)) /
                                 superblock->s_blocks_per_group;
+    /* plus 2 because need to rebase on fist usable inode; also
+     * the '/' root inode is inside the reserved inodes---always inode 2 */
     int32_t num_files = superblock->s_inodes_count -
-                        superblock->s_free_inodes_count;
+                        superblock->s_free_inodes_count -
+                        superblock->s_first_ino + 2;
     struct bson_info* serialized;
     struct bson_info* sectors;
     struct bson_kv value;
