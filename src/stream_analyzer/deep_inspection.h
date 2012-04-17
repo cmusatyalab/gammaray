@@ -37,6 +37,7 @@ struct ext2_fs
     uint64_t fs_type;
     char* mount_point;
     uint64_t num_block_groups;
+    uint64_t num_files;
     struct ext2_superblock superblock;
     struct linkedlist* ext2_bgds;
     struct linkedlist* ext2_files;
@@ -71,12 +72,6 @@ struct ext2_bgd
     uint64_t inode_table_sector_start;
     uint64_t inode_table_sector_end;
 };
-
-struct instance
-{
-    struct mbr mbr;
-};
-
 
 /* functions */
 void qemu_parse_header(uint8_t* data, struct qemu_bdrv_write* write);
