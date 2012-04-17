@@ -173,7 +173,7 @@ bson_readf(struct bson_info* bson_info, FILE* file);
   * @param file - the file to read from on disk
   * @return EXIT_SUCCESS on success, EXIT_FAILURE otherwise
   *
-   */
+  */
 int
 bson_make_readable(struct bson_info* bson_info);
 
