@@ -15,6 +15,7 @@ struct file_sector_map
 };
 
 int qemu_init_datastructures();
+int qemu_print_write(struct qemu_bdrv_write write);
 int qemu_deep_inspect(struct qemu_bdrv_write write);
 bool qemu_is_tracked(struct qemu_bdrv_write write);
 struct bst_node* qemu_get_mapping_bst(char * path);

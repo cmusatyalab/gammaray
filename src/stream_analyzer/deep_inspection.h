@@ -10,6 +10,19 @@
 /* write event */
 #define QEMU_HEADER_SIZE sizeof(struct qemu_bdrv_write_header)
 
+enum SECTOR_TYPE
+{
+    SECTOR_UNKNOWN = -1,
+    SECTOR_MBR = 0,
+    SECTOR_EXT2_PARTITION = 1,
+    SECTOR_EXT2_SUPERBLOCK = 2,
+    SECTOR_EXT2_BLOCK_GROUP_DESCRIPTOR = 3,
+    SECTOR_EXT2_BLOCK_GROUP_BLOCKMAP = 4,
+    SECTOR_EXT2_BLOCK_GROUP_INODEMAP = 5,
+    SECTOR_EXT2_INODE = 6,
+    SECTOR_EXT2_DATA = 7
+};
+
 struct qemu_bdrv_write_header
 {
     int64_t sector_num;
@@ -76,5 +89,8 @@ struct ext2_bgd
 /* functions */
 void qemu_parse_header(uint8_t* data, struct qemu_bdrv_write* write);
 int qemu_load_index(FILE* index, struct mbr* mbr);
+int qemu_print_write(struct qemu_bdrv_write* write);
+int qemu_infer_sector_type(struct qemu_bdrv_write* write, struct mbr* mbr);
+int qemu_print_sector_type(enum SECTOR_TYPE type);
 
 #endif

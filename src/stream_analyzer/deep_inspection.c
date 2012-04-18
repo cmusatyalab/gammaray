@@ -21,6 +21,117 @@ void qemu_parse_header(uint8_t* event_stream, struct qemu_bdrv_write* write)
     write->header = *((struct qemu_bdrv_write_header*) event_stream);
 }
 
+int qemu_print_sector_type(enum SECTOR_TYPE type)
+{
+    switch(type)
+    {
+        case SECTOR_MBR:
+            fprintf_light_green(stdout, "Write to MBR detected.\n");
+            return 0;
+        case SECTOR_EXT2_SUPERBLOCK:
+            fprintf_light_green(stdout, "Write to ext2 superblock detected.\n");
+            return 0;
+        case SECTOR_EXT2_BLOCK_GROUP_DESCRIPTOR:
+            fprintf_light_green(stdout, "Write to ext2 block group descriptor detected.\n");
+            return 0;
+        case SECTOR_EXT2_BLOCK_GROUP_BLOCKMAP:
+            fprintf_light_green(stdout, "Write to ext2 block group block map detected.\n");
+            return 0;
+        case SECTOR_EXT2_BLOCK_GROUP_INODEMAP:
+            fprintf_light_green(stdout, "Write to ext2 block group inode map detected.\n");
+            return 0;
+        case SECTOR_EXT2_INODE:
+            fprintf_light_green(stdout, "Write to ext2 inode detected.\n");
+            return 0;
+        case SECTOR_EXT2_DATA:
+            fprintf_light_green(stdout, "Write to ext2 data block detected.\n");
+            return 0;
+        case SECTOR_EXT2_PARTITION:
+            fprintf_light_green(stdout, "Write to ext2 partition detected.\n");
+            return 0;
+        case SECTOR_UNKNOWN:
+            fprintf_light_red(stdout, "Unknown sector type.\n");
+    }
+
+    return -1;
+}
+
+int qemu_infer_sector_type(struct qemu_bdrv_write* write, struct mbr* mbr)
+{
+    uint64_t i, j;
+    struct partition* partition;
+    struct ext2_fs* fs;
+    struct ext2_bgd* bgd;
+
+    uint64_t block_size, blocks_per_block_group, sectors_per_block_group,
+             start_sector, bgd_start, bgd_end;
+
+    if (write->header.sector_num == mbr->sector)
+        return SECTOR_MBR;
+
+    for (i = 0; i < linkedlist_size(mbr->pt); i++)
+    {
+        partition = linkedlist_get(mbr->pt, i);
+        
+        if (write->header.sector_num <= partition->final_sector_lba &&
+            write->header.sector_num >= partition->first_sector_lba)
+        {
+            if (write->header.sector_num == partition->first_sector_lba + 2)
+                return SECTOR_EXT2_SUPERBLOCK;
+
+            fs = &(partition->fs);
+            block_size = ext2_block_size(fs->superblock);
+            blocks_per_block_group = fs->superblock.s_blocks_per_group;
+            sectors_per_block_group = blocks_per_block_group *
+                                      (block_size / SECTOR_SIZE);
+            start_sector = fs->superblock.s_first_data_block *
+                           (block_size / SECTOR_SIZE) + partition->first_sector_lba;
+
+            for (j = 0; j < linkedlist_size(fs->ext2_bgds); j++)
+            {
+                bgd_start = start_sector + sectors_per_block_group * j;
+                bgd_end = bgd_start + sectors_per_block_group - 1;
+                bgd = linkedlist_get(fs->ext2_bgds, i);
+                if (write->header.sector_num == bgd->sector)
+                    return SECTOR_EXT2_BLOCK_GROUP_DESCRIPTOR;
+
+                if (write->header.sector_num <= bgd->block_bitmap_sector_end &&
+                    write->header.sector_num >= bgd->block_bitmap_sector_start)
+                    return SECTOR_EXT2_BLOCK_GROUP_BLOCKMAP;
+
+                if (write->header.sector_num <= bgd->inode_bitmap_sector_end &&
+                    write->header.sector_num >= bgd->inode_bitmap_sector_start)
+                    return SECTOR_EXT2_BLOCK_GROUP_INODEMAP;
+
+                if (write->header.sector_num <= bgd->inode_table_sector_end &&
+                    write->header.sector_num >= bgd->inode_table_sector_start)
+                    return SECTOR_EXT2_INODE;
+
+                if (write->header.sector_num <= bgd_end &&
+                    write->header.sector_num >= bgd_start)
+                    return SECTOR_EXT2_DATA;
+
+            }
+
+            return SECTOR_EXT2_PARTITION;
+        }
+    }
+
+   return SECTOR_UNKNOWN;
+}
+
+int qemu_print_write(struct qemu_bdrv_write* write)
+{
+    fprintf_light_blue(stdout, "brdv_write event\n");
+    fprintf_yellow(stdout, "\tsector_num: %0."PRId64"\n",
+                           write->header.sector_num);
+    fprintf_yellow(stdout, "\tnb_sectors: %d\n",
+                           write->header.nb_sectors);
+    fprintf_yellow(stdout, "\tdata buffer pointer (malloc()'d): %p\n",
+                           write->data);
+    return 0;
+}
+
 void print_ext2_file(struct ext2_file* file)
 {
     fprintf_light_cyan(stdout, "-- ext2 File --\n");
@@ -454,7 +565,7 @@ int qemu_load_index(FILE* index, struct mbr* mbr)
         }
     } 
 
-    print_mbr(mbr);
+    //print_mbr(mbr);
     bson_cleanup(bson);
 
     return EXIT_SUCCESS;
