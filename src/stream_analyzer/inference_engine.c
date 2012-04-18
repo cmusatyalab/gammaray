@@ -5,6 +5,11 @@
  *                                                                           *
  *****************************************************************************/
 
+#include "color.h"
+#include "deep_inspection.h"
+
+#include <zmq.h>
+
 #include <inttypes.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -15,9 +20,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "color.h"
-#include "deep_inspection.h"
-
+#define PUB_SOCKET 13738
 #define SECTOR_SIZE 512 
 
 int read_loop(int fd, struct mbr* mbr)
@@ -131,6 +134,24 @@ int main(int argc, char* args[])
         return EXIT_FAILURE;
     }
 
+    /* 0MQ */
+    void* zmq_context = zmq_init(1);
+    if (zmq_context == NULL)
+    {
+        fprintf_light_red(stderr, "Failed getting ZeroMQ context.\n");
+        return EXIT_FAILURE;
+    }
+
+    void* pub_socket = zmq_socket(zmq_context, ZMQ_PUB);
+    if (pub_socket == NULL)
+    {
+        fprintf_light_red(stderr, "Failed getting PUB socket.\n");
+        return EXIT_FAILURE;
+    }
+
+    zmq_bind(pub_socket, "tcp://0.0.0.0:13738");
+    fprintf_cyan(stdout, "PUB Socket, TCP: %d\n", PUB_SOCKET);
+
     fprintf_cyan(stdout, "Attaching to stream: %s\n\n", stream);
 
     if (strcmp(stream, "-") != 0)
@@ -152,6 +173,8 @@ int main(int argc, char* args[])
     ret = read_loop(fd, &mbr);
     close(fd);
     fclose(indexf);
+    zmq_close(pub_socket);
+    zmq_term(zmq_context);
 
     return EXIT_SUCCESS;
 }

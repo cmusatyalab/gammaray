@@ -18,6 +18,7 @@ default:
 		 ../datastructures/bst.c \
 		 ../datastructures/linkedlist.c \
 		 deep_inspection.c \
+		 -lzmq \
 		 -o inference_engine \
 		 -Wall \
 		 -Werror \
