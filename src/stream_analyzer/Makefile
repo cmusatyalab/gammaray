@@ -43,6 +43,7 @@ test: default
 	@./inference_engine \
 		/tmp/tinycore.bson \
 		/home/wolf/Dropbox/Projects/xray/sample/file_create_write_65k.log \
+		tinycore \
 		| less -R
 
 test_stream: default

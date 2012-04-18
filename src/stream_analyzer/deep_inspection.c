@@ -1,11 +1,98 @@
+#define _GNU_SOURCE
 #include "color.h"
 #include "deep_inspection.h"
 #include "__bson.h" /* TODO: fix BSON library to be more friendly */
 #include "bson.h"
 
+#include "zmq.h"
+
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include <errno.h>
+#include <unistd.h>
+
+#ifndef HOST_NAME_MAX
+    #define HOST_NAME_MAX 256
+#endif
+
+#define FILE_DATA_WRITE "data"
+#define FILE_META_WRITE "metadata"
+#define VM_NAME_MAX 512
+#define PATH_MAX 4096
+
+void zmq_send_print_error(int err)
+{
+    switch(err)
+    {
+        case EAGAIN:
+            fprintf_light_red(stderr, "Non-blocking mode was requested and the"
+                                      " message cannot be sent at the moment."
+                                      "\n");
+            break;
+        
+        case ENOTSUP:
+            fprintf_light_red(stderr, "The zmq_send() operation is not "
+                                      "supported by this socket type.\n");
+            break;
+
+        case EFSM:
+            fprintf_light_red(stderr, "The zmq_send() operation cannot be "
+                                      "performed on this socket at the moment "
+                                      "due to the socket not being in the "
+                                      "appropriate state. This error may "
+                                      "occur with socket types that switch "
+                                      "between several states, such as "
+                                      "ZMQ_REP. See the messaging patterns "
+                                      "section of zmq_socket(3) for more "
+                                      "information.\n");
+            break;
+        
+        case ETERM:
+            fprintf_light_red(stderr, "The 0MQ context associated with the "
+                                      "specified socket was terminated.\n");
+            break;
+        
+        case ENOTSOCK:
+            fprintf_light_red(stderr,  "The provided socket was invalid.\n");
+            break;
+        
+        case EINTR:
+            fprintf_light_red(stderr, "The operation was interrupted by "
+                                      "delivery of a signal before the "
+                                      "message was sent.\n");
+            break;
+        
+        case EFAULT:
+            fprintf_light_red(stderr, "Invalid message.\n");
+            break;
+    }
+}
+
+char* construct_channel_name(char* vmname, char* path)
+{
+    char* buf = malloc(HOST_NAME_MAX + VM_NAME_MAX + PATH_MAX + 3);
+    if (buf == NULL)
+        return NULL;
+
+    if (gethostname(buf, HOST_NAME_MAX))
+    {
+        free(buf);
+        return NULL;
+    }
+
+    strncat(buf, ":", 1);
+    strncat(buf, vmname, strlen(vmname));
+    strncat(buf, ":", 1);
+    strncat(buf, path, strlen(path));
+    return buf;    
+}
+
+void qemu_free(void* data, void* hint)
+{
+    free(data);
+}
 
 char* clone_cstring(char* cstring)
 {
@@ -56,12 +143,18 @@ int qemu_print_sector_type(enum SECTOR_TYPE type)
     return -1;
 }
 
-int qemu_deep_inspect(struct qemu_bdrv_write* write, struct mbr* mbr)
+int qemu_deep_inspect(struct qemu_bdrv_write* write, struct mbr* mbr,
+                      void* pub_socket, char* vmname)
 {
-    uint64_t i, j;
+    uint64_t i, j, start = 0, end = 0;
+    uint8_t* buf;
+    char* channel_name;
     struct partition* partition;
     struct ext2_fs* fs;
     struct ext2_file* file;
+    zmq_msg_t msg;
+    struct bson_info* bson;
+    struct bson_kv val;
 
     for (i = 0; i < linkedlist_size(mbr->pt); i++)
     {
@@ -80,6 +173,77 @@ int qemu_deep_inspect(struct qemu_bdrv_write* write, struct mbr* mbr)
                                               " modifying %s\n",
                                               write->header.sector_num,
                                               file->path);
+                    if (file->is_dir)
+                        fprintf_light_green(stdout, "Directory modification."
+                                                    "\n");
+
+                    if (!file->is_dir)
+                    {
+                        bson = bson_init();
+
+                        val.type = BSON_STRING;
+                        val.size = strlen(FILE_DATA_WRITE); 
+                        val.key = "type";
+                        val.data = FILE_DATA_WRITE;
+
+                        bson_serialize(bson, &val);
+
+                        val.type = BSON_INT64;
+                        val.key = "start_byte";
+                        val.data = &start;
+
+                        bson_serialize(bson, &val);
+
+                        val.type = BSON_INT64;
+                        val.key = "end_byte";
+                        val.data = &end;
+
+                        bson_serialize(bson, &val);
+
+                        val.type = BSON_BINARY;
+                        val.subtype = BSON_BINARY_GENERIC;
+                        val.key = "data";
+                        val.data = write->data;
+                        val.size = write->header.nb_sectors * SECTOR_SIZE;
+
+                        bson_serialize(bson, &val);
+                        bson_finalize(bson);
+
+                        channel_name = construct_channel_name(vmname,
+                                                              file->path);
+
+                        buf = malloc(bson->size + strlen(channel_name));
+                        memcpy((uint8_t*) mempcpy(buf, channel_name,
+                                                  strlen(channel_name)),
+                                bson->buffer, bson->size);
+                        fprintf_light_cyan(stdout, "Channel: '%s'\n", channel_name);
+                        free(channel_name);
+                        bson_cleanup(bson);
+
+                        if (zmq_msg_init_data(&msg, buf, bson->size +
+                                                         strlen(channel_name), 
+                                              qemu_free, 0))
+                        {
+                            fprintf_light_red(stderr, "Failure initializing "
+                                                      "zmq message data.\n");
+                            return -1;
+                        }
+
+                        if (zmq_send(pub_socket, &msg, 0))
+                        {
+                            fprintf_light_red(stderr, "Failure sending zmq "
+                                                      "message.\n");
+                            zmq_send_print_error(errno);
+                            return -1;
+                        }
+
+                        if (zmq_msg_close(&msg))
+                        {
+                            fprintf_light_red(stderr, "Failure closing zmq "
+                                                      "message.\n");
+                            return -1;
+                        }
+                    }
                 }
             }
 

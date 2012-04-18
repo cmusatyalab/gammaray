@@ -23,7 +23,7 @@
 #define PUB_SOCKET 13738
 #define SECTOR_SIZE 512 
 
-int read_loop(int fd, struct mbr* mbr)
+int read_loop(int fd, struct mbr* mbr, void* pub_socket, char* vmname)
 {
     uint8_t buf[QEMU_HEADER_SIZE];
     int64_t total = 0, read_ret = 0;
@@ -88,8 +88,10 @@ int read_loop(int fd, struct mbr* mbr)
 
         qemu_print_write(&write);
         qemu_print_sector_type(qemu_infer_sector_type(&write, mbr));
-        qemu_deep_inspect(&write, mbr);
+        qemu_deep_inspect(&write, mbr, pub_socket, vmname);
         free((void*) write.data);
+        fflush(stdout);
+        sleep(1);
     }
 
     return EXIT_SUCCESS;
@@ -100,24 +102,25 @@ int read_loop(int fd, struct mbr* mbr)
 int main(int argc, char* args[])
 {
     int fd, ret;
-    char* index, *stream;
+    char* index, *stream, *vmname;
     struct mbr mbr;
     FILE* indexf;
     fprintf_blue(stdout, "VM Disk Analysis Engine -- "
                          "By: Wolfgang Richter "
                          "<wolf@cs.cmu.edu>\n");
 
-    if (argc < 3)
+    if (argc < 4)
     {
         fprintf_light_red(stderr, "Usage: %s <disk index file> <stream file>"
-                                  "\n", args[0]);
+                                  " <vmname>\n", args[0]);
         return EXIT_FAILURE;
     }
 
     index = args[1];
     stream = args[2];
+    vmname = args[3];
 
-    fprintf_cyan(stdout, "Loading index: %s\n\n", index);
+    fprintf_cyan(stdout, "%s: loading index: %s\n\n", vmname, index);
 
     indexf = fopen(index, "r");
 
@@ -134,7 +137,7 @@ int main(int argc, char* args[])
         return EXIT_FAILURE;
     }
 
-    /* 0MQ */
+    /* ----------------- 0MQ ----------------- */
     void* zmq_context = zmq_init(1);
     if (zmq_context == NULL)
     {
@@ -150,9 +153,10 @@ int main(int argc, char* args[])
     }
 
     zmq_bind(pub_socket, "tcp://0.0.0.0:13738");
-    fprintf_cyan(stdout, "PUB Socket, TCP: %d\n", PUB_SOCKET);
+    fprintf_cyan(stdout, "%s: PUB Socket, TCP: %d\n", vmname, PUB_SOCKET);
 
-    fprintf_cyan(stdout, "Attaching to stream: %s\n\n", stream);
+
+    fprintf_cyan(stdout, "%s: attaching to stream: %s\n\n", vmname, stream);
 
     if (strcmp(stream, "-") != 0)
     {
@@ -170,7 +174,7 @@ int main(int argc, char* args[])
         return EXIT_FAILURE;
     }
 
-    ret = read_loop(fd, &mbr);
+    ret = read_loop(fd, &mbr, pub_socket, vmname);
     close(fd);
     fclose(indexf);
     zmq_close(pub_socket);
