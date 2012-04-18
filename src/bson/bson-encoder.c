@@ -303,7 +303,7 @@ int serialize_element(struct bson_info* bson_info, struct bson_kv* value)
             serialize_cstring(bson_info, value->key);
             serialize_binary(bson_info, &(value->size),
                                         value->subtype,
-                                        (uint8_t*)(value->data) + 4);
+                                        (uint8_t*)(value->data));
             break; 
 
         case BSON_UNDEFINED:
