@@ -85,8 +85,8 @@ int read_loop(int fd, struct mbr* mbr)
 
         qemu_print_write(&write);
         qemu_print_sector_type(qemu_infer_sector_type(&write, mbr));
-        //qemu_deep_inspect(write);
-        //free((void*) write.data);
+        qemu_deep_inspect(&write, mbr);
+        free((void*) write.data);
     }
 
     return EXIT_SUCCESS;

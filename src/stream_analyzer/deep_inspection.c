@@ -56,6 +56,40 @@ int qemu_print_sector_type(enum SECTOR_TYPE type)
     return -1;
 }
 
+int qemu_deep_inspect(struct qemu_bdrv_write* write, struct mbr* mbr)
+{
+    uint64_t i, j;
+    struct partition* partition;
+    struct ext2_fs* fs;
+    struct ext2_file* file;
+
+    for (i = 0; i < linkedlist_size(mbr->pt); i++)
+    {
+        partition = linkedlist_get(mbr->pt, i);
+        
+        if (write->header.sector_num <= partition->final_sector_lba &&
+            write->header.sector_num >= partition->first_sector_lba)
+        {
+            fs = &(partition->fs);
+            for (j = 0; j < linkedlist_size(fs->ext2_files); j++)
+            {
+                file = linkedlist_get(fs->ext2_files, j);
+                if (bst_find(file->sectors, write->header.sector_num))
+                {
+                    fprintf_light_red(stdout, "Write to sector %"PRId64
+                                              " modifying %s\n",
+                                              write->header.sector_num,
+                                              file->path);
+                }
+            }
+
+            return SECTOR_EXT2_PARTITION;
+        }
+    }
+
+   return 0;
+}
+
 int qemu_infer_sector_type(struct qemu_bdrv_write* write, struct mbr* mbr)
 {
     uint64_t i, j;
@@ -91,7 +125,7 @@ int qemu_infer_sector_type(struct qemu_bdrv_write* write, struct mbr* mbr)
             {
                 bgd_start = start_sector + sectors_per_block_group * j;
                 bgd_end = bgd_start + sectors_per_block_group - 1;
-                bgd = linkedlist_get(fs->ext2_bgds, i);
+                bgd = linkedlist_get(fs->ext2_bgds, j);
                 if (write->header.sector_num == bgd->sector)
                     return SECTOR_EXT2_BLOCK_GROUP_DESCRIPTOR;
 
