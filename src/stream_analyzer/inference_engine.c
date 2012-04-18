@@ -98,6 +98,13 @@ int read_loop(int fd, struct mbr* mbr, void* pub_socket, char* vmname)
 }
 
 
+void print_zmq_version()
+{
+    int major, minor, patch;
+    zmq_version (&major, &minor, &patch);
+    fprintf(stdout, "Current 0MQ version is %d.%d.%d\n", major, minor, patch);
+}
+
 /* main thread of execution */
 int main(int argc, char* args[])
 {
@@ -108,6 +115,7 @@ int main(int argc, char* args[])
     fprintf_blue(stdout, "VM Disk Analysis Engine -- "
                          "By: Wolfgang Richter "
                          "<wolf@cs.cmu.edu>\n");
+    print_zmq_version();
 
     if (argc < 4)
     {

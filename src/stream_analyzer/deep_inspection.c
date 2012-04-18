@@ -217,8 +217,7 @@ int qemu_deep_inspect(struct qemu_bdrv_write* write, struct mbr* mbr,
                                                   strlen(channel_name)),
                                 bson->buffer, bson->size);
                         fprintf_light_cyan(stdout, "Channel: '%s'\n", channel_name);
-                        free(channel_name);
-                        bson_cleanup(bson);
+                        fprintf_light_cyan(stdout, "Msg Len: '%"PRIu64"'", bson->size + strlen(channel_name));
 
                         if (zmq_msg_init_data(&msg, buf, bson->size +
                                                          strlen(channel_name), 
@@ -228,6 +227,9 @@ int qemu_deep_inspect(struct qemu_bdrv_write* write, struct mbr* mbr,
                                                       "zmq message data.\n");
                             return -1;
                         }
+
+                        free(channel_name);
+                        bson_cleanup(bson);
 
                         if (zmq_send(pub_socket, &msg, 0))
                         {
