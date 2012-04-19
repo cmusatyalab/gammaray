@@ -143,6 +143,1113 @@ int qemu_print_sector_type(enum SECTOR_TYPE type)
     return -1;
 }
 
+int ext2_compare_inodes(struct ext2_inode* old_inode,
+                        struct ext2_inode* new_inode, void* pub_socket,
+                        char* vmname, char* path)
+{
+    int i;
+    char* channel_name;
+    zmq_msg_t msg;
+    struct bson_info* bson;
+    struct bson_kv val;
+    uint8_t* buf;
+    uint64_t old, new;
+
+    bson = bson_init();
+
+    if (old_inode->i_mode != new_inode->i_mode)
+    {
+        fprintf_yellow(stdout, "inode mode modified.\n");
+
+        val.type = BSON_STRING;
+        val.size = strlen("inode.i_mode");
+        val.key = "type";
+        val.data = "inode.i_mode";
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "old";
+        old = old_inode->i_mode;
+        val.data = &(old);
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "new";
+        new = new_inode->i_mode;
+        val.data = &(new);
+
+        bson_serialize(bson, &val);
+        bson_finalize(bson);
+        
+        channel_name = construct_channel_name(vmname, path);
+        buf = malloc(bson->size + strlen(channel_name) + 1);
+        memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
+                                bson->buffer, bson->size);
+
+        if (zmq_msg_init_data(&msg, buf, bson->size +
+                              strlen(channel_name) + 1, 
+                              qemu_free, 0))
+        {
+            fprintf_light_red(stderr, "Failure initializing "
+                                      "zmq message data.\n");
+            return -1;
+        }
+
+        free(channel_name);
+        bson_reset(bson);
+
+        if (zmq_send(pub_socket, &msg, 0))
+        {
+            fprintf_light_red(stderr, "Failure sending zmq "
+                                      "message.\n");
+            zmq_send_print_error(errno);
+            return -1;
+        }
+
+        if (zmq_msg_close(&msg))
+        {
+            fprintf_light_red(stderr, "Failure closing zmq "
+                                      "message.\n");
+            return -1;
+        }
+    }
+
+    if (old_inode->i_uid != new_inode->i_uid)
+    {
+        fprintf_yellow(stdout, "owner modified.\n");
+    
+        val.type = BSON_STRING;
+        val.size = strlen("inode.i_uid");
+        val.key = "type";
+        val.data = "inode.i_uid";
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "old";
+        old = old_inode->i_uid;
+        val.data = &(old);
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "new";
+        new = new_inode->i_uid;
+        val.data = &(new);
+
+        bson_serialize(bson, &val);
+        bson_finalize(bson);
+        
+        channel_name = construct_channel_name(vmname, path);
+        buf = malloc(bson->size + strlen(channel_name) + 1);
+        memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
+                                bson->buffer, bson->size);
+
+        if (zmq_msg_init_data(&msg, buf, bson->size +
+                              strlen(channel_name) + 1, 
+                              qemu_free, 0))
+        {
+            fprintf_light_red(stderr, "Failure initializing "
+                                      "zmq message data.\n");
+            return -1;
+        }
+
+        free(channel_name);
+        bson_reset(bson);
+
+        if (zmq_send(pub_socket, &msg, 0))
+        {
+            fprintf_light_red(stderr, "Failure sending zmq "
+                                      "message.\n");
+            zmq_send_print_error(errno);
+            return -1;
+        }
+
+        if (zmq_msg_close(&msg))
+        {
+            fprintf_light_red(stderr, "Failure closing zmq "
+                                      "message.\n");
+            return -1;
+        }
+    }
+
+    if (old_inode->i_size != new_inode->i_size)
+    {
+        fprintf_light_yellow(stdout, "inode size modified, old=%"PRIu32" new=%"PRIu32".\n",
+                                      old_inode->i_size, new_inode->i_size);
+    
+        val.type = BSON_STRING;
+        val.size = strlen("inode.i_size");
+        val.key = "type";
+        val.data = "inode.i_size";
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "old";
+        old = old_inode->i_size;
+        val.data = &(old);
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "new";
+        new = new_inode->i_size;
+        val.data = &(new);
+
+        bson_serialize(bson, &val);
+        bson_finalize(bson);
+        
+        channel_name = construct_channel_name(vmname, path);
+        buf = malloc(bson->size + strlen(channel_name) + 1);
+        memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
+                                bson->buffer, bson->size);
+
+        if (zmq_msg_init_data(&msg, buf, bson->size +
+                              strlen(channel_name) + 1, 
+                              qemu_free, 0))
+        {
+            fprintf_light_red(stderr, "Failure initializing "
+                                      "zmq message data.\n");
+            return -1;
+        }
+
+        free(channel_name);
+        bson_reset(bson);
+
+        if (zmq_send(pub_socket, &msg, 0))
+        {
+            fprintf_light_red(stderr, "Failure sending zmq "
+                                      "message.\n");
+            zmq_send_print_error(errno);
+            return -1;
+        }
+
+        if (zmq_msg_close(&msg))
+        {
+            fprintf_light_red(stderr, "Failure closing zmq "
+                                      "message.\n");
+            return -1;
+        }
+    }
+
+    if (old_inode->i_atime != new_inode->i_atime)
+    {
+        fprintf_yellow(stdout, "inode atime modified.\n");
+    
+        val.type = BSON_STRING;
+        val.size = strlen("inode.i_atime");
+        val.key = "type";
+        val.data = "inode.i_atime";
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "old";
+        old = old_inode->i_atime;
+        val.data = &(old);
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "new";
+        new = new_inode->i_atime;
+        val.data = &(new);
+
+        bson_serialize(bson, &val);
+        bson_finalize(bson);
+        
+        channel_name = construct_channel_name(vmname, path);
+        buf = malloc(bson->size + strlen(channel_name) + 1);
+        memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
+                                bson->buffer, bson->size);
+
+        if (zmq_msg_init_data(&msg, buf, bson->size +
+                              strlen(channel_name) + 1, 
+                              qemu_free, 0))
+        {
+            fprintf_light_red(stderr, "Failure initializing "
+                                      "zmq message data.\n");
+            return -1;
+        }
+
+        free(channel_name);
+        bson_reset(bson);
+
+        if (zmq_send(pub_socket, &msg, 0))
+        {
+            fprintf_light_red(stderr, "Failure sending zmq "
+                                      "message.\n");
+            zmq_send_print_error(errno);
+            return -1;
+        }
+
+        if (zmq_msg_close(&msg))
+        {
+            fprintf_light_red(stderr, "Failure closing zmq "
+                                      "message.\n");
+            return -1;
+        }
+    }
+
+    if (old_inode->i_ctime != new_inode->i_ctime)
+    {
+        fprintf_yellow(stdout, "inode ctime modified.\n");
+    
+        val.type = BSON_STRING;
+        val.size = strlen("inode.i_ctime");
+        val.key = "type";
+        val.data = "inode.i_ctime";
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "old";
+        old = old_inode->i_ctime;
+        val.data = &(old);
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "new";
+        new = new_inode->i_ctime;
+        val.data = &(new);
+
+        bson_serialize(bson, &val);
+        bson_finalize(bson);
+        
+        channel_name = construct_channel_name(vmname, path);
+        buf = malloc(bson->size + strlen(channel_name) + 1);
+        memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
+                                bson->buffer, bson->size);
+
+        if (zmq_msg_init_data(&msg, buf, bson->size +
+                              strlen(channel_name) + 1, 
+                              qemu_free, 0))
+        {
+            fprintf_light_red(stderr, "Failure initializing "
+                                      "zmq message data.\n");
+            return -1;
+        }
+
+        free(channel_name);
+        bson_reset(bson);
+
+        if (zmq_send(pub_socket, &msg, 0))
+        {
+            fprintf_light_red(stderr, "Failure sending zmq "
+                                      "message.\n");
+            zmq_send_print_error(errno);
+            return -1;
+        }
+
+        if (zmq_msg_close(&msg))
+        {
+            fprintf_light_red(stderr, "Failure closing zmq "
+                                      "message.\n");
+            return -1;
+        }
+    }
+
+    if (old_inode->i_mtime != new_inode->i_mtime)
+    {
+        fprintf_yellow(stdout, "inode mtime modified.\n");
+    
+        val.type = BSON_STRING;
+        val.size = strlen("inode.i_mtime");
+        val.key = "type";
+        val.data = "inode.i_mtime";
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "old";
+        old = old_inode->i_mtime;
+        val.data = &(old);
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "new";
+        new = new_inode->i_mtime;
+        val.data = &(new);
+
+        bson_serialize(bson, &val);
+        bson_finalize(bson);
+        
+        channel_name = construct_channel_name(vmname, path);
+        buf = malloc(bson->size + strlen(channel_name) + 1);
+        memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
+                                bson->buffer, bson->size);
+
+        if (zmq_msg_init_data(&msg, buf, bson->size +
+                              strlen(channel_name) + 1, 
+                              qemu_free, 0))
+        {
+            fprintf_light_red(stderr, "Failure initializing "
+                                      "zmq message data.\n");
+            return -1;
+        }
+
+        free(channel_name);
+        bson_reset(bson);
+
+        if (zmq_send(pub_socket, &msg, 0))
+        {
+            fprintf_light_red(stderr, "Failure sending zmq "
+                                      "message.\n");
+            zmq_send_print_error(errno);
+            return -1;
+        }
+
+        if (zmq_msg_close(&msg))
+        {
+            fprintf_light_red(stderr, "Failure closing zmq "
+                                      "message.\n");
+            return -1;
+        }
+    }
+        
+    if (old_inode->i_dtime != new_inode->i_dtime)
+    {
+        fprintf_yellow(stdout, "inode dtime modified.\n");
+
+        val.type = BSON_STRING;
+        val.size = strlen("inode.i_dtime");
+        val.key = "type";
+        val.data = "inode.i_dtime";
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "old";
+        old = old_inode->i_dtime;
+        val.data = &(old);
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "new";
+        new = new_inode->i_dtime;
+        val.data = &(new);
+
+        bson_serialize(bson, &val);
+        bson_finalize(bson);
+        
+        channel_name = construct_channel_name(vmname, path);
+        buf = malloc(bson->size + strlen(channel_name) + 1);
+        memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
+                                bson->buffer, bson->size);
+
+        if (zmq_msg_init_data(&msg, buf, bson->size +
+                              strlen(channel_name) + 1, 
+                              qemu_free, 0))
+        {
+            fprintf_light_red(stderr, "Failure initializing "
+                                      "zmq message data.\n");
+            return -1;
+        }
+
+        free(channel_name);
+        bson_reset(bson);
+
+        if (zmq_send(pub_socket, &msg, 0))
+        {
+            fprintf_light_red(stderr, "Failure sending zmq "
+                                      "message.\n");
+            zmq_send_print_error(errno);
+            return -1;
+        }
+
+        if (zmq_msg_close(&msg))
+        {
+            fprintf_light_red(stderr, "Failure closing zmq "
+                                      "message.\n");
+            return -1;
+        }
+    }
+
+    if (old_inode->i_gid != new_inode->i_gid)
+    {
+        fprintf_yellow(stdout, "inode group modified.\n");
+
+        val.type = BSON_STRING;
+        val.size = strlen("inode.i_gid");
+        val.key = "type";
+        val.data = "inode.i_gid";
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "old";
+        old = old_inode->i_gid;
+        val.data = &(old);
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "new";
+        new = new_inode->i_gid;
+        val.data = &(new);
+
+        bson_serialize(bson, &val);
+        bson_finalize(bson);
+        
+        channel_name = construct_channel_name(vmname, path);
+        buf = malloc(bson->size + strlen(channel_name) + 1);
+        memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
+                                bson->buffer, bson->size);
+
+        if (zmq_msg_init_data(&msg, buf, bson->size +
+                              strlen(channel_name) + 1, 
+                              qemu_free, 0))
+        {
+            fprintf_light_red(stderr, "Failure initializing "
+                                      "zmq message data.\n");
+            return -1;
+        }
+
+        free(channel_name);
+        bson_reset(bson);
+
+        if (zmq_send(pub_socket, &msg, 0))
+        {
+            fprintf_light_red(stderr, "Failure sending zmq "
+                                      "message.\n");
+            zmq_send_print_error(errno);
+            return -1;
+        }
+
+        if (zmq_msg_close(&msg))
+        {
+            fprintf_light_red(stderr, "Failure closing zmq "
+                                      "message.\n");
+            return -1;
+        }
+    }
+
+    if (old_inode->i_links_count != new_inode->i_links_count)
+    {
+        fprintf_yellow(stdout, "inode links count modified.\n");
+
+        val.type = BSON_STRING;
+        val.size = strlen("inode.i_links_count");
+        val.key = "type";
+        val.data = "inode.i_links_count";
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "old";
+        old = old_inode->i_links_count;
+        val.data = &(old);
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "new";
+        new = new_inode->i_links_count;
+        val.data = &(new);
+
+        bson_serialize(bson, &val);
+        bson_finalize(bson);
+        
+        channel_name = construct_channel_name(vmname, path);
+        buf = malloc(bson->size + strlen(channel_name) + 1);
+        memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
+                                bson->buffer, bson->size);
+
+        if (zmq_msg_init_data(&msg, buf, bson->size +
+                              strlen(channel_name) + 1, 
+                              qemu_free, 0))
+        {
+            fprintf_light_red(stderr, "Failure initializing "
+                                      "zmq message data.\n");
+            return -1;
+        }
+
+        free(channel_name);
+        bson_reset(bson);
+
+        if (zmq_send(pub_socket, &msg, 0))
+        {
+            fprintf_light_red(stderr, "Failure sending zmq "
+                                      "message.\n");
+            zmq_send_print_error(errno);
+            return -1;
+        }
+
+        if (zmq_msg_close(&msg))
+        {
+            fprintf_light_red(stderr, "Failure closing zmq "
+                                      "message.\n");
+            return -1;
+        }
+    }
+
+    if (old_inode->i_blocks != new_inode->i_blocks)
+    {
+        fprintf_light_yellow(stdout, "inode block count modified.\n");
+    
+        val.type = BSON_STRING;
+        val.size = strlen("inode.i_blocks");
+        val.key = "type";
+        val.data = "inode.i_blocks";
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "old";
+        old = old_inode->i_blocks;
+        val.data = &(old);
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "new";
+        new = new_inode->i_blocks;
+        val.data = &(new);
+
+        bson_serialize(bson, &val);
+        bson_finalize(bson);
+        
+        channel_name = construct_channel_name(vmname, path);
+        buf = malloc(bson->size + strlen(channel_name) + 1);
+        memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
+                                bson->buffer, bson->size);
+
+        if (zmq_msg_init_data(&msg, buf, bson->size +
+                              strlen(channel_name) + 1, 
+                              qemu_free, 0))
+        {
+            fprintf_light_red(stderr, "Failure initializing "
+                                      "zmq message data.\n");
+            return -1;
+        }
+
+        free(channel_name);
+        bson_reset(bson);
+
+        if (zmq_send(pub_socket, &msg, 0))
+        {
+            fprintf_light_red(stderr, "Failure sending zmq "
+                                      "message.\n");
+            zmq_send_print_error(errno);
+            return -1;
+        }
+
+        if (zmq_msg_close(&msg))
+        {
+            fprintf_light_red(stderr, "Failure closing zmq "
+                                      "message.\n");
+            return -1;
+        }
+    }
+
+    if (old_inode->i_flags != new_inode->i_flags)
+    {
+        fprintf_yellow(stdout, "inode flags modified.\n");
+
+        val.type = BSON_STRING;
+        val.size = strlen("inode.i_flags");
+        val.key = "type";
+        val.data = "inode.i_flags";
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "old";
+        old = old_inode->i_flags;
+        val.data = &(old);
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "new";
+        new = new_inode->i_flags;
+        val.data = &(new);
+
+        bson_serialize(bson, &val);
+        bson_finalize(bson);
+        
+        channel_name = construct_channel_name(vmname, path);
+        buf = malloc(bson->size + strlen(channel_name) + 1);
+        memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
+                                bson->buffer, bson->size);
+
+        if (zmq_msg_init_data(&msg, buf, bson->size +
+                              strlen(channel_name) + 1, 
+                              qemu_free, 0))
+        {
+            fprintf_light_red(stderr, "Failure initializing "
+                                      "zmq message data.\n");
+            return -1;
+        }
+
+        free(channel_name);
+        bson_reset(bson);
+
+        if (zmq_send(pub_socket, &msg, 0))
+        {
+            fprintf_light_red(stderr, "Failure sending zmq "
+                                      "message.\n");
+            zmq_send_print_error(errno);
+            return -1;
+        }
+
+        if (zmq_msg_close(&msg))
+        {
+            fprintf_light_red(stderr, "Failure closing zmq "
+                                      "message.\n");
+            return -1;
+        }
+    }
+
+    if (old_inode->i_osd1 != new_inode->i_osd1)
+    {
+        fprintf_yellow(stdout, "inode osd1 modified.\n");
+    
+        val.type = BSON_STRING;
+        val.size = strlen("inode.i_osd1");
+        val.key = "type";
+        val.data = "inode.i_osd1";
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "old";
+        old = old_inode->i_osd1;
+        val.data = &(old);
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "new";
+        new = new_inode->i_osd1;
+        val.data = &(new);
+
+        bson_serialize(bson, &val);
+        bson_finalize(bson);
+        
+        channel_name = construct_channel_name(vmname, path);
+        buf = malloc(bson->size + strlen(channel_name) + 1);
+        memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
+                                bson->buffer, bson->size);
+
+        if (zmq_msg_init_data(&msg, buf, bson->size +
+                              strlen(channel_name) + 1, 
+                              qemu_free, 0))
+        {
+            fprintf_light_red(stderr, "Failure initializing "
+                                      "zmq message data.\n");
+            return -1;
+        }
+
+        free(channel_name);
+        bson_reset(bson);
+
+        if (zmq_send(pub_socket, &msg, 0))
+        {
+            fprintf_light_red(stderr, "Failure sending zmq "
+                                      "message.\n");
+            zmq_send_print_error(errno);
+            return -1;
+        }
+
+        if (zmq_msg_close(&msg))
+        {
+            fprintf_light_red(stderr, "Failure closing zmq "
+                                      "message.\n");
+            return -1;
+        }
+    }
+
+    /* loop 15 */
+    for (i = 0; i < 15; i++)
+    {
+        if (old_inode->i_block[i] == 0 && new_inode->i_block[i] != 0)
+            fprintf_light_yellow(stdout, "inode block position %d [%"PRIu32"] added.\n", i, new_inode->i_block[i]);
+        else if (old_inode->i_block[i] != 0 && new_inode->i_block[i] == 0)
+            fprintf_light_yellow(stdout, "inode block position %d [%"PRIu32"->%"PRIu32"] removed.\n", i, old_inode->i_block[i], new_inode->i_block[i]);
+        else if (old_inode->i_block[i] != new_inode->i_block[i])
+            fprintf_light_yellow(stdout, "inode block position %d [%"PRIu32"->%"PRIu32"] overwritten.\n", i, old_inode->i_block[i], new_inode->i_block[i]);
+
+
+        if (old_inode->i_block[i] != new_inode->i_block[i])
+        {
+            val.type = BSON_STRING;
+            val.size = strlen("inode.i_block");
+            val.key = "type";
+            val.data = "inode.i_block";
+
+            bson_serialize(bson, &val);
+
+            val.type = BSON_INT64;
+            val.key = "index";
+            val.data = &(i);
+
+            bson_serialize(bson, &val);
+
+            val.type = BSON_INT64;
+            val.key = "old";
+            old = old_inode->i_block[i];
+            val.data = &(old);
+
+            bson_serialize(bson, &val);
+
+            val.type = BSON_INT64;
+            val.key = "new";
+            new = new_inode->i_block[i];
+            val.data = &(new);
+
+            bson_serialize(bson, &val);
+            bson_finalize(bson);
+            
+            channel_name = construct_channel_name(vmname, path);
+            buf = malloc(bson->size + strlen(channel_name) + 1);
+            memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
+                                    bson->buffer, bson->size);
+
+            if (zmq_msg_init_data(&msg, buf, bson->size +
+                                  strlen(channel_name) + 1, 
+                                  qemu_free, 0))
+            {
+                fprintf_light_red(stderr, "Failure initializing "
+                                          "zmq message data.\n");
+                return -1;
+            }
+
+            free(channel_name);
+            bson_reset(bson);
+
+            if (zmq_send(pub_socket, &msg, 0))
+            {
+                fprintf_light_red(stderr, "Failure sending zmq "
+                                          "message.\n");
+                zmq_send_print_error(errno);
+                return -1;
+            }
+
+            if (zmq_msg_close(&msg))
+            {
+                fprintf_light_red(stderr, "Failure closing zmq "
+                                          "message.\n");
+                return -1;
+            }
+        }
+    }
+
+    if (old_inode->i_generation != new_inode->i_generation)
+    {
+        fprintf_yellow(stdout, "inode generation modified.\n");
+
+        val.type = BSON_STRING;
+        val.size = strlen("inode.i_generation");
+        val.key = "type";
+        val.data = "inode.i_generation";
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "old";
+        old = old_inode->i_generation;
+        val.data = &(old);
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "new";
+        new = new_inode->i_generation;
+        val.data = &(new);
+
+        bson_serialize(bson, &val);
+        bson_finalize(bson);
+        
+        channel_name = construct_channel_name(vmname, path);
+        buf = malloc(bson->size + strlen(channel_name) + 1);
+        memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
+                                bson->buffer, bson->size);
+
+        if (zmq_msg_init_data(&msg, buf, bson->size +
+                              strlen(channel_name) + 1, 
+                              qemu_free, 0))
+        {
+            fprintf_light_red(stderr, "Failure initializing "
+                                      "zmq message data.\n");
+            return -1;
+        }
+
+        free(channel_name);
+        bson_reset(bson);
+
+        if (zmq_send(pub_socket, &msg, 0))
+        {
+            fprintf_light_red(stderr, "Failure sending zmq "
+                                      "message.\n");
+            zmq_send_print_error(errno);
+            return -1;
+        }
+
+        if (zmq_msg_close(&msg))
+        {
+            fprintf_light_red(stderr, "Failure closing zmq "
+                                      "message.\n");
+            return -1;
+        }
+    }
+
+    if (old_inode->i_file_acl != new_inode->i_file_acl)
+    {
+        fprintf_yellow(stdout, "inode file_acl modified.\n");
+
+        val.type = BSON_STRING;
+        val.size = strlen("inode.i_file_acl");
+        val.key = "type";
+        val.data = "inode.i_file_acl";
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "old";
+        old = old_inode->i_file_acl;
+        val.data = &(old);
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "new";
+        new = new_inode->i_file_acl;
+        val.data = &(new);
+
+        bson_serialize(bson, &val);
+        bson_finalize(bson);
+        
+        channel_name = construct_channel_name(vmname, path);
+        buf = malloc(bson->size + strlen(channel_name) + 1);
+        memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
+                                bson->buffer, bson->size);
+
+        if (zmq_msg_init_data(&msg, buf, bson->size +
+                              strlen(channel_name) + 1, 
+                              qemu_free, 0))
+        {
+            fprintf_light_red(stderr, "Failure initializing "
+                                      "zmq message data.\n");
+            return -1;
+        }
+
+        free(channel_name);
+        bson_reset(bson);
+
+        if (zmq_send(pub_socket, &msg, 0))
+        {
+            fprintf_light_red(stderr, "Failure sending zmq "
+                                      "message.\n");
+            zmq_send_print_error(errno);
+            return -1;
+        }
+
+        if (zmq_msg_close(&msg))
+        {
+            fprintf_light_red(stderr, "Failure closing zmq "
+                                      "message.\n");
+            return -1;
+        }
+    }
+
+    if (old_inode->i_dir_acl != new_inode->i_dir_acl)
+    {
+        fprintf_yellow(stdout, "inode dir_acl modified.\n");
+
+        val.type = BSON_STRING;
+        val.size = strlen("inode.i_dir_acl");
+        val.key = "type";
+        val.data = "inode.i_dir_acl";
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "old";
+        old = old_inode->i_dir_acl;
+        val.data = &(old);
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "new";
+        new = new_inode->i_dir_acl;
+        val.data = &(new);
+
+        bson_serialize(bson, &val);
+        bson_finalize(bson);
+        
+        channel_name = construct_channel_name(vmname, path);
+        buf = malloc(bson->size + strlen(channel_name) + 1);
+        memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
+                                bson->buffer, bson->size);
+
+        if (zmq_msg_init_data(&msg, buf, bson->size +
+                              strlen(channel_name) + 1, 
+                              qemu_free, 0))
+        {
+            fprintf_light_red(stderr, "Failure initializing "
+                                      "zmq message data.\n");
+            return -1;
+        }
+
+        free(channel_name);
+        bson_reset(bson);
+
+        if (zmq_send(pub_socket, &msg, 0))
+        {
+            fprintf_light_red(stderr, "Failure sending zmq "
+                                      "message.\n");
+            zmq_send_print_error(errno);
+            return -1;
+        }
+
+        if (zmq_msg_close(&msg))
+        {
+            fprintf_light_red(stderr, "Failure closing zmq "
+                                      "message.\n");
+            return -1;
+        }
+    }
+
+    if (old_inode->i_faddr != new_inode->i_faddr)
+    {
+        fprintf_yellow(stdout, "inode faddr modified.\n");
+
+        val.type = BSON_STRING;
+        val.size = strlen("inode.i_faddr");
+        val.key = "type";
+        val.data = "inode.i_faddr";
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "old";
+        old = old_inode->i_faddr;
+        val.data = &(old);
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "new";
+        new = new_inode->i_faddr;
+        val.data = &(new);
+
+        bson_serialize(bson, &val);
+        bson_finalize(bson);
+        
+        channel_name = construct_channel_name(vmname, path);
+        buf = malloc(bson->size + strlen(channel_name) + 1);
+        memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
+                                bson->buffer, bson->size);
+
+        if (zmq_msg_init_data(&msg, buf, bson->size +
+                              strlen(channel_name) + 1, 
+                              qemu_free, 0))
+        {
+            fprintf_light_red(stderr, "Failure initializing "
+                                      "zmq message data.\n");
+            return -1;
+        }
+
+        free(channel_name);
+        bson_reset(bson);
+
+        if (zmq_send(pub_socket, &msg, 0))
+        {
+            fprintf_light_red(stderr, "Failure sending zmq "
+                                      "message.\n");
+            zmq_send_print_error(errno);
+            return -1;
+        }
+
+        if (zmq_msg_close(&msg))
+        {
+            fprintf_light_red(stderr, "Failure closing zmq "
+                                      "message.\n");
+            return -1;
+        }
+    }
+
+    for (i = 0; i < 12; i++)
+    {
+        if (old_inode->i_osd2[i] != new_inode->i_osd2[i])
+        {
+            fprintf_yellow(stdout, "inode osd2 byte %d modified.\n", i);
+
+            val.type = BSON_STRING;
+            val.size = strlen("inode.i_osd2");
+            val.key = "type";
+            val.data = "inode.i_osd2";
+
+            bson_serialize(bson, &val);
+
+            val.type = BSON_INT64;
+            val.key = "index";
+            val.data = &(i);
+
+            bson_serialize(bson, &val);
+
+            val.type = BSON_INT64;
+            val.key = "old";
+            old = old_inode->i_osd2[i];
+            val.data = &(old);
+
+            bson_serialize(bson, &val);
+
+            val.type = BSON_INT64;
+            val.key = "new";
+            new = new_inode->i_osd2[i];
+            val.data = &(new);
+
+            bson_serialize(bson, &val);
+            bson_finalize(bson);
+            
+            channel_name = construct_channel_name(vmname, path);
+            buf = malloc(bson->size + strlen(channel_name) + 1);
+            memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
+                                    bson->buffer, bson->size);
+
+            if (zmq_msg_init_data(&msg, buf, bson->size +
+                                  strlen(channel_name) + 1, 
+                                  qemu_free, 0))
+            {
+                fprintf_light_red(stderr, "Failure initializing "
+                                          "zmq message data.\n");
+                return -1;
+            }
+
+            free(channel_name);
+            bson_reset(bson);
+
+            if (zmq_send(pub_socket, &msg, 0))
+            {
+                fprintf_light_red(stderr, "Failure sending zmq "
+                                          "message.\n");
+                zmq_send_print_error(errno);
+                return -1;
+            }
+
+            if (zmq_msg_close(&msg))
+            {
+                fprintf_light_red(stderr, "Failure closing zmq "
+                                          "message.\n");
+                return -1;
+            }
+        }
+    }
+
+    bson_cleanup(bson);
+
+    return EXIT_SUCCESS;
+}
+
 int qemu_deep_inspect(struct qemu_bdrv_write* write, struct mbr* mbr,
                       void* pub_socket, char* vmname)
 {
@@ -153,6 +1260,7 @@ int qemu_deep_inspect(struct qemu_bdrv_write* write, struct mbr* mbr,
     struct ext2_fs* fs;
     struct ext2_file* file;
     zmq_msg_t msg;
+    struct ext2_inode new_inode;
     struct bson_info* bson;
     struct bson_kv val;
 
@@ -167,6 +1275,20 @@ int qemu_deep_inspect(struct qemu_bdrv_write* write, struct mbr* mbr,
             for (j = 0; j < linkedlist_size(fs->ext2_files); j++)
             {
                 file = linkedlist_get(fs->ext2_files, j);
+
+                if (file->inode_sector == write->header.sector_num)
+                {
+                    fprintf_light_red(stdout, "Write to sector %"PRIu64
+                                              " containing inode for file "
+                                              "%s\n", file->inode_sector,
+                                              file->path);
+                    new_inode = *((struct ext2_inode*)
+                                  &(write->data[file->inode_offset]));
+                    /* compare inode, emit diff */
+                    ext2_compare_inodes(&(file->inode), &new_inode, pub_socket,
+                                        vmname, file->path);
+                }
+
                 if (bst_find(file->sectors, write->header.sector_num))
                 {
                     fprintf_light_red(stdout, "Write to sector %"PRId64
@@ -212,15 +1334,15 @@ int qemu_deep_inspect(struct qemu_bdrv_write* write, struct mbr* mbr,
                         channel_name = construct_channel_name(vmname,
                                                               file->path);
 
-                        buf = malloc(bson->size + strlen(channel_name));
+                        buf = malloc(bson->size + strlen(channel_name) + 1);
                         memcpy((uint8_t*) mempcpy(buf, channel_name,
-                                                  strlen(channel_name)),
+                                                  strlen(channel_name) + 1),
                                 bson->buffer, bson->size);
                         fprintf_light_cyan(stdout, "Channel: '%s'\n", channel_name);
-                        fprintf_light_cyan(stdout, "Msg Len: '%"PRIu64"'", bson->size + strlen(channel_name));
+                        fprintf_light_cyan(stdout, "Msg Len: '%"PRIu64"'", bson->size + strlen(channel_name) + 1);
 
                         if (zmq_msg_init_data(&msg, buf, bson->size +
-                                                         strlen(channel_name), 
+                                                         strlen(channel_name) + 1, 
                                               qemu_free, 0))
                         {
                             fprintf_light_red(stderr, "Failure initializing "
