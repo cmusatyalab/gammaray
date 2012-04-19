@@ -68,6 +68,8 @@ struct partition
 
 struct ext2_file
 {
+    uint64_t inode_sector;
+    uint64_t inode_offset;
     char* path;
     bool is_dir;
     struct ext2_inode inode;

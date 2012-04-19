@@ -335,6 +335,8 @@ int qemu_print_write(struct qemu_bdrv_write* write)
 void print_ext2_file(struct ext2_file* file)
 {
     fprintf_light_cyan(stdout, "-- ext2 File --\n");
+    fprintf_yellow(stdout, "file->inode_sector == %"PRIu64"\n", file->inode_sector);
+    fprintf_yellow(stdout, "file->inode_offset == %"PRIu64"\n", file->inode_offset);
     fprintf_light_yellow(stdout, "file->path == %s\n", file->path);
     fprintf_yellow(stdout, "file->is_dir == %s\n", file->is_dir ? "true" : "false");
     fprintf_yellow(stdout, "file->inode == %p\n", &(file->inode));
@@ -649,6 +651,22 @@ int __deserialize_ext2_file(FILE* index, struct bson_info* bson,
 
     if (bson_readf(bson, index) != 1)
         return EXIT_FAILURE;
+
+    if (bson_deserialize(bson, &value1, &value2) != 1)
+        return EXIT_FAILURE;
+    
+    if (strcmp(value1.key, "inode_sector") != 0)
+        return EXIT_FAILURE;
+
+    file.inode_sector = *((uint64_t*) value1.data);
+
+    if (bson_deserialize(bson, &value1, &value2) != 1)
+        return EXIT_FAILURE;
+    
+    if (strcmp(value1.key, "inode_offset") != 0)
+        return EXIT_FAILURE;
+
+    file.inode_offset = *((uint64_t*) value1.data);
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
