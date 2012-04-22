@@ -4,6 +4,8 @@ import sys
 import bson
 import zmq
 
+PORT=13738
+
 if __name__ == '__main__':
 
     if len(sys.argv) < 3:
@@ -19,15 +21,28 @@ if __name__ == '__main__':
     context= zmq.Context(1)
     socket = context.socket(zmq.SUB)
 
-    socket.connect('tcp://%s:13738' % server)
+    socket.connect('tcp://%s:%d' % (server, PORT))
     socket.setsockopt(zmq.SUBSCRIBE, filter_string)
+
     while (1):
         msg = socket.recv()
+        channel = msg[:msg.find('\x00')]
+
+        print 'New Message Received for: %s' % channel
+
+        if channel != filter_string:
+            continue
+
         msg = msg[msg.find('\x00') + 1:]
         deserialized = bson.loads(msg)
+
         for k in deserialized:
             if k != 'data':
-                print '%s : ' % (k),
-                print deserialized[k]
+                print '\t%10s : ' % (k),
+                print '\t\'%s\'' % str(deserialized[k])
+            else:
+                print 'Received binary data.\n'
+
+        print ''
 
     context.term()
