@@ -147,7 +147,7 @@ int ext2_compare_inodes(struct ext2_inode* old_inode,
                         struct ext2_inode* new_inode, void* pub_socket,
                         char* vmname, char* path)
 {
-    int i;
+    uint64_t i;
     char* channel_name;
     zmq_msg_t msg;
     struct bson_info* bson;
@@ -1244,6 +1244,8 @@ int ext2_compare_inodes(struct ext2_inode* old_inode,
             }
         }
     }
+    
+    *old_inode = *new_inode;
 
     bson_cleanup(bson);
 
@@ -1254,6 +1256,7 @@ int qemu_deep_inspect(struct qemu_bdrv_write* write, struct mbr* mbr,
                       void* pub_socket, char* vmname)
 {
     uint64_t i, j, start = 0, end = 0;
+    uint64_t inode_offset;
     uint8_t* buf;
     char* channel_name;
     struct partition* partition;
@@ -1276,14 +1279,22 @@ int qemu_deep_inspect(struct qemu_bdrv_write* write, struct mbr* mbr,
             {
                 file = linkedlist_get(fs->ext2_files, j);
 
-                if (file->inode_sector == write->header.sector_num)
+                if (file->inode_sector >= write->header.sector_num &&
+                    file->inode_sector <= write->header.sector_num +
+                                          write->header.nb_sectors - 1)
                 {
                     fprintf_light_red(stdout, "Write to sector %"PRIu64
                                               " containing inode for file "
                                               "%s\n", file->inode_sector,
                                               file->path);
+
+                    inode_offset = (file->inode_sector -
+                                    write->header.sector_num) * 512;
+                    inode_offset += file->inode_offset;
+
                     new_inode = *((struct ext2_inode*)
-                                  &(write->data[file->inode_offset]));
+                                  &(write->data[inode_offset]));
+
                     /* compare inode, emit diff */
                     ext2_compare_inodes(&(file->inode), &new_inode, pub_socket,
                                         vmname, file->path);
@@ -1338,8 +1349,6 @@ int qemu_deep_inspect(struct qemu_bdrv_write* write, struct mbr* mbr,
                         memcpy((uint8_t*) mempcpy(buf, channel_name,
                                                   strlen(channel_name) + 1),
                                 bson->buffer, bson->size);
-                        fprintf_light_cyan(stdout, "Channel: '%s'\n", channel_name);
-                        fprintf_light_cyan(stdout, "Msg Len: '%"PRIu64"'", bson->size + strlen(channel_name) + 1);
 
                         if (zmq_msg_init_data(&msg, buf, bson->size +
                                                          strlen(channel_name) + 1, 
