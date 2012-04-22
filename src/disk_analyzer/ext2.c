@@ -2286,7 +2286,6 @@ int ext2_serialize_tree(FILE* disk, int64_t partition_offset,
     
     if (root_inode.i_mode & 0x8000) /* file, no dir entries more */
     {
-        prefix[strlen(prefix) - 1] = '\0';
         value.type = BSON_STRING;
         value.size = strlen(prefix);
         value.key = "path";
@@ -2379,6 +2378,7 @@ int ext2_serialize_tree(FILE* disk, int64_t partition_offset,
         while (position < block_size)
         {
             strcpy(path, prefix);
+            strcat(path, "/");
 
             if (ext2_read_dir_entry(&buf[position], &dir))
             {
@@ -2415,7 +2415,7 @@ int ext2_serialize_tree(FILE* disk, int64_t partition_offset,
                     fprintf_red(stderr, "%s\n", path);
                 }
                 ext2_serialize_tree(disk, partition_offset, superblock,
-                                    child_inode, strcat(path, "/"), serializef,
+                                    child_inode, path, serializef,
                                     bson); /* recursive call */
             }
 
@@ -2432,7 +2432,7 @@ int ext2_serialize_fs_tree(FILE* disk, int64_t partition_offset,
 {
     struct ext2_inode root;
     struct bson_info* bson;
-    char* buf = malloc(strlen(mount) + 2);
+    char* buf = malloc(strlen(mount) + 1);
 
     if (buf == NULL)
     {
@@ -2441,7 +2441,6 @@ int ext2_serialize_fs_tree(FILE* disk, int64_t partition_offset,
     }
 
     memcpy(buf, mount, strlen(mount));
-    buf[strlen(mount)] = '/';
     buf[strlen(mount) + 1] = '\0';
 
     bson = bson_init();
