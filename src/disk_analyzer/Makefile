@@ -1,5 +1,5 @@
 default:
-	@clang disk_analyzer.c ../util/color.c ext2.c mbr.c \
+	@clang disk_analyzer.c ../util/color.c ext2.c ntfs.c mbr.c \
 		   ../bson/bson-encoder.c \
 		   -o disk_analyzer \
 		   -Wall \
@@ -24,9 +24,16 @@ default:
 		   -I../util \
 		   -I../bson
 
+test_ntfs: default
+	@valgrind --track-origins=yes ./disk_analyzer \
+		/home/wolf/VM/win7enterprise.raw \
+		/tmp/win7enterprise.bson
+
+	@../bson/bson_printer /tmp/win7enterprise.bson | less -R
+
 test: default
 	@valgrind --track-origins=yes ./disk_analyzer \
-		/home/wolf/Dropbox/Projects/xray/sample/tinycore.raw \
+		/home/wolf/ropbox/Projects/xray/sample/tinycore.raw \
 		/tmp/tinycore.bson
 
 	@../bson/bson_printer /tmp/tinycore.bson | less -R

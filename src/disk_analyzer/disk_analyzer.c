@@ -17,6 +17,7 @@
 
 #include "color.h"
 #include "ext2.h"
+#include "ntfs.h"
 #include "mbr.h"
 
 /* main thread of execution */
@@ -25,6 +26,7 @@ int main(int argc, char* args[])
     FILE* disk, *serializef;
     struct mbr mbr;
     struct ext2_superblock ext2_superblock;
+    struct ntfs_superblock ntfs_superblock;
     struct partition_table_entry pte;
     int64_t partition_offset;
     int i, active_count = 0;
@@ -69,15 +71,17 @@ int main(int argc, char* args[])
         return EXIT_FAILURE;
     }
 
+    print_mbr(mbr);
 
     memset(buf, 0, sizeof(buf));
 
     /* active partitions count */
     for (i = 0; i < 4; i++)
     {
-        if ((partition_offset = mbr_partition_offset(mbr, i)) >= 0)
+        if ((partition_offset = mbr_partition_offset(mbr, i)) > 0)
         {
-            if (ext2_probe(disk, partition_offset, &ext2_superblock))
+            if (ext2_probe(disk, partition_offset, &ext2_superblock) &&
+                ntfs_probe(disk, partition_offset, &ntfs_superblock))
             {
                 continue;
             }
@@ -96,12 +100,11 @@ int main(int argc, char* args[])
 
     for (i = 0; i < 4; i++)
     {
-        if ((partition_offset = mbr_partition_offset(mbr, i)) >= 0)
+        if ((partition_offset = mbr_partition_offset(mbr, i)) > 0)
         {
             if (ext2_probe(disk, partition_offset, &ext2_superblock))
             {
                 fprintf_light_red(stderr, "ext2 probe failed.\n");
-                continue;
             }
             else
             {
@@ -142,6 +145,18 @@ int main(int argc, char* args[])
                                        &ext2_superblock,
                                        ext2_last_mount_point(&ext2_superblock),
                                        serializef);
+            }
+
+            if (ntfs_probe(disk, partition_offset, &ntfs_superblock))
+            {
+                fprintf_light_red(stderr, "NTFS probe failed.\n");
+            }
+            else
+            {
+                fprintf(stdout, "\n");
+                fprintf_light_green(stdout, "--- Analyzing NTFS Partition at "
+                                            "Offset 0x%.16"PRIx64" ---\n",
+                                            partition_offset);
             }
         }
     }

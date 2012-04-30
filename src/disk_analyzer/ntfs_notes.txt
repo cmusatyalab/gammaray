@@ -1,0 +1,13 @@
+Documentation:
+    http://dubeyko.com/development/FileSystems/NTFS/ntfsdoc.pdf
+
+I don't know how to bootstrap a partition yet.
+
+Supposedly right after the boot sector (512 bytes in) there is a Master File
+Table which contain metadata for all files in NTFS.  Even metadata is stored as
+files (cool, possibly simpler reading/writing).  
+
+Issues: the attributes used in the MFT are defined in an attribute file.
+
+I am currently unsure of the correct method of finding and reading the
+attribute file in the face of variable length attributes.
