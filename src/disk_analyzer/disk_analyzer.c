@@ -6,8 +6,6 @@
  *****************************************************************************/
 
 #define _FILE_OFFSET_BITS 64
-#define UINT_16(s) (uint16_t) s
-#define UINT_32(i) (uint32_t) i
 
 #include <inttypes.h>
 #include <stdint.h>
@@ -26,7 +24,7 @@ int main(int argc, char* args[])
     FILE* disk, *serializef;
     struct mbr mbr;
     struct ext2_superblock ext2_superblock;
-    struct ntfs_superblock ntfs_superblock;
+    struct ntfs_boot_file ntfs_bootf;
     struct partition_table_entry pte;
     int64_t partition_offset;
     int i, active_count = 0;
@@ -81,7 +79,7 @@ int main(int argc, char* args[])
         if ((partition_offset = mbr_partition_offset(mbr, i)) > 0)
         {
             if (ext2_probe(disk, partition_offset, &ext2_superblock) &&
-                ntfs_probe(disk, partition_offset, &ntfs_superblock))
+                ntfs_probe(disk, partition_offset, &ntfs_bootf))
             {
                 continue;
             }
@@ -147,7 +145,7 @@ int main(int argc, char* args[])
                                        serializef);
             }
 
-            if (ntfs_probe(disk, partition_offset, &ntfs_superblock))
+            if (ntfs_probe(disk, partition_offset, &ntfs_bootf))
             {
                 fprintf_light_red(stderr, "NTFS probe failed.\n");
             }
@@ -157,6 +155,7 @@ int main(int argc, char* args[])
                 fprintf_light_green(stdout, "--- Analyzing NTFS Partition at "
                                             "Offset 0x%.16"PRIx64" ---\n",
                                             partition_offset);
+                ntfs_walk_mft(&ntfs_bootf, partition_offset);
             }
         }
     }
