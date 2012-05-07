@@ -86,5 +86,5 @@ int ntfs_probe(FILE* disk, int64_t partition_offset,
 int ntfs_print_file_record(struct ntfs_file_record * record);
 uint64_t ntfs_lcn_to_offset(struct ntfs_boot_file* bootf,
                             int64_t partition_offset, uint64_t lcn);
-int ntfs_walk_mft(struct ntfs_boot_file* bootf, int64_t partition_offset);
+int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf, int64_t partition_offset);
 #endif

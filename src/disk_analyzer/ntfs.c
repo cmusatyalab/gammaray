@@ -31,7 +31,8 @@ int ntfs_print_file_record(struct ntfs_file_record* rec)
                                                                   magic[1],
                                                                   magic[2],
                                                                   magic[3]);
-    fprintf_yellow(stdout, "flags: %"PRIx16"\n", rec->flags);
+    fprintf_yellow(stdout, "file_record[0].flags: %"PRIx16"\n", rec->flags);
+    fprintf_light_yellow(stdout, "file_record[0].rec_num: %"PRIu32"\n", rec->rec_num);
     return EXIT_SUCCESS;
 }
 
@@ -93,18 +94,46 @@ int ntfs_probe(FILE* disk, int64_t partition_offset,
     return EXIT_SUCCESS;
 }
 
-int ntfs_read_file_record(struct ntfs_boot_file* bootf, int64_t partition_offset,
+int ntfs_read_file_record(FILE* disk, struct ntfs_boot_file* bootf, int64_t partition_offset,
                           struct ntfs_file_record* rec, uint64_t record_num)
 {
+    if (record_num > 0)
+        return -1; /* don't support arbitrary records yet */
+
+    if (fseeko(disk, ntfs_lcn_to_offset(bootf, partition_offset, bootf->lcn_mft), SEEK_SET))
+    {
+        fprintf_light_red(stderr, "Error seeking to partition offset and $MFT "
+                                  "position while NTFS probing.\n");
+        return -1;
+    }
+
+    if (fread(rec, 1, sizeof(*rec), disk) != sizeof(*rec))
+    {
+        fprintf_light_red(stderr, "Error reading FILE Record.\n");
+        return -1;
+    }
+
+    ntfs_print_file_record(rec);
+
     return 1;
 }
 
-int ntfs_walk_mft(struct ntfs_boot_file* bootf, int64_t partition_offset)
+int ntfs_print_file_name(FILE* disk, struct ntfs_boot_file* bootf, int64_t partition_offset,
+                         struct ntfs_file_record* rec)
+{
+    uint64_t offset = ntfs_lcn_to_offset(bootf, partition_offset, bootf->lcn_mft);
+    offset += rec->allocated_size;
+
+    return EXIT_SUCCESS;
+}
+
+int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf, int64_t partition_offset)
 {
     struct ntfs_file_record rec;
     uint64_t num = 0;
-    while (ntfs_read_file_record(bootf, partition_offset, &rec, num) > 0)
+    while (ntfs_read_file_record(disk, bootf, partition_offset, &rec, num) > 0)
     {
+        ntfs_print_file_name(disk, bootf, partition_offset, &rec);
         num++;
     }
     return EXIT_SUCCESS;

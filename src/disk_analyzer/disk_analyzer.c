@@ -155,7 +155,7 @@ int main(int argc, char* args[])
                 fprintf_light_green(stdout, "--- Analyzing NTFS Partition at "
                                             "Offset 0x%.16"PRIx64" ---\n",
                                             partition_offset);
-                ntfs_walk_mft(&ntfs_bootf, partition_offset);
+                ntfs_walk_mft(disk, &ntfs_bootf, partition_offset);
             }
         }
     }
