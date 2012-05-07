@@ -24,26 +24,17 @@ default:
 		   -I../util \
 		   -I../bson
 
-test_ntfs: default
+test: default
 	@valgrind --track-origins=yes ./disk_analyzer \
 		/home/wolf/VM/win7enterprise.raw \
 		/tmp/win7enterprise.bson
 
-	@../bson/bson_printer /tmp/win7enterprise.bson | less -R
-
-test: default
+test_tinycore: default
 	@valgrind --track-origins=yes ./disk_analyzer \
 		/home/wolf/ropbox/Projects/xray/sample/tinycore.raw \
 		/tmp/tinycore.bson
 
 	@../bson/bson_printer /tmp/tinycore.bson | less -R
-
-bigtest: default
-	@./disk_analyzer /home/wolf/sample_virtual_disks/tinycore_big.img
-
-demo: default
-	./disk_analyzer /home/wolf/Dropbox/Projects/xray/sample/tinycore.raw | \
-	less -ru
 
 clean:
 	@rm disk_analyzer *.gch
