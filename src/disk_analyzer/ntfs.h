@@ -4,12 +4,35 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#define SECTOR_SIZE 512
+#define NTFS_MFT_OFFSET 8192
+
 struct ntfs_superblock
 {
     uint64_t test;
 } __attribute__((packed));
 
-struct standard_attribute_header
+struct ntfs_boot_file
+{
+    uint8_t jump[3];
+    int8_t sys_id[8];
+    uint16_t bytes_per_sector;
+    uint8_t sectors_per_cluster;    
+    uint8_t unused[7];
+    uint8_t media;
+    uint16_t unused2;
+    uint16_t sectors_per_track;
+    uint16_t number_of_heads;
+    uint8_t unused3[8];
+    uint32_t signature;
+    uint64_t sectors_in_volume;
+    uint64_t lcn_mft;
+    uint64_t lcn_mftmirr;
+    uint32_t clusters_per_mft;
+    uint32_t volume_serial;
+} __attribute__((packed));
+
+struct ntfs_standard_attribute_header
 {
     uint32_t attribute_type;
     uint32_t length;
@@ -24,7 +47,7 @@ struct standard_attribute_header
     uint8_t padding;
 } __attribute__((packed));
 
-struct standard_information
+struct ntfs_standard_information
 {
     uint64_t c_time;
     uint64_t a_time;
@@ -40,7 +63,7 @@ struct standard_information
     uint64_t update_squence_num;
 } __attribute__((packed));
 
-struct file_record
+struct ntfs_file_record
 {
     uint32_t magic; /* ASCII FILE or BAAD */
     uint16_t offset_update_seq;
@@ -50,9 +73,18 @@ struct file_record
     uint16_t hard_link_count;
     uint16_t offset_first_attribute;
     uint16_t flags;
+    uint32_t real_size;
+    uint32_t allocated_size;
+    uint64_t file_ref_base;
+    uint16_t next_attr_id;
+    uint16_t align;
+    uint32_t rec_num;
 } __attribute__((packed));
 
 int ntfs_probe(FILE* disk, int64_t partition_offset,
-               struct ntfs_superblock* superblock);
-
+               struct ntfs_boot_file* bootf);
+int ntfs_print_file_record(struct ntfs_file_record * record);
+uint64_t ntfs_lcn_to_offset(struct ntfs_boot_file* bootf,
+                            int64_t partition_offset, uint64_t lcn);
+int ntfs_walk_mft(struct ntfs_boot_file* bootf, int64_t partition_offset);
 #endif
