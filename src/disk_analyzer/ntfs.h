@@ -63,6 +63,20 @@ struct ntfs_standard_information
     uint64_t update_squence_num;
 } __attribute__((packed));
 
+struct ntfs_file_name
+{
+    uint64_t parent_ref;
+    uint64_t c_time;
+    uint64_t a_time;
+    uint64_t m_time;
+    uint64_t r_time;
+    uint64_t allocated_size;
+    uint64_t real_size;
+    uint32_t flags;
+    uint32_t something;
+    uint8_t name_len;
+} __attribute__((packed));
+
 struct ntfs_file_record
 {
     uint32_t magic; /* ASCII FILE or BAAD */
@@ -86,5 +100,6 @@ int ntfs_probe(FILE* disk, int64_t partition_offset,
 int ntfs_print_file_record(struct ntfs_file_record * record);
 uint64_t ntfs_lcn_to_offset(struct ntfs_boot_file* bootf,
                             int64_t partition_offset, uint64_t lcn);
-int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf, int64_t partition_offset);
+int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf,
+                  int64_t partition_offset);
 #endif
