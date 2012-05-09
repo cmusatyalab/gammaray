@@ -25,9 +25,13 @@ default:
 		   -I../bson
 
 test: default
-	@valgrind --track-origins=yes ./disk_analyzer \
+	@./disk_analyzer \
 		/home/wolf/VM/win7enterprise.raw \
-		/tmp/win7enterprise.bson
+		/tmp/win7enterprise.bson #| grep found > fnames
+
+	#@valgrind --track-origins=yes ./disk_analyzer \
+		#/home/wolf/VM/win7enterprise.raw \
+		#/tmp/win7enterprise.bson
 
 test_tinycore: default
 	@valgrind --track-origins=yes ./disk_analyzer \
