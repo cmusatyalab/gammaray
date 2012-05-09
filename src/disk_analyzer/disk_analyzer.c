@@ -8,6 +8,7 @@
 #define _FILE_OFFSET_BITS 64
 
 #include <inttypes.h>
+#include <locale.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -46,6 +47,8 @@ int main(int argc, char* args[])
 
     serializef = fopen(args[2], "w");
     
+    setlocale(LC_ALL, "");
+
     if (disk == NULL)
     {
         fprintf_light_red(stderr, "Error opening raw disk file '%s'. "
