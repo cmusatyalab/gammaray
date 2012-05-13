@@ -3,6 +3,7 @@
 #include "color.h"
 #include "ntfs.h"
 
+#include <assert.h>
 #include <errno.h>
 #include <iconv.h>
 #include <inttypes.h>
@@ -197,7 +198,7 @@ int ntfs_read_file_record(FILE* disk, struct ntfs_boot_file* bootf,
         fprintf_light_cyan(stdout, "Reached end of MFT, not FILE magic.\n");
         return -1;
     }
-    ntfs_print_file_record(rec);
+    //ntfs_print_file_record(rec);
 
     return 1;
 }
@@ -257,7 +258,7 @@ int ntfs_print_file_name(FILE* disk, struct ntfs_boot_file* bootf,
         return -1;
     }
 
-    ntfs_print_standard_attribute_header(&sah);
+    //ntfs_print_standard_attribute_header(&sah);
 
     offset += sah.length;
 
@@ -274,7 +275,7 @@ int ntfs_print_file_name(FILE* disk, struct ntfs_boot_file* bootf,
         return -1;
     }
 
-    ntfs_print_standard_attribute_header(&sah);
+    //ntfs_print_standard_attribute_header(&sah);
 
     if (sah.attribute_type == 0x30) /* file name */
     {
@@ -291,7 +292,7 @@ int ntfs_print_file_name(FILE* disk, struct ntfs_boot_file* bootf,
             return -1;
         }
 
-        ntfs_print_file_names(&fname);
+        //ntfs_print_file_names(&fname);
 
         if (fread(file_name_encoded, 2, fname.name_len, disk) != fname.name_len)
         {
@@ -362,7 +363,7 @@ int ntfs_print_file_name(FILE* disk, struct ntfs_boot_file* bootf,
         return -1;
     }
 
-    ntfs_print_standard_attribute_header(&sah);
+    //ntfs_print_standard_attribute_header(&sah);
 
     offset += sah.length;
 
@@ -379,14 +380,68 @@ int ntfs_print_file_name(FILE* disk, struct ntfs_boot_file* bootf,
         return -1;
     }
 
-    ntfs_print_standard_attribute_header(&sah);
-    if (sah.attribute_type == 0x80) /* file name */
+    //ntfs_print_standard_attribute_header(&sah);
+    if (sah.attribute_type == 0x80)
     {
         fprintf_light_blue(stdout, "File DATA\n");
-        exit(0);
+        assert((sah.flags & 0x0001) == 0x0000); /* not compressed */
+        assert((sah.flags & 0x4000) == 0x0000); /* not encrypted */
+        assert((sah.flags & 0x8000) == 0x0000); /* not sparse */
+        assert((sah.non_resident_flag == 0x0001)); /* should be non-resident */
         return EXIT_SUCCESS;
     }
     fprintf_light_red(stdout, "NO FILE DATA!?\n");
+    return EXIT_SUCCESS;
+}
+
+int ntfs_read_file_data(FILE* disk, struct ntfs_boot_file* bootf,
+                        int64_t partition_offset, struct ntfs_file_record* rec)
+{
+    /* loop through all attributes... */
+    struct ntfs_standard_attribute_header sah;
+    uint64_t offset = ntfs_lcn_to_offset(bootf, partition_offset, bootf->lcn_mft);
+    uint32_t end_marker = 0;
+
+    offset += (rec->allocated_size) * (rec->rec_num); /* at _least_ win xp needed */
+    offset += (rec->offset_first_attribute); /* skip to first attr */
+
+    while (1)
+    {
+        if (fseeko(disk, offset, SEEK_SET))
+        {
+            fprintf_light_red(stderr, "Error seeking to partition offset and $MFT "
+                                      "position while NTFS probing.\n");
+            return -1;
+        }
+
+        if (fread(&sah, 1, sizeof(sah), disk) != sizeof(sah))
+        {
+            fprintf_light_red(stderr, "Error reading FILE Record.\n");
+            return -1;
+        }
+
+        offset += sah.length;
+
+        if (fseeko(disk, offset, SEEK_SET))
+        {
+            fprintf_light_red(stderr, "Error seeking to partition offset and $MFT "
+                                      "position while NTFS probing.\n");
+            return -1;
+        }
+
+        if (fread(&end_marker, 1, sizeof(end_marker), disk) != sizeof(end_marker))
+        {
+            fprintf_light_red(stderr, "Error reading FILE Record.\n");
+            return -1;
+        }
+
+        if (end_marker == 0xffffffff)
+        {
+            fprintf_light_blue(stdout, "End of Attributes encountered.\n");
+            break;
+        }
+    }
+
     return EXIT_SUCCESS;
 }
 
@@ -395,11 +450,13 @@ int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf,
 {
     struct ntfs_file_record rec;
     uint64_t num = 0;
+
     while (ntfs_read_file_record(disk, bootf, partition_offset, &rec, num) > 0)
     {
         if (!(rec.flags & 0x02))
         {
             ntfs_print_file_name(disk, bootf, partition_offset, &rec);
+            ntfs_read_file_data(disk, bootf, partition_offset, &rec);
             //return 0;
         }
         num++;
