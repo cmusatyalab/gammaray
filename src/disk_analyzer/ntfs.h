@@ -107,6 +107,7 @@ struct ntfs_file_record
     uint16_t next_attr_id;
     uint16_t align;
     uint32_t rec_num;
+    uint16_t usn_num;
 } __attribute__((packed));
 
 int ntfs_probe(FILE* disk, int64_t partition_offset,
