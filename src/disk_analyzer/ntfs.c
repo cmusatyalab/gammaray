@@ -168,9 +168,6 @@ int ntfs_read_file_record(FILE* disk, struct ntfs_boot_file* bootf,
                           int64_t partition_offset,
                           struct ntfs_file_record* rec, uint64_t record_num)
 {
-    //if (record_num > 10)
-    //    return -1; /* don't support arbitrary records yet */
-
     uint64_t offset = ntfs_lcn_to_offset(bootf, partition_offset, bootf->lcn_mft);
 
     if (fseeko(disk, ntfs_lcn_to_offset(bootf, partition_offset, bootf->lcn_mft), SEEK_SET))
@@ -332,6 +329,25 @@ int ntfs_print_file_name(FILE* disk,
     return EXIT_SUCCESS;
 }
 
+int ntfs_print_data_run(struct ntfs_data_run_header* header, FILE* disk)
+{
+    fprintf_light_yellow(stdout, "data_run.raw: %x\n", header->packed_sizes);
+    fprintf_yellow(stdout, "data_run.length_size: %u\n", UPPER_NIBBLE(header->packed_sizes));
+    fprintf_yellow(stdout, "data_run.start_size: %u\n", LOWER_NIBBLE(header->packed_sizes));
+    return EXIT_SUCCESS;
+}
+
+int ntfs_print_non_resident_header(struct ntfs_non_resident_header* header)
+{
+    fprintf_yellow(stdout, "non_resident.last_vcn: %"PRIu64"\n", header->last_vcn);
+    fprintf_yellow(stdout, "non_resident.data_run_offset: %"PRIu16"\n", header->data_run_offset);
+    fprintf_yellow(stdout, "non_resident.compression_size: %"PRIu16"\n", header->compression_size);
+    fprintf_yellow(stdout, "non_resident.allocated_size: %"PRIu64"\n", header->allocated_size);
+    fprintf_yellow(stdout, "non_resident.real_size: %"PRIu64"\n", header->real_size);
+    fprintf_yellow(stdout, "non_resident.initialized_size: %"PRIu64"\n", header->initialized_size);
+    return EXIT_SUCCESS;
+}
+
 int ntfs_parse_data_attribute(FILE* disk,
                               struct ntfs_standard_attribute_header* sah,
                               wchar_t* reconstruct)
@@ -339,6 +355,8 @@ int ntfs_parse_data_attribute(FILE* disk,
     FILE* reconstructed = NULL;
     char fname[1024] = { 0 };
     uint8_t buf[4096];
+    struct ntfs_data_run_header data_run;
+    struct ntfs_non_resident_header non_resident;
 
     if (reconstruct)
     {
@@ -384,6 +402,28 @@ int ntfs_parse_data_attribute(FILE* disk,
     if (sah->non_resident_flag)
     {
         fprintf_yellow(stdout, "\tData is not resident.\n");
+
+        if (fread(&non_resident, 1, sizeof(non_resident), disk) != sizeof(non_resident))
+        {
+            fprintf_light_red(stderr, "Error reading non-resident header.\n");
+            return -1;
+        }
+
+        ntfs_print_non_resident_header(&non_resident);
+
+        if (fseeko(disk, non_resident.data_run_offset - (sizeof(sah) + sizeof(non_resident)), SEEK_CUR))
+        {
+            fprintf_light_red(stderr, "Error seeking to data runs.\n");
+            return -1;
+        }
+
+        if (fread(&data_run, 1, sizeof(data_run), disk) != sizeof(data_run))
+        {
+            fprintf_light_red(stderr, "Error reading data run header.\n");
+            return -1;
+        }
+
+        ntfs_print_data_run(&data_run, disk);
     }
     else
     {
@@ -531,6 +571,8 @@ int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf,
                                       true);
         }
         num++;
+        if (num == 20)
+            break;
     }
     return EXIT_SUCCESS;
 }

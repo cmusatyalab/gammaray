@@ -7,9 +7,23 @@
 #define SECTOR_SIZE 512
 #define NTFS_MFT_OFFSET 8192
 
-struct ntfs_superblock
+#define UPPER_NIBBLE(u) ((u & 0x0f0) >> 4) 
+#define LOWER_NIBBLE(u) ((u & 0x0f))
+
+struct ntfs_data_run_header
 {
-    uint64_t test;
+    uint8_t packed_sizes;
+} __attribute__((packed));
+
+struct ntfs_non_resident_header
+{
+    uint64_t last_vcn;
+    uint16_t data_run_offset;
+    uint16_t compression_size;
+    uint32_t padding;
+    uint64_t allocated_size;
+    uint64_t real_size;
+    uint64_t initialized_size;
 } __attribute__((packed));
 
 struct ntfs_boot_file
