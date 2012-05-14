@@ -78,6 +78,20 @@ int ntfs_print_standard_attribute_header(struct ntfs_standard_attribute_header* 
     return EXIT_SUCCESS;
 }
 
+uint8_t* ntfs_read_update_sequence(FILE* disk, struct ntfs_file_record* rec)
+{
+    uint8_t* buf = malloc(2*(rec->size_usn) - 2);
+
+    if (fread(buf, 1, 2*(rec->size_usn) - 2, disk) != 2*(rec->size_usn) - 2)
+    {
+        if (buf)
+            free(buf);
+        return NULL;
+    }
+
+    return buf;
+}
+
 int ntfs_print_standard_information(struct ntfs_standard_information* si)
 {
     fprintf_yellow(stdout, "c_time: %"PRIu64"\n", si->c_time);
@@ -92,7 +106,7 @@ int ntfs_print_file_record(struct ntfs_file_record* rec)
     uint8_t* magic = (uint8_t*) &(rec->magic);
     fprintf_light_blue(stdout, "file_record.magic: %.4s\n", magic);
     fprintf_yellow(stdout, "file_record.offset_update_seq: %"PRIu16"\n", rec->offset_update_seq);
-    fprintf_yellow(stdout, "file_record.size_usn: %"PRIu16"\n", rec->size_usn);
+    fprintf_light_yellow(stdout, "file_record.size_usn: %"PRIu16"\n", rec->size_usn);
     fprintf_yellow(stdout, "file_record.lsn: %"PRIu64"\n", rec->lsn);
     fprintf_yellow(stdout, "file_record.seq_num: %"PRIu16"\n", rec->seq_num);
     fprintf_yellow(stdout, "file_record.hard_link_count: %"PRIu16"\n", rec->hard_link_count);
@@ -102,7 +116,8 @@ int ntfs_print_file_record(struct ntfs_file_record* rec)
     fprintf_yellow(stdout, "file_record.allocated_size: %"PRIu16"\n", rec->allocated_size);
     fprintf_yellow(stdout, "file_record.file_ref_base: %"PRIu16"\n", rec->file_ref_base);
     fprintf_yellow(stdout, "file_record.next_attr_id: %"PRIu16"\n", rec->next_attr_id);
-    fprintf_light_yellow(stdout, "file_record.rec_num: %"PRIu32"\n", rec->rec_num);
+    fprintf_yellow(stdout, "file_record.rec_num: %"PRIu32"\n", rec->rec_num);
+    fprintf_light_yellow(stdout, "file_record.usn_num: %"PRIu16"\n", rec->usn_num);
     return EXIT_SUCCESS;
 }
 
@@ -350,11 +365,14 @@ int ntfs_print_non_resident_header(struct ntfs_non_resident_header* header)
 
 int ntfs_parse_data_attribute(FILE* disk,
                               struct ntfs_standard_attribute_header* sah,
-                              wchar_t* reconstruct)
+                              wchar_t* reconstruct,
+                              uint8_t* update_sequence)
 {
     FILE* reconstructed = NULL;
     char fname[1024] = { 0 };
+    char counter_str[1024] = { 0 };
     uint8_t buf[4096];
+    uint64_t counter = 0;
     struct ntfs_data_run_header data_run;
     struct ntfs_non_resident_header non_resident;
 
@@ -365,11 +383,13 @@ int ntfs_parse_data_attribute(FILE* disk,
 
         fprintf_light_green(stdout, "Dynamic path: %s\n", fname);
 
-        if ((reconstructed = fopen(fname, "w")) == NULL)
+        /* create "versions" of files depending on number of valid file records */
+        while ((reconstructed = fopen(fname, "wx")) == NULL)
         {
             fprintf_light_red(stderr, "Error creating file %s\n", fname);
             fprintf_light_red(stderr, "\t%s\n", strerror(errno));
-            return -1;
+            snprintf(counter_str, 1024, "%"PRIu64, counter);
+            strcat(fname, counter_str);
         }
     }
 
@@ -447,6 +467,23 @@ int ntfs_parse_data_attribute(FILE* disk,
                 return -1;
             }
 
+            fprintf_light_white(stdout, "sah->length_of_attribute %"PRIu32"\n", sah->length_of_attribute);
+
+            for (counter = 510; counter < sah->length_of_attribute; counter += 512)
+            {
+                fprintf_light_blue(stdout, "replacing positions %"PRIu64" and %"PRIu64
+                                           " with positions %"PRIu64" and %"PRIu64"\n",
+                                           counter, counter + 1, counter/512,
+                                           counter/512 + 1);
+                fprintf_light_blue(stdout, "replacing values %c and %c"
+                                           " with values %c and %c\n",
+                                           buf[counter], buf[counter + 1], update_sequence[counter/512],
+                                           update_sequence[counter/512 + 1]);
+
+                buf[counter] = update_sequence[counter/512];
+                buf[counter + 1] = update_sequence[counter/512 + 1];
+            }
+
             if (fwrite(buf, 1, sah->length_of_attribute, reconstructed) != sah->length_of_attribute)
             {
                 fprintf_light_red(stderr, "Error writing resident attribute.\n");
@@ -512,7 +549,7 @@ int ntfs_read_file_attributes(FILE* disk, struct ntfs_boot_file* bootf,
         {
             fprintf_yellow(stdout, "Data Attribute[%"PRIu32"] detected.\n",
                                    attribute_counter);
-            ntfs_parse_data_attribute(disk, &sah, fname);
+            ntfs_parse_data_attribute(disk, &sah, fname, update_sequence);
             if (fname)
             {
                 free(fname);
@@ -563,18 +600,25 @@ int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf,
 {
     struct ntfs_file_record rec;
     uint64_t num = 0;
+    uint8_t* update_sequence = NULL;
+    uint64_t file_record_position = 0;
 
     while (ntfs_read_file_record(disk, bootf, partition_offset, &rec, num) > 0)
     {
-        if (!(rec.flags & 0x02))
+        if (!(rec.flags & 0x02) && (rec.flags & 0x01) && rec.file_ref_base == 0)
         {
             fprintf_light_blue(stdout, "Analyzing MFT File\n");
+            update_sequence = ntfs_read_update_sequence(disk, &rec);
+            assert(update_sequence != NULL);
+            ntfs_print_file_record(&rec);
             ntfs_read_file_attributes(disk, bootf, partition_offset, &rec,
-                                      true);
+                                      true, update_sequence, &file_record_position);
+            if (update_sequence)
+                free(update_sequence);
         }
         num++;
-        if (num == 20)
-            break;
+        ///if (num == 20)
+        //    break;
     }
     return EXIT_SUCCESS;
 }
