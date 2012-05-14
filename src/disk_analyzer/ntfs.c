@@ -428,8 +428,10 @@ int ntfs_parse_data_attribute(FILE* disk,
     else
     {
         fprintf_yellow(stdout, "\tData is resident.\n");
+        fprintf_white(stdout, "\tsah->offset_of_attribute: %x\tsizeof(sah) %x\n", sah->offset_of_attribute, sizeof(*sah));
+        fprintf_green(stdout, "\tSeeking to %d\n", sah->offset_of_attribute - sizeof(*sah));
         
-        if (fseeko(disk, sah->offset_of_attribute - sizeof(sah), SEEK_CUR))
+        if (fseeko(disk, sah->offset_of_attribute - sizeof(*sah), SEEK_CUR))
         {
             fprintf_light_red(stderr, "Error seeking to data attribute.\n");
             return -1;
