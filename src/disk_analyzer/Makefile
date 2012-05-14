@@ -6,7 +6,7 @@ default:
 		   -Werror \
 		   -I../util \
 		   -I../bson \
-		   #-DNOCOLOR
+		   -g
 	@clang inode_explorer.c ext2.c \
 		   ../util/color.c mbr.c \
 		   ../bson/bson-encoder.c \
