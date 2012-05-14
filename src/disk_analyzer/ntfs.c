@@ -232,20 +232,21 @@ char* ntfs_namespace(uint8_t namespace)
 }
 
 int ntfs_print_file_name(FILE* disk, 
-                         struct ntfs_standard_attribute_header* sah)
+                         struct ntfs_standard_attribute_header* sah,
+                         wchar_t** export_fname)
 {
     struct ntfs_file_name fname;
-    wchar_t file_name[512];
+    wchar_t* file_name = malloc(sizeof(wchar_t) * 512);
     wchar_t* file_namep = file_name;
     wchar_t** file_namepp = &file_namep;
     char file_name_encoded[512];
     char* file_name_encodedp = file_name_encoded;
     char** file_name_encodedpp = &file_name_encodedp;
     iconv_t cd = iconv_open("WCHAR_T", "UTF-16");
-    size_t outbytes = 1024;
+    size_t outbytes = sizeof(wchar_t) * 512;
     size_t inbytes; 
 
-    memset(file_name, 0, 512);
+    memset(file_name, 0, sizeof(wchar_t) * 512);
     memset(file_name_encoded, 0, 512);
     
     if (cd < 0)
@@ -322,6 +323,8 @@ int ntfs_print_file_name(FILE* disk,
                 iconv_close(cd);
                 return EXIT_SUCCESS;
             }
+
+            *export_fname = file_name;
         }
     }
     iconv_close(cd);
@@ -331,8 +334,27 @@ int ntfs_print_file_name(FILE* disk,
 
 int ntfs_parse_data_attribute(FILE* disk,
                               struct ntfs_standard_attribute_header* sah,
-                              FILE* reconstruct)
+                              wchar_t* reconstruct)
 {
+    FILE* reconstructed = NULL;
+    char fname[1024] = { 0 };
+    uint8_t buf[4096];
+
+    if (reconstruct)
+    {
+        strcat(fname, "/tmp/win7/");
+        assert(wcstombs(fname + strlen(fname), reconstruct, 1024 - strlen(fname)) != -1);
+
+        fprintf_light_green(stdout, "Dynamic path: %s\n", fname);
+
+        if ((reconstructed = fopen(fname, "w")) == NULL)
+        {
+            fprintf_light_red(stderr, "Error creating file %s\n", fname);
+            fprintf_light_red(stderr, "\t%s\n", strerror(errno));
+            return -1;
+        }
+    }
+
     if (sah->attribute_type != 0x80)
     {
         return -1;
@@ -366,7 +388,32 @@ int ntfs_parse_data_attribute(FILE* disk,
     else
     {
         fprintf_yellow(stdout, "\tData is resident.\n");
+        
+        if (fseeko(disk, sah->offset_of_attribute - sizeof(sah), SEEK_CUR))
+        {
+            fprintf_light_red(stderr, "Error seeking to data attribute.\n");
+            return -1;
+        }
+
+        assert(sah->length_of_attribute < 4096);
+
+        if (reconstructed)
+        {
+            if (fread(buf, 1, sah->length_of_attribute, disk) != sah->length_of_attribute)
+            {
+                fprintf_light_red(stderr, "Error reading resident attribute.\n");
+                return -1;
+            }
+
+            if (fwrite(buf, 1, sah->length_of_attribute, reconstructed) != sah->length_of_attribute)
+            {
+                fprintf_light_red(stderr, "Error writing resident attribute.\n");
+            }
+        }
     }
+
+    if (reconstructed)
+        fclose(reconstructed);
 
     return 0;
 }
@@ -374,7 +421,7 @@ int ntfs_parse_data_attribute(FILE* disk,
 int ntfs_read_file_attributes(FILE* disk, struct ntfs_boot_file* bootf,
                               int64_t partition_offset,
                               struct ntfs_file_record* rec,
-                              FILE* reconstruct)
+                              bool reconstruct)
 {
     /* loop through all attributes... */
     struct ntfs_standard_attribute_header sah;
@@ -382,6 +429,7 @@ int ntfs_read_file_attributes(FILE* disk, struct ntfs_boot_file* bootf,
     uint32_t end_marker = 0;
     uint32_t attribute_counter = 0;
     bool found_end = false;
+    wchar_t* fname = NULL;
 
     offset += (rec->allocated_size) * (rec->rec_num); /* at _least_ win xp needed */
     offset += (rec->offset_first_attribute); /* skip to first attr */
@@ -409,7 +457,12 @@ int ntfs_read_file_attributes(FILE* disk, struct ntfs_boot_file* bootf,
         {
             fprintf_yellow(stdout, "Filename Attribute[%"PRIu32"] detected.\n",
                                    attribute_counter);
-            ntfs_print_file_name(disk, &sah);
+            if (fname)
+            {
+                free(fname);
+                fname = NULL;
+            }
+            ntfs_print_file_name(disk, &sah, &fname);
         }
 
         /* if data, dispatch */
@@ -417,7 +470,12 @@ int ntfs_read_file_attributes(FILE* disk, struct ntfs_boot_file* bootf,
         {
             fprintf_yellow(stdout, "Data Attribute[%"PRIu32"] detected.\n",
                                    attribute_counter);
-            ntfs_parse_data_attribute(disk, &sah, reconstruct);
+            ntfs_parse_data_attribute(disk, &sah, fname);
+            if (fname)
+            {
+                free(fname);
+                fname = NULL;
+            }
         }
 
         /* final attribute check, loop breaker */
@@ -444,7 +502,11 @@ int ntfs_read_file_attributes(FILE* disk, struct ntfs_boot_file* bootf,
         attribute_counter++;
     }
 
+    if (fname)
+        free(fname);
+
     fprintf_yellow(stdout, "total attributes: %"PRIu32"\n", attribute_counter);
+
     if (!found_end)
     {
         fprintf_light_red(stdout, "*** Critical Error: END OF ATTRIBUTES MARKER"
@@ -464,8 +526,9 @@ int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf,
     {
         if (!(rec.flags & 0x02))
         {
+            fprintf_light_blue(stdout, "Analyzing MFT File\n");
             ntfs_read_file_attributes(disk, bootf, partition_offset, &rec,
-                                      NULL);
+                                      true);
         }
         num++;
     }
