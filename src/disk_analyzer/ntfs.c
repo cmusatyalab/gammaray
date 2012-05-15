@@ -1,9 +1,7 @@
-#define _FILE_OFFSET_BITS 64
-
 #include "color.h"
 #include "ntfs.h"
+#include "util.h"
 
-#include <assert.h>
 #include <errno.h>
 #include <iconv.h>
 #include <inttypes.h>
@@ -12,7 +10,8 @@
 #include <string.h>
 #include <wchar.h>
 
-#define SECTOR_SIZE 512
+
+
 
 char* namespaces[] = { "POSIX",
                        "Win32",
@@ -52,6 +51,10 @@ wchar_t* ignore_files[] = { L"$MFT",
                             NULL 
                           };
 
+
+
+
+/* helpers */
 bool ntfs_ignore_file(wchar_t* fname)
 {
     int i = 0;
@@ -63,62 +66,12 @@ bool ntfs_ignore_file(wchar_t* fname)
     return false;
 }
 
-int ntfs_print_standard_attribute_header(struct ntfs_standard_attribute_header* sah)
+char* ntfs_namespace(uint8_t namespace)
 {
-    fprintf_yellow(stdout, "sah.attribute_type: 0x%"PRIx32"\n", sah->attribute_type);
-    fprintf_yellow(stdout, "sah.length: %"PRIu32"\n", sah->length);
-    fprintf_yellow(stdout, "sah.non_resident_flag: 0x%"PRIx8"\n", sah->non_resident_flag);
-    fprintf_yellow(stdout, "sah.name_length: %"PRIu8"\n", sah->name_length);
-    fprintf_yellow(stdout, "sah.name_offset: %"PRIu16"\n", sah->name_offset);
-    fprintf_yellow(stdout, "sah.flags: 0x%"PRIx16"\n", sah->flags);
-    fprintf_yellow(stdout, "sah.attribute_id: %"PRIu16"\n", sah->attribute_id);
-    fprintf_yellow(stdout, "sah.length_of_attribute: %"PRIu32"\n", sah->length_of_attribute);
-    fprintf_yellow(stdout, "sah.offset_of_attribute: %"PRIu16"\n", sah->offset_of_attribute);
-    fprintf_yellow(stdout, "sah.indexed_flag: 0x%"PRIx8"\n", sah->indexed_flag);
-    return EXIT_SUCCESS;
-}
+    if (namespace > 3)
+        return "unknown";
 
-uint8_t* ntfs_read_update_sequence(FILE* disk, struct ntfs_file_record* rec)
-{
-    uint8_t* buf = malloc(2*(rec->size_usn) - 2);
-
-    if (fread(buf, 1, 2*(rec->size_usn) - 2, disk) != 2*(rec->size_usn) - 2)
-    {
-        if (buf)
-            free(buf);
-        return NULL;
-    }
-
-    return buf;
-}
-
-int ntfs_print_standard_information(struct ntfs_standard_information* si)
-{
-    fprintf_yellow(stdout, "c_time: %"PRIu64"\n", si->c_time);
-    fprintf_yellow(stdout, "a_time: %"PRIu64"\n", si->a_time);
-    fprintf_yellow(stdout, "m_time: %"PRIu64"\n", si->m_time);
-    fprintf_yellow(stdout, "r_time: %"PRIu64"\n", si->r_time);
-    return EXIT_SUCCESS;
-}
-
-int ntfs_print_file_record(struct ntfs_file_record* rec)
-{
-    uint8_t* magic = (uint8_t*) &(rec->magic);
-    fprintf_light_blue(stdout, "file_record.magic: %.4s\n", magic);
-    fprintf_yellow(stdout, "file_record.offset_update_seq: %"PRIu16"\n", rec->offset_update_seq);
-    fprintf_light_yellow(stdout, "file_record.size_usn: %"PRIu16"\n", rec->size_usn);
-    fprintf_yellow(stdout, "file_record.lsn: %"PRIu64"\n", rec->lsn);
-    fprintf_yellow(stdout, "file_record.seq_num: %"PRIu16"\n", rec->seq_num);
-    fprintf_yellow(stdout, "file_record.hard_link_count: %"PRIu16"\n", rec->hard_link_count);
-    fprintf_yellow(stdout, "file_record.offset_first_attributes: %"PRIu16"\n", rec->offset_first_attribute);
-    fprintf_yellow(stdout, "file_record.flags: %"PRIx16"\n", rec->flags);
-    fprintf_yellow(stdout, "file_record.real_size: %"PRIu16"\n", rec->real_size);
-    fprintf_yellow(stdout, "file_record.allocated_size: %"PRIu16"\n", rec->allocated_size);
-    fprintf_yellow(stdout, "file_record.file_ref_base: %"PRIu16"\n", rec->file_ref_base);
-    fprintf_yellow(stdout, "file_record.next_attr_id: %"PRIu16"\n", rec->next_attr_id);
-    fprintf_yellow(stdout, "file_record.rec_num: %"PRIu32"\n", rec->rec_num);
-    fprintf_light_yellow(stdout, "file_record.usn_num: %"PRIu16"\n", rec->usn_num);
-    return EXIT_SUCCESS;
+    return namespaces[namespace]; 
 }
 
 uint64_t ntfs_lcn_to_offset(struct ntfs_boot_file* bootf, int64_t partition_offset,
@@ -129,6 +82,10 @@ uint64_t ntfs_lcn_to_offset(struct ntfs_boot_file* bootf, int64_t partition_offs
     return (lcn*bytes_per_cluster) + partition_offset;
 }
 
+
+
+
+/* printers for all structs */
 int ntfs_print_boot_file(struct ntfs_boot_file* bootf, int64_t partition_offset)
 {
     fprintf_light_blue(stdout, "-- Analyzing Boot File $Boot --\n");
@@ -146,83 +103,69 @@ int ntfs_print_boot_file(struct ntfs_boot_file* bootf, int64_t partition_offset)
     fprintf_green(stdout, "\tlcn_mft offset: %"PRIu64"\n", ntfs_lcn_to_offset(bootf, partition_offset, bootf->lcn_mft));
     fprintf_light_yellow(stdout, "boot->lcn_mftmirr: %"PRIu64"\n", bootf->lcn_mftmirr);
     fprintf_green(stdout, "\tlcn_mft offset: %"PRIu64"\n", ntfs_lcn_to_offset(bootf, partition_offset, bootf->lcn_mftmirr));
-    fprintf_yellow(stdout, "boot->clusters_per_mft: %"PRIu32"\n", bootf->clusters_per_mft);
+    fprintf_yellow(stdout, "boot->clusters_per_mft_record: %"PRId32"\n", bootf->clusters_per_mft_record);
+    fprintf_yellow(stdout, "boot->clusters_per_index_record: %"PRId32"\n", bootf->clusters_per_index_record);
     fprintf_yellow(stdout, "boot->volume_serial: %"PRIu32"\n", bootf->volume_serial);
     
     return EXIT_SUCCESS;
 }
 
-int ntfs_probe(FILE* disk, int64_t partition_offset,
-               struct ntfs_boot_file* bootf)
+int ntfs_print_file_record(struct ntfs_file_record* rec)
 {
-    if (fseeko(disk, partition_offset, SEEK_SET))
-    {
-        fprintf_light_red(stderr, "Error seeking to partition offset and $MFT "
-                                  "position while NTFS probing.\n");
-        return EXIT_FAILURE;
-    }
-
-    if (fread(bootf, 1, sizeof(*bootf), disk) != sizeof(*bootf))
-    {
-        fprintf_light_red(stderr, "Error reading FILE Record.\n");
-        return EXIT_FAILURE;
-    }
-
-    if (strncmp((char*) bootf->sys_id, "NTFS", 4) != 0)
-    {
-        fprintf_light_red(stderr, "NTFS probe failed.\n");
-        return EXIT_FAILURE;
-    }
-
-    ntfs_print_boot_file(bootf, partition_offset);
-
+    uint8_t* magic = (uint8_t*) &(rec->magic);
+    fprintf_light_blue(stdout, "file_record.magic: %.4s\n", magic);
+    fprintf_yellow(stdout, "file_record.offset_update_seq: %0.4"PRIx16"\n", rec->offset_update_seq);
+    fprintf_light_yellow(stdout, "file_record.size_usn: %"PRIu16"\n", rec->size_usn);
+    fprintf_yellow(stdout, "file_record.lsn: %"PRIu64"\n", rec->lsn);
+    fprintf_yellow(stdout, "file_record.seq_num: %"PRIu16"\n", rec->seq_num);
+    fprintf_yellow(stdout, "file_record.hard_link_count: %"PRIu16"\n", rec->hard_link_count);
+    fprintf_yellow(stdout, "file_record.offset_first_attributes: %0.4"PRIx16"\n", rec->offset_first_attribute);
+    fprintf_yellow(stdout, "file_record.flags: %"PRIx16"\n", rec->flags);
+    fprintf_yellow(stdout, "file_record.real_size: %"PRIu16"\n", rec->real_size);
+    fprintf_yellow(stdout, "file_record.allocated_size: %"PRIu16"\n", rec->allocated_size);
+    fprintf_yellow(stdout, "file_record.file_ref_base: %"PRIu16"\n", rec->file_ref_base);
+    fprintf_yellow(stdout, "file_record.next_attr_id: %"PRIu16"\n", rec->next_attr_id);
+    fprintf_yellow(stdout, "file_record.rec_num: %"PRIu32"\n", rec->rec_num);
+    fprintf_light_yellow(stdout, "file_record.usn_num: %"PRIu16"\n", rec->usn_num);
     return EXIT_SUCCESS;
 }
 
-int ntfs_read_file_record(FILE* disk, struct ntfs_boot_file* bootf,
-                          int64_t partition_offset,
-                          struct ntfs_file_record* rec, uint64_t record_num)
+int ntfs_print_standard_attribute_header(struct ntfs_standard_attribute_header* sah)
 {
-    uint64_t offset = ntfs_lcn_to_offset(bootf, partition_offset, bootf->lcn_mft);
-
-    if (fseeko(disk, ntfs_lcn_to_offset(bootf, partition_offset, bootf->lcn_mft), SEEK_SET))
-    {
-        fprintf_light_red(stderr, "Error seeking to partition offset and $MFT "
-                                  "position while NTFS probing.\n");
-        return -1;
-    }
-
-    if (fread(rec, 1, sizeof(*rec), disk) != sizeof(*rec))
-    {
-        fprintf_light_red(stderr, "Error reading FILE Record.\n");
-        return -1;
-    }
-
-    offset += rec->allocated_size * record_num;
-
-    if (fseeko(disk, offset, SEEK_SET))
-    {
-        fprintf_light_red(stderr, "Error seeking to partition offset and $MFT "
-                                  "position while NTFS probing.\n");
-        return -1;
-    }
-
-    if (fread(rec, 1, sizeof(*rec), disk) != sizeof(*rec))
-    {
-        fprintf_light_red(stderr, "Error reading FILE Record.\n");
-        return -1;
-    }
-
-    if (strncmp((char*) &(rec->magic), "FILE", 4) != 0)
-    {
-        fprintf_light_cyan(stdout, "Reached end of MFT, not FILE magic.\n");
-        return -1;
-    }
-
-    return 1;
+    fprintf_yellow(stdout, "sah.attribute_type: 0x%"PRIx32"\n", sah->attribute_type);
+    fprintf_yellow(stdout, "sah.length: %"PRIu32"\n", sah->length);
+    fprintf_yellow(stdout, "sah.non_resident_flag: 0x%"PRIx8"\n", sah->non_resident_flag);
+    fprintf_yellow(stdout, "sah.name_length: %"PRIu8"\n", sah->name_length);
+    fprintf_yellow(stdout, "sah.name_offset: %"PRIu16"\n", sah->name_offset);
+    fprintf_yellow(stdout, "sah.flags: 0x%"PRIx16"\n", sah->flags);
+    fprintf_yellow(stdout, "sah.attribute_id: %"PRIu16"\n", sah->attribute_id);
+    fprintf_yellow(stdout, "sah.length_of_attribute: %"PRIu32"\n", sah->length_of_attribute);
+    fprintf_yellow(stdout, "sah.offset_of_attribute: %"PRIu16"\n", sah->offset_of_attribute);
+    fprintf_yellow(stdout, "sah.indexed_flag: 0x%"PRIx8"\n", sah->indexed_flag);
+    return EXIT_SUCCESS;
 }
 
-int ntfs_print_file_names(struct ntfs_file_name* rec)
+int ntfs_print_non_resident_header(struct ntfs_non_resident_header* header)
+{
+    fprintf_yellow(stdout, "non_resident.last_vcn: %"PRIu64"\n", header->last_vcn);
+    fprintf_yellow(stdout, "non_resident.data_run_offset: %"PRIu16"\n", header->data_run_offset);
+    fprintf_yellow(stdout, "non_resident.compression_size: %"PRIu16"\n", header->compression_size);
+    fprintf_yellow(stdout, "non_resident.allocated_size: %"PRIu64"\n", header->allocated_size);
+    fprintf_yellow(stdout, "non_resident.real_size: %"PRIu64"\n", header->real_size);
+    fprintf_yellow(stdout, "non_resident.initialized_size: %"PRIu64"\n", header->initialized_size);
+    return EXIT_SUCCESS;
+}
+
+int ntfs_print_standard_information(struct ntfs_standard_information* si)
+{
+    fprintf_yellow(stdout, "c_time: %"PRIu64"\n", si->c_time);
+    fprintf_yellow(stdout, "a_time: %"PRIu64"\n", si->a_time);
+    fprintf_yellow(stdout, "m_time: %"PRIu64"\n", si->m_time);
+    fprintf_yellow(stdout, "r_time: %"PRIu64"\n", si->r_time);
+    return EXIT_SUCCESS;
+}
+
+int ntfs_print_file_name(struct ntfs_file_name* rec)
 {
     fprintf_yellow(stdout, "rec->c_time: %"PRIu64"\n", rec->c_time);
     fprintf_yellow(stdout, "rec->a_time: %"PRIu64"\n", rec->a_time);
@@ -235,17 +178,277 @@ int ntfs_print_file_names(struct ntfs_file_name* rec)
     return EXIT_SUCCESS;
 }
 
-char* ntfs_namespace(uint8_t namespace)
+int ntfs_print_data_run(struct ntfs_data_run_header* header, FILE* disk)
 {
-    if (namespace > 3)
-        return "unknown";
-
-    return namespaces[namespace]; 
+    fprintf_light_yellow(stdout, "data_run.raw: %x\n", header->packed_sizes);
+    fprintf_yellow(stdout, "data_run.length_size: %u\n", UPPER_NIBBLE(header->packed_sizes));
+    fprintf_yellow(stdout, "data_run.start_size: %u\n", LOWER_NIBBLE(header->packed_sizes));
+    return EXIT_SUCCESS;
 }
 
-int ntfs_print_file_name(FILE* disk, 
-                         struct ntfs_standard_attribute_header* sah,
-                         wchar_t** export_fname)
+
+int ntfs_print_update_sequence(struct ntfs_update_sequence* seq)
+{
+    int i;
+    fprintf_yellow(stdout, "seq.usn_num: %0.4"PRIx16"\n", seq->usn_num);
+    fprintf_yellow(stdout, "seq.usn_size: %"PRIu16"\n", seq->usn_size);
+    fprintf_yellow(stdout, "seq.data: ");
+    for (i = 0; i < seq->usn_size; i++)
+    {
+        fprintf_light_yellow(stdout, " %0.2"PRIx8" ", seq->data[i]);
+    }
+    fprintf(stdout, "\n");
+    return EXIT_SUCCESS;
+}
+
+
+
+
+
+/* read boot record/probe for valid NTFS partition */
+int ntfs_probe(FILE* disk, int64_t partition_offset,
+               struct ntfs_boot_file* bootf)
+{
+    uint32_t bits;
+    uint8_t* bytes;
+
+    if (fseeko(disk, partition_offset, SEEK_SET))
+    {
+        fprintf_light_red(stderr, "Error seeking to partition offset "
+                                  "position while NTFS probing.\n");
+        return EXIT_FAILURE;
+    }
+
+    if (fread(bootf, 1, sizeof(*bootf), disk) != sizeof(*bootf))
+    {
+        fprintf_light_red(stderr, "Error reading BOOT record.\n");
+        return EXIT_FAILURE;
+    }
+
+    if (strncmp((char*) bootf->sys_id, "NTFS", 4) != 0)
+    {
+        fprintf_light_red(stderr, "NTFS probe failed.\n");
+        return EXIT_FAILURE;
+    }
+
+    bytes = (uint8_t*) &bootf->clusters_per_mft_record;
+    if (top_bit_set(bytes[0]))
+    {
+        bits = highest_set_bit(bootf->clusters_per_mft_record);
+        bootf->clusters_per_mft_record = sign_extend(bootf->clusters_per_mft_record, bits);
+    }
+
+
+    bytes = (uint8_t*) &bootf->clusters_per_index_record;
+    if (top_bit_set(bytes[0]))
+    {
+        bits = highest_set_bit(bootf->clusters_per_index_record);
+        bootf->clusters_per_index_record = sign_extend(bootf->clusters_per_index_record, bits);
+    }
+
+    return EXIT_SUCCESS;
+}
+
+
+
+/* read FILE record */
+uint8_t* ntfs_read_file_record(FILE* disk, int64_t* offset,
+                               struct ntfs_boot_file* bootf)
+{
+    uint64_t record_size = bootf->clusters_per_mft_record > 0 ?
+                           bootf->clusters_per_mft_record *
+                           bootf->sectors_per_cluster *
+                           bootf->bytes_per_sector :
+                           2 << -1 * (bootf->clusters_per_mft_record + 1);
+
+    uint8_t* data = malloc(record_size);
+
+    if (data == NULL)
+    {
+        fprintf_light_red(stderr, "Error malloc()ing to read file record.\n");
+        return NULL;
+    }
+
+    if (fseeko(disk, *offset, SEEK_SET))
+    {
+        fprintf_light_red(stderr, "Error seeking to FILE record.\n");
+        return NULL;
+    }
+
+    if (fread(data, 1, record_size, disk) != record_size)
+    {
+        fprintf_light_red(stderr, "Error reading FILE record data.\n");
+        free(data);
+        return NULL;
+    }
+
+    if (strncmp((char*) data, "FILE", 4) != 0)
+    {
+        fprintf_light_cyan(stdout, "FILE magic bytes mistmatch.\n");
+        free(data);
+        return NULL;
+    }
+
+    *offset += record_size;
+
+    return data;
+}
+
+
+/* read FILE record header */
+int ntfs_read_file_record_header(uint8_t* data, uint64_t* offset,
+                                 struct ntfs_file_record* rec)
+{
+    memcpy(rec, &(data[*offset]), sizeof(*rec));
+    *offset += sizeof(*rec);
+    return EXIT_SUCCESS;
+}
+
+
+/* read update sequence array */
+int ntfs_read_update_sequence(uint8_t* data, uint64_t* offset,
+                              struct ntfs_file_record* rec,
+                              struct ntfs_update_sequence* seq)
+{
+    uint8_t* buf = malloc(2*(rec->size_usn) - 2);
+    memcpy(buf, &(data[*offset]), 2*(rec->size_usn) - 2);
+    *offset += 2*(rec->size_usn) - 2;
+
+    seq->usn_num = rec->usn_num;
+    seq->usn_size = 2*(rec->size_usn) - 2;
+    seq->data = buf;
+
+    return EXIT_SUCCESS;
+}
+
+/* apply fixups */
+int ntfs_fixup_data(uint8_t* data, uint64_t data_len,
+                    struct ntfs_update_sequence* seq)
+{
+    uint64_t data_counter = 510;
+    uint64_t seq_counter = 0;
+
+    for(; data_counter < data_len; data_counter += 512)
+    {
+        if (seq_counter < seq->usn_size)
+        {
+            if (*((uint16_t*) &(data[data_counter])) != seq->usn_num)
+            {
+                fprintf_light_red(stderr, "Corrupt sector encountered by "
+                                          "fixup.\n");
+                fprintf_light_red(stderr, "Saw: %0.4"PRIx16"\n",
+                                          *((uint16_t*) &(data[data_counter])));
+                return EXIT_FAILURE;
+            }
+
+            data[data_counter] = seq->data[seq_counter];
+            data[data_counter + 1] = seq->data[seq_counter + 1]; 
+            seq_counter += 2;
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    return EXIT_SUCCESS;
+}
+
+/* read attribute */
+int ntfs_read_attribute_header(uint8_t* data, uint64_t* offset,
+                               struct ntfs_standard_attribute_header* sah)
+{
+    memcpy(sah, &(data[*offset]), sizeof(*sah));
+    *offset += sizeof(*sah);
+
+    return EXIT_SUCCESS; 
+}
+
+int ntfs_read_attribute_data(uint8_t* data, uint64_t* offset,
+                             uint8_t* buf, uint64_t buf_len,
+                             struct ntfs_standard_attribute_header* sah)
+{
+    *offset += sah->offset_of_attribute - sizeof(*sah);
+
+    if (sah->length_of_attribute > buf_len)
+    {
+        fprintf_light_red(stderr, "Resident attribute over %"PRIu64" bytes.\n",
+                                  buf_len);
+        return EXIT_FAILURE;
+    }
+
+    memcpy(buf, &(data[*offset]), sah->length_of_attribute);
+    *offset += sah->length_of_attribute;
+    return EXIT_SUCCESS;
+}
+
+FILE* ntfs_create_reconstructed_file(wchar_t* name)
+{
+    FILE* reconstructed = NULL;
+    char fname[1024] = { 0 };
+
+    if (name)
+    {
+        strcat(fname, "/tmp/win7/");
+        if (wcstombs(fname + strlen(fname), name, 1024 - strlen(fname)) != -1)
+        {
+            fprintf_light_red(stderr, "Could not create file name.\n");
+            return NULL;
+        }
+
+        fprintf_light_green(stdout, "Dynamic path: %s\n", fname);
+
+        /* create "versions" of files depending on number of valid file records */
+        /* TODO: could loop forever */
+        while ((reconstructed = fopen(fname, "wx")) == NULL)
+        {
+            fprintf_light_red(stderr, "Error creating file %s\n", fname);
+            fprintf_light_red(stderr, "\t%s\n", strerror(errno));
+            strcat(fname, "0");
+        }
+    }
+
+    return reconstructed;
+}
+
+/* handler for resident */
+int ntfs_handle_resident_data_attribute(uint8_t* data, uint64_t* offset,
+                                        uint8_t* buf, uint64_t buf_len,
+                                        wchar_t* name,
+                                        struct ntfs_standard_attribute_header* sah)
+{
+    FILE* reconstructed = ntfs_create_reconstructed_file(name);
+    
+    fprintf_yellow(stdout, "\tData is resident.\n");
+    fprintf_white(stdout, "\tsah->offset_of_attribute: %x\tsizeof(sah) %x\n", sah->offset_of_attribute, sizeof(*sah));
+    fprintf_green(stdout, "\tSeeking to %d\n", sah->offset_of_attribute - sizeof(*sah));
+
+    ntfs_read_attribute_data(data, offset, buf, buf_len, sah);
+  
+    if (reconstructed)
+    {
+        if (fwrite(buf, 1, sah->length_of_attribute, reconstructed) != sah->length_of_attribute)
+        {
+            fclose(reconstructed);
+            fprintf_light_red(stderr, "Error writing resident attribute.\n");
+            return EXIT_FAILURE;
+        }
+
+        fclose(reconstructed);
+    }
+
+    return EXIT_SUCCESS;
+}
+
+
+/* handler for non-resident */
+/* TODO */
+
+
+/* dispatch handler for file name */
+int ntfs_dispatch_file_name_attribute(uint8_t* data, uint64_t* offset,
+                                    wchar_t** name,
+                                    struct ntfs_standard_attribute_header* sah)
 {
     struct ntfs_file_name fname;
     wchar_t* file_name = malloc(sizeof(wchar_t) * 512);
@@ -269,26 +472,17 @@ int ntfs_print_file_name(FILE* disk,
 
     if (sah->attribute_type == 0x30) /* file name */
     {
-        if (fseeko(disk, sah->offset_of_attribute - sizeof(*sah), SEEK_CUR))
-        {
-            fprintf_light_red(stderr, "Error seeking to offset while pulling"
-                                      "file_name attribute.\n");
-            return -1;
-        }
+        /* TODO: refactor */
+        *offset += sah->offset_of_attribute - sizeof(*sah);
+        fname = *((struct ntfs_file_name*) &(data[*offset]));
+        *offset += sizeof(struct ntfs_file_name);
 
-        if (fread(&fname, 1, sizeof(fname), disk) != sizeof(fname))
-        {
-            fprintf_light_red(stderr, "Error reading file name struct.\n");
-            return -1;
-        }
+        ntfs_print_file_name(&fname);
 
-        if (fread(file_name_encoded, 2, fname.name_len, disk) != fname.name_len)
-        {
-            fprintf_light_red(stderr, "Error reading the file name string.\n");
-            return -1;
-        }
+        memcpy(file_name_encoded, &(data[*offset]), 2*fname.name_len);
+        *offset += 2*fname.name_len;
 
-        file_name_encodedp = file_name_encoded + 1; /* skip namespace */
+        file_name_encodedp = file_name_encoded;
         file_name_encodedpp = &file_name_encodedp;
         inbytes = 2*fname.name_len;
 
@@ -327,8 +521,9 @@ int ntfs_print_file_name(FILE* disk,
         {
             fprintf_light_cyan(stdout, "found fname[len=%d, namespace=%s]: "
                                        "%ls\n", wcslen(file_name),
-                                       ntfs_namespace(file_name_encoded[0]),
+                                       ntfs_namespace(fname.fnamespace),
                                        file_name);
+
             if (ntfs_ignore_file(file_name))
             {
                 fprintf(stdout, "ignoring file.\n");
@@ -336,289 +531,151 @@ int ntfs_print_file_name(FILE* disk,
                 return EXIT_SUCCESS;
             }
 
-            *export_fname = file_name;
+            if (*name)
+                free(*name);
+            *name = file_name;
         }
     }
+
     iconv_close(cd);
 
     return EXIT_SUCCESS;
 }
 
-int ntfs_print_data_run(struct ntfs_data_run_header* header, FILE* disk)
+/* dispatch handler for data */
+int ntfs_dispatch_data_attribute(uint8_t* data, uint64_t* offset,
+                                 wchar_t* name,
+                                 struct ntfs_standard_attribute_header* sah)
 {
-    fprintf_light_yellow(stdout, "data_run.raw: %x\n", header->packed_sizes);
-    fprintf_yellow(stdout, "data_run.length_size: %u\n", UPPER_NIBBLE(header->packed_sizes));
-    fprintf_yellow(stdout, "data_run.start_size: %u\n", LOWER_NIBBLE(header->packed_sizes));
-    return EXIT_SUCCESS;
-}
-
-int ntfs_print_non_resident_header(struct ntfs_non_resident_header* header)
-{
-    fprintf_yellow(stdout, "non_resident.last_vcn: %"PRIu64"\n", header->last_vcn);
-    fprintf_yellow(stdout, "non_resident.data_run_offset: %"PRIu16"\n", header->data_run_offset);
-    fprintf_yellow(stdout, "non_resident.compression_size: %"PRIu16"\n", header->compression_size);
-    fprintf_yellow(stdout, "non_resident.allocated_size: %"PRIu64"\n", header->allocated_size);
-    fprintf_yellow(stdout, "non_resident.real_size: %"PRIu64"\n", header->real_size);
-    fprintf_yellow(stdout, "non_resident.initialized_size: %"PRIu64"\n", header->initialized_size);
-    return EXIT_SUCCESS;
-}
-
-int ntfs_parse_data_attribute(FILE* disk,
-                              struct ntfs_standard_attribute_header* sah,
-                              wchar_t* reconstruct,
-                              uint8_t* update_sequence)
-{
-    FILE* reconstructed = NULL;
-    char fname[1024] = { 0 };
-    char counter_str[1024] = { 0 };
-    uint8_t buf[4096];
-    uint64_t counter = 0;
-    struct ntfs_data_run_header data_run;
-    struct ntfs_non_resident_header non_resident;
-
-    if (reconstruct)
-    {
-        strcat(fname, "/tmp/win7/");
-        assert(wcstombs(fname + strlen(fname), reconstruct, 1024 - strlen(fname)) != -1);
-
-        fprintf_light_green(stdout, "Dynamic path: %s\n", fname);
-
-        /* create "versions" of files depending on number of valid file records */
-        while ((reconstructed = fopen(fname, "wx")) == NULL)
-        {
-            fprintf_light_red(stderr, "Error creating file %s\n", fname);
-            fprintf_light_red(stderr, "\t%s\n", strerror(errno));
-            snprintf(counter_str, 1024, "%"PRIu64, counter);
-            strcat(fname, counter_str);
-        }
-    }
+    uint8_t resident_buffer[4096];
 
     if (sah->attribute_type != 0x80)
     {
-        return -1;
+        fprintf_light_red(stderr, "Data handler, not a data attribute.\n");
+        return EXIT_FAILURE;
     }
     
     if ((sah->flags & 0x0001) != 0x0000) /* check compressed */
     {
         fprintf_light_red(stdout, "NTFS: Error no support for compressed files"
                                   " yet.\n");
-        return 1;
+        return EXIT_FAILURE;
     }
 
     if ((sah->flags & 0x4000) != 0x0000) /* check encrypted */
     {
         fprintf_light_red(stdout, "NTFS: Error no support for encrypted files "
                                   "yet.\n");
-        return 1;
+        return EXIT_FAILURE;
     }
 
     if ((sah->flags & 0x8000) != 0x0000) /* check sparse */
     {
         fprintf_light_red(stdout, "NTFS: Error no support for sparse files "
                                   "yet.\n");
-        return 1;
+        return EXIT_FAILURE;
     }
 
     if (sah->non_resident_flag)
     {
-        fprintf_yellow(stdout, "\tData is not resident.\n");
-
-        if (fread(&non_resident, 1, sizeof(non_resident), disk) != sizeof(non_resident))
-        {
-            fprintf_light_red(stderr, "Error reading non-resident header.\n");
-            return -1;
-        }
-
-        ntfs_print_non_resident_header(&non_resident);
-
-        if (fseeko(disk, non_resident.data_run_offset - (sizeof(sah) + sizeof(non_resident)), SEEK_CUR))
-        {
-            fprintf_light_red(stderr, "Error seeking to data runs.\n");
-            return -1;
-        }
-
-        if (fread(&data_run, 1, sizeof(data_run), disk) != sizeof(data_run))
-        {
-            fprintf_light_red(stderr, "Error reading data run header.\n");
-            return -1;
-        }
-
-        ntfs_print_data_run(&data_run, disk);
+        fprintf_light_cyan(stderr, "Currently not handling non-resident data.\n");
+        return EXIT_FAILURE; 
     }
     else
     {
-        fprintf_yellow(stdout, "\tData is resident.\n");
-        fprintf_white(stdout, "\tsah->offset_of_attribute: %x\tsizeof(sah) %x\n", sah->offset_of_attribute, sizeof(*sah));
-        fprintf_green(stdout, "\tSeeking to %d\n", sah->offset_of_attribute - sizeof(*sah));
-        
-        if (fseeko(disk, sah->offset_of_attribute - sizeof(*sah), SEEK_CUR))
-        {
-            fprintf_light_red(stderr, "Error seeking to data attribute.\n");
-            return -1;
-        }
-
-        assert(sah->length_of_attribute < 4096);
-
-        if (reconstructed)
-        {
-            if (fread(buf, 1, sah->length_of_attribute, disk) != sah->length_of_attribute)
-            {
-                fprintf_light_red(stderr, "Error reading resident attribute.\n");
-                return -1;
-            }
-
-            fprintf_light_white(stdout, "sah->length_of_attribute %"PRIu32"\n", sah->length_of_attribute);
-
-            for (counter = 510; counter < sah->length_of_attribute; counter += 512)
-            {
-                fprintf_light_blue(stdout, "replacing positions %"PRIu64" and %"PRIu64
-                                           " with positions %"PRIu64" and %"PRIu64"\n",
-                                           counter, counter + 1, counter/512,
-                                           counter/512 + 1);
-                fprintf_light_blue(stdout, "replacing values %c and %c"
-                                           " with values %c and %c\n",
-                                           buf[counter], buf[counter + 1], update_sequence[counter/512],
-                                           update_sequence[counter/512 + 1]);
-
-                buf[counter] = update_sequence[counter/512];
-                buf[counter + 1] = update_sequence[counter/512 + 1];
-            }
-
-            if (fwrite(buf, 1, sah->length_of_attribute, reconstructed) != sah->length_of_attribute)
-            {
-                fprintf_light_red(stderr, "Error writing resident attribute.\n");
-            }
-        }
+        ntfs_handle_resident_data_attribute(data, offset, resident_buffer, 4096,
+                                            name, sah);
+        exit(0);
     }
-
-    if (reconstructed)
-        fclose(reconstructed);
-
-    return 0;
-}
-
-int ntfs_read_file_attributes(FILE* disk, struct ntfs_boot_file* bootf,
-                              int64_t partition_offset,
-                              struct ntfs_file_record* rec,
-                              bool reconstruct)
-{
-    /* loop through all attributes... */
-    struct ntfs_standard_attribute_header sah;
-    uint64_t offset = ntfs_lcn_to_offset(bootf, partition_offset, bootf->lcn_mft);
-    uint32_t end_marker = 0;
-    uint32_t attribute_counter = 0;
-    bool found_end = false;
-    wchar_t* fname = NULL;
-
-    offset += (rec->allocated_size) * (rec->rec_num); /* at _least_ win xp needed */
-    offset += (rec->offset_first_attribute); /* skip to first attr */
-
-    while (attribute_counter < 1024)
-    {
-        /* read a single attribute */
-        if (fseeko(disk, offset, SEEK_SET))
-        {
-            fprintf_light_red(stderr, "Error seeking to partition offset and $MFT "
-                                      "position while NTFS probing.\n");
-            return -1;
-        }
-
-        if (fread(&sah, 1, sizeof(sah), disk) != sizeof(sah))
-        {
-            fprintf_light_red(stderr, "Error reading FILE Record.\n");
-            return -1;
-        }
-
-        offset += sah.length;
-
-        /* if filename, dispatch */
-        if (sah.attribute_type == 0x30)
-        {
-            fprintf_yellow(stdout, "Filename Attribute[%"PRIu32"] detected.\n",
-                                   attribute_counter);
-            if (fname)
-            {
-                free(fname);
-                fname = NULL;
-            }
-            ntfs_print_file_name(disk, &sah, &fname);
-        }
-
-        /* if data, dispatch */
-        if (sah.attribute_type == 0x80)
-        {
-            fprintf_yellow(stdout, "Data Attribute[%"PRIu32"] detected.\n",
-                                   attribute_counter);
-            ntfs_parse_data_attribute(disk, &sah, fname, update_sequence);
-            if (fname)
-            {
-                free(fname);
-                fname = NULL;
-            }
-        }
-
-        /* final attribute check, loop breaker */
-        if (fseeko(disk, offset, SEEK_SET))
-        {
-            fprintf_light_red(stderr, "Error seeking to partition offset and $MFT "
-                                      "position while NTFS probing.\n");
-            return -1;
-        }
-
-        if (fread(&end_marker, 1, sizeof(end_marker), disk) != sizeof(end_marker))
-        {
-            fprintf_light_red(stderr, "Error reading FILE Record.\n");
-            return -1;
-        }
-
-        if (end_marker == 0xffffffff)
-        {
-            fprintf_light_blue(stdout, "End of Attributes encountered.\n");
-            found_end = true;
-            break;
-        }
-
-        attribute_counter++;
-    }
-
-    if (fname)
-        free(fname);
-
-    fprintf_yellow(stdout, "total attributes: %"PRIu32"\n", attribute_counter);
-
-    if (!found_end)
-    {
-        fprintf_light_red(stdout, "*** Critical Error: END OF ATTRIBUTES MARKER"
-                                  " NOT FOUND!\n");
-    } 
 
     return EXIT_SUCCESS;
 }
 
+
+/* attribute dispatcher */
+int ntfs_attribute_dispatcher(uint8_t* data, uint64_t* offset, wchar_t** fname,
+                              struct ntfs_standard_attribute_header* sah)
+{
+    uint64_t old_offset = *offset;
+
+    if (sah->attribute_type == 0x30)
+    {
+        fprintf_light_yellow(stdout, "Dispatching file name attribute.\n");
+        if (ntfs_dispatch_file_name_attribute(data, offset, fname, sah))
+            return EXIT_FAILURE;
+        *offset = old_offset + sah->length - sizeof(*sah);
+        return EXIT_SUCCESS;
+    }
+    else if (sah->attribute_type == 0x80)
+    {
+        fprintf_light_yellow(stdout, "Dispatching data attribute.\n");
+        if (ntfs_dispatch_data_attribute(data, offset, *fname, sah))
+            return EXIT_FAILURE;
+        *offset = old_offset + sah->length - sizeof(*sah);
+    }
+    else
+    {
+        *offset += sah->length - sizeof(*sah);
+        fprintf_light_yellow(stdout, "Dispatching unhandled attribute.\n");
+        if (*((uint32_t*) &(data[*offset])) == 0xffffff)
+            return 0;
+    }
+
+    return 1;
+}
+
+
+
+
+/* meta-walk MFT */
 int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf,
                   int64_t partition_offset)
 {
     struct ntfs_file_record rec;
-    uint64_t num = 0;
-    uint8_t* update_sequence = NULL;
-    uint64_t file_record_position = 0;
+    struct ntfs_update_sequence seq;
+    struct ntfs_standard_attribute_header sah;
+    uint8_t* data = NULL;
+    int64_t file_record_offset;
+    uint64_t data_offset = 0;
+    wchar_t* fname = NULL;
 
-    while (ntfs_read_file_record(disk, bootf, partition_offset, &rec, num) > 0)
+    file_record_offset =
+        ntfs_lcn_to_offset(bootf, partition_offset, bootf->lcn_mft); 
+
+    if ((data = ntfs_read_file_record(disk, &file_record_offset, bootf)) ==
+                NULL)
     {
-        if (!(rec.flags & 0x02) && (rec.flags & 0x01) && rec.file_ref_base == 0)
-        {
-            fprintf_light_blue(stdout, "Analyzing MFT File\n");
-            update_sequence = ntfs_read_update_sequence(disk, &rec);
-            assert(update_sequence != NULL);
-            ntfs_print_file_record(&rec);
-            ntfs_read_file_attributes(disk, bootf, partition_offset, &rec,
-                                      true, update_sequence, &file_record_position);
-            if (update_sequence)
-                free(update_sequence);
-        }
-        num++;
-        ///if (num == 20)
-        //    break;
+        return EXIT_FAILURE;
     }
+
+    ntfs_read_file_record_header(data, &data_offset, &rec);
+    ntfs_print_file_record(&rec);
+    ntfs_read_update_sequence(data, &data_offset, &rec, &seq);
+    ntfs_fixup_data(data, 1024, &seq);
+
+    data_offset = rec.offset_first_attribute;
+
+    ntfs_read_attribute_header(data, &data_offset, &sah);
+    ntfs_print_standard_attribute_header(&sah);
+
+    ntfs_attribute_dispatcher(data, &data_offset, &fname, &sah);
+
+    ntfs_read_attribute_header(data, &data_offset, &sah);
+    ntfs_print_standard_attribute_header(&sah);
+
+    ntfs_attribute_dispatcher(data, &data_offset, &fname, &sah);
+
+
+    ntfs_read_attribute_header(data, &data_offset, &sah);
+    ntfs_print_standard_attribute_header(&sah);
+
+    ntfs_attribute_dispatcher(data, &data_offset, &fname, &sah);
+    
+    if (data)
+        free(data);
+    if (seq.data)
+        free(seq.data);
+    if (fname)
+        free(fname);
     return EXIT_SUCCESS;
 }

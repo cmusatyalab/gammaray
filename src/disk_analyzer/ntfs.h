@@ -5,27 +5,11 @@
 #include <stdio.h>
 
 #define SECTOR_SIZE 512
-#define NTFS_MFT_OFFSET 8192
 
 #define UPPER_NIBBLE(u) ((u & 0x0f0) >> 4) 
 #define LOWER_NIBBLE(u) ((u & 0x0f))
 
-struct ntfs_data_run_header
-{
-    uint8_t packed_sizes;
-} __attribute__((packed));
-
-struct ntfs_non_resident_header
-{
-    uint64_t last_vcn;
-    uint16_t data_run_offset;
-    uint16_t compression_size;
-    uint32_t padding;
-    uint64_t allocated_size;
-    uint64_t real_size;
-    uint64_t initialized_size;
-} __attribute__((packed));
-
+/* partition start, for probing and bootstrapping */
 struct ntfs_boot_file
 {
     uint8_t jump[3];
@@ -42,10 +26,39 @@ struct ntfs_boot_file
     uint64_t sectors_in_volume;
     uint64_t lcn_mft;
     uint64_t lcn_mftmirr;
-    uint32_t clusters_per_mft;
+    int32_t clusters_per_mft_record;
+    int32_t clusters_per_index_record;
     uint32_t volume_serial;
 } __attribute__((packed));
 
+/* MFT parsing; full FILE RECORD header */
+struct ntfs_file_record
+{
+    uint32_t magic; /* ASCII FILE or BAAD */
+    uint16_t offset_update_seq;
+    uint16_t size_usn;
+    uint64_t lsn;
+    uint16_t seq_num;
+    uint16_t hard_link_count;
+    uint16_t offset_first_attribute;
+    uint16_t flags;
+    uint32_t real_size;
+    uint32_t allocated_size;
+    uint64_t file_ref_base;
+    uint16_t next_attr_id;
+    uint16_t align;
+    uint32_t rec_num;
+    uint16_t usn_num;
+} __attribute__((packed));
+
+struct ntfs_full_file_record
+{
+    struct ntfs_file_record header;
+    uint64_t len;
+    uint8_t* data;
+};
+
+/* MFT Parsing; full Attribute header */
 struct ntfs_standard_attribute_header
 {
     uint32_t attribute_type;
@@ -61,6 +74,18 @@ struct ntfs_standard_attribute_header
     uint8_t padding;
 } __attribute__((packed));
 
+struct ntfs_non_resident_header
+{
+    uint64_t last_vcn;
+    uint16_t data_run_offset;
+    uint16_t compression_size;
+    uint32_t padding;
+    uint64_t allocated_size;
+    uint64_t real_size;
+    uint64_t initialized_size;
+} __attribute__((packed));
+
+/* -- special attributes -- */
 struct ntfs_standard_information
 {
     uint64_t c_time;
@@ -89,32 +114,25 @@ struct ntfs_file_name
     uint32_t flags;
     uint32_t something;
     uint8_t name_len;
+    uint8_t fnamespace;
 } __attribute__((packed));
 
-struct ntfs_file_record
+struct ntfs_data_run_header
 {
-    uint32_t magic; /* ASCII FILE or BAAD */
-    uint16_t offset_update_seq;
-    uint16_t size_usn;
-    uint64_t lsn;
-    uint16_t seq_num;
-    uint16_t hard_link_count;
-    uint16_t offset_first_attribute;
-    uint16_t flags;
-    uint32_t real_size;
-    uint32_t allocated_size;
-    uint64_t file_ref_base;
-    uint16_t next_attr_id;
-    uint16_t align;
-    uint32_t rec_num;
+    uint8_t packed_sizes;
+} __attribute__((packed));
+
+struct ntfs_update_sequence
+{
     uint16_t usn_num;
+    uint16_t usn_size;
+    uint8_t* data;
 } __attribute__((packed));
 
 int ntfs_probe(FILE* disk, int64_t partition_offset,
                struct ntfs_boot_file* bootf);
-int ntfs_print_file_record(struct ntfs_file_record * record);
-uint64_t ntfs_lcn_to_offset(struct ntfs_boot_file* bootf,
-                            int64_t partition_offset, uint64_t lcn);
+int ntfs_print_boot_file(struct ntfs_boot_file* bootf,
+                         int64_t partition_offset);
 int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf,
                   int64_t partition_offset);
 #endif
