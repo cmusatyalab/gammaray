@@ -1,6 +1,7 @@
 default:
 	@clang disk_analyzer.c ../util/color.c ext2.c ntfs.c mbr.c \
 		   ../bson/bson-encoder.c \
+		   ../util/util.c \
 		   -o disk_analyzer \
 		   -Wall \
 		   -Werror \
@@ -10,6 +11,7 @@ default:
 	@clang inode_explorer.c ext2.c \
 		   ../util/color.c mbr.c \
 		   ../bson/bson-encoder.c \
+		   ../util/util.c \
 		   -o inode_explorer \
 		   -Wall \
 		   -Werror \
@@ -18,6 +20,7 @@ default:
 	@clang data_block_explorer.c ext2.c \
 		   ../util/color.c mbr.c \
 		   ../bson/bson-encoder.c \
+		   ../util/util.c \
 		   -o data_block_explorer \
 		   -Wall \
 		   -Werror \
