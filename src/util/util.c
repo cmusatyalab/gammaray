@@ -4,6 +4,36 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+bool top_bit_set(uint8_t byte)
+{
+    return (0x80 & byte) == 0x80;
+}
+
+/* http://stackoverflow.com/posts/4970859/revisions */
+uint32_t highest_set_bit(uint32_t val)
+{
+    int counter = 0;
+
+    while (val >>= 1)
+    {
+        counter++;
+    }
+
+    return counter;
+}
+
+/* http://graphics.stanford.edu/~seander/bithacks.html#VariableSignExtend */
+int32_t sign_extend(uint32_t val, uint32_t bits)
+{
+    int32_t r;
+    int32_t const m = 1U << (bits - 1);
+
+    val = val & ((1U << bits) - 1);
+    r = (val ^ m) - m;
+
+    return r;
+}
+
 int ascii_dump(uint8_t* buf, uint64_t count)
 {
     if (buf == NULL)
