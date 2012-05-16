@@ -579,7 +579,6 @@ int ntfs_dispatch_data_attribute(uint8_t* data, uint64_t* offset,
     if (sah->non_resident_flag)
     {
         fprintf_light_cyan(stderr, "Currently not handling non-resident data.\n");
-        return EXIT_FAILURE; 
     }
     else
     {
@@ -602,7 +601,7 @@ int ntfs_attribute_dispatcher(uint8_t* data, uint64_t* offset, wchar_t** fname,
     {
         fprintf_light_yellow(stdout, "Dispatching file name attribute.\n");
         if (ntfs_dispatch_file_name_attribute(data, offset, fname, sah))
-            return EXIT_FAILURE;
+           return EXIT_FAILURE;
         *offset = old_offset + sah->length - sizeof(*sah);
         return EXIT_SUCCESS;
     }
@@ -670,6 +669,13 @@ int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf,
     ntfs_print_standard_attribute_header(&sah);
 
     ntfs_attribute_dispatcher(data, &data_offset, &fname, &sah);
+    
+
+
+    ntfs_read_attribute_header(data, &data_offset, &sah);
+    ntfs_print_standard_attribute_header(&sah);
+
+    ntfs_attribute_dispatcher(data, &data_offset, &fname, &sah);    
     
     if (data)
         free(data);
