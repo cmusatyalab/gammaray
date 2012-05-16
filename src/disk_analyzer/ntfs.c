@@ -328,6 +328,8 @@ int ntfs_fixup_data(uint8_t* data, uint64_t data_len,
     uint64_t data_counter = 510;
     uint64_t seq_counter = 0;
 
+    fprintf_light_blue(stdout, "-- BEFORE FIXUP --\n");
+    hexdump(data, 1024);
     for(; data_counter < data_len; data_counter += 512)
     {
         if (seq_counter < seq->usn_size)
@@ -351,6 +353,8 @@ int ntfs_fixup_data(uint8_t* data, uint64_t data_len,
         }
     }
 
+    fprintf_light_blue(stdout, "-- AFTER FIXUP --\n");
+    hexdump(data, 1024);
     return EXIT_SUCCESS;
 }
 
@@ -595,21 +599,21 @@ int ntfs_dispatch_data_attribute(uint8_t* data, uint64_t* offset,
 int ntfs_attribute_dispatcher(uint8_t* data, uint64_t* offset, wchar_t** fname,
                               struct ntfs_standard_attribute_header* sah)
 {
+    int ret = 1;
     uint64_t old_offset = *offset;
 
     if (sah->attribute_type == 0x30)
     {
         fprintf_light_yellow(stdout, "Dispatching file name attribute.\n");
         if (ntfs_dispatch_file_name_attribute(data, offset, fname, sah))
-           return EXIT_FAILURE;
+           ret = -1;
         *offset = old_offset + sah->length - sizeof(*sah);
-        return EXIT_SUCCESS;
     }
     else if (sah->attribute_type == 0x80)
     {
         fprintf_light_yellow(stdout, "Dispatching data attribute.\n");
         if (ntfs_dispatch_data_attribute(data, offset, *fname, sah))
-            return EXIT_FAILURE;
+            ret = -1;
         *offset = old_offset + sah->length - sizeof(*sah);
     }
     else
@@ -617,10 +621,10 @@ int ntfs_attribute_dispatcher(uint8_t* data, uint64_t* offset, wchar_t** fname,
         *offset += sah->length - sizeof(*sah);
         fprintf_light_yellow(stdout, "Dispatching unhandled attribute.\n");
         if (*((uint32_t*) &(data[*offset])) == 0xffffff)
-            return 0;
+            ret = 0;
     }
 
-    return 1;
+    return ret;
 }
 
 
