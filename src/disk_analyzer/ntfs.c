@@ -272,6 +272,7 @@ uint8_t* ntfs_read_file_record(FILE* disk, int64_t* offset,
     if (fseeko(disk, *offset, SEEK_SET))
     {
         fprintf_light_red(stderr, "Error seeking to FILE record.\n");
+        free(data);
         return NULL;
     }
 
@@ -328,6 +329,7 @@ int ntfs_fixup_data(uint8_t* data, uint64_t data_len,
     uint64_t data_counter = 510;
     uint64_t seq_counter = 0;
 
+    ntfs_print_update_sequence(seq);
     fprintf_light_blue(stdout, "-- BEFORE FIXUP --\n");
     hexdump(data, 1024);
     for(; data_counter < data_len; data_counter += 512)
@@ -624,6 +626,9 @@ int ntfs_attribute_dispatcher(uint8_t* data, uint64_t* offset, wchar_t** fname,
             ret = 0;
     }
 
+    if (*((int32_t*) &(data[*offset])) == -1)
+        ret = 0;
+
     return ret;
 }
 
@@ -641,51 +646,49 @@ int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf,
     int64_t file_record_offset;
     uint64_t data_offset = 0;
     wchar_t* fname = NULL;
+    int counter = 0;
 
     file_record_offset =
         ntfs_lcn_to_offset(bootf, partition_offset, bootf->lcn_mft); 
 
-    if ((data = ntfs_read_file_record(disk, &file_record_offset, bootf)) ==
+    fprintf_light_red(stdout, "Current file_record_offset: %"PRId64"\n", file_record_offset);
+    while ((data = ntfs_read_file_record(disk, &file_record_offset, bootf)) !=
                 NULL)
     {
-        return EXIT_FAILURE;
+        data_offset = 0;
+        fprintf_light_red(stdout, "Current file_record_offset: %"PRId64"\n", file_record_offset);
+        ntfs_read_file_record_header(data, &data_offset, &rec);
+        ntfs_print_file_record(&rec);
+        ntfs_read_update_sequence(data, &data_offset, &rec, &seq);
+        ntfs_fixup_data(data, 1024, &seq);
+        
+        data_offset = rec.offset_first_attribute;
+        counter = 0;
+        while (ntfs_read_attribute_header(data, &data_offset, &sah) == 0 &&
+               counter < 1024)
+        {
+            ntfs_print_standard_attribute_header(&sah);
+
+            if (ntfs_attribute_dispatcher(data, &data_offset, &fname, &sah) ==0)
+                break;
+            counter++;
+        }
+        if (data)
+        {
+            free(data);
+            data = NULL;
+        }
+        if (seq.data)
+        {
+            free(seq.data);
+            seq.data = NULL;
+        }
+        if (fname)
+        {
+            free(fname);
+            fname = NULL;
+        }
     }
-
-    ntfs_read_file_record_header(data, &data_offset, &rec);
-    ntfs_print_file_record(&rec);
-    ntfs_read_update_sequence(data, &data_offset, &rec, &seq);
-    ntfs_fixup_data(data, 1024, &seq);
-
-    data_offset = rec.offset_first_attribute;
-
-    ntfs_read_attribute_header(data, &data_offset, &sah);
-    ntfs_print_standard_attribute_header(&sah);
-
-    ntfs_attribute_dispatcher(data, &data_offset, &fname, &sah);
-
-    ntfs_read_attribute_header(data, &data_offset, &sah);
-    ntfs_print_standard_attribute_header(&sah);
-
-    ntfs_attribute_dispatcher(data, &data_offset, &fname, &sah);
-
-
-    ntfs_read_attribute_header(data, &data_offset, &sah);
-    ntfs_print_standard_attribute_header(&sah);
-
-    ntfs_attribute_dispatcher(data, &data_offset, &fname, &sah);
     
-
-
-    ntfs_read_attribute_header(data, &data_offset, &sah);
-    ntfs_print_standard_attribute_header(&sah);
-
-    ntfs_attribute_dispatcher(data, &data_offset, &fname, &sah);    
-    
-    if (data)
-        free(data);
-    if (seq.data)
-        free(seq.data);
-    if (fname)
-        free(fname);
     return EXIT_SUCCESS;
 }
