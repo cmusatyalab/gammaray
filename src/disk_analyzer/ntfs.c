@@ -540,6 +540,7 @@ int ntfs_dispatch_file_name_attribute(uint8_t* data, uint64_t* offset,
             if (*name)
                 free(*name);
             *name = file_name;
+            fprintf_light_red(stdout, "set fname to: %ls\n", *name);
         }
     }
 
@@ -588,9 +589,9 @@ int ntfs_dispatch_data_attribute(uint8_t* data, uint64_t* offset,
     }
     else
     {
+        fprintf_light_red(stdout, "fname to resident data handler: %ls\n", name);
         ntfs_handle_resident_data_attribute(data, offset, resident_buffer, 4096,
                                             name, sah);
-        exit(0);
     }
 
     return EXIT_SUCCESS;
@@ -609,11 +610,13 @@ int ntfs_attribute_dispatcher(uint8_t* data, uint64_t* offset, wchar_t** fname,
         fprintf_light_yellow(stdout, "Dispatching file name attribute.\n");
         if (ntfs_dispatch_file_name_attribute(data, offset, fname, sah))
            ret = -1;
+        fprintf(stdout, "dispatched file name: %ls\n", *fname);
         *offset = old_offset + sah->length - sizeof(*sah);
     }
     else if (sah->attribute_type == 0x80)
     {
         fprintf_light_yellow(stdout, "Dispatching data attribute.\n");
+        fprintf(stdout, "with fname: %ls\n", *fname);
         if (ntfs_dispatch_data_attribute(data, offset, *fname, sah))
             ret = -1;
         *offset = old_offset + sah->length - sizeof(*sah);
@@ -622,13 +625,12 @@ int ntfs_attribute_dispatcher(uint8_t* data, uint64_t* offset, wchar_t** fname,
     {
         *offset += sah->length - sizeof(*sah);
         fprintf_light_yellow(stdout, "Dispatching unhandled attribute.\n");
-        if (*((uint32_t*) &(data[*offset])) == 0xffffff)
-            ret = 0;
     }
 
     if (*((int32_t*) &(data[*offset])) == -1)
         ret = 0;
 
+    fprintf_light_red(stdout, "returning %d\n", ret);
     return ret;
 }
 
