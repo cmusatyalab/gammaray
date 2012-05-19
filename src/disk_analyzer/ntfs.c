@@ -396,7 +396,7 @@ FILE* ntfs_create_reconstructed_file(wchar_t* name)
     if (name)
     {
         strcat(fname, "/tmp/win7/");
-        if (wcstombs(fname + strlen(fname), name, 1024 - strlen(fname)) != -1)
+        if (wcstombs(fname + strlen(fname), name, 1024 - strlen(fname)) == -1)
         {
             fprintf_light_red(stderr, "Could not create file name.\n");
             return NULL;
