@@ -58,7 +58,7 @@ struct ntfs_full_file_record
     uint8_t* data;
 };
 
-/* MFT Parsing; full Attribute header */
+/* MFT Parsing; full attribute header */
 struct ntfs_standard_attribute_header
 {
     uint32_t attribute_type;
