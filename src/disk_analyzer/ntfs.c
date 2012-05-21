@@ -82,7 +82,13 @@ uint64_t ntfs_lcn_to_offset(struct ntfs_boot_file* bootf, int64_t partition_offs
     return (lcn*bytes_per_cluster) + partition_offset;
 }
 
-
+uint64_t ntfs_lcn_len(struct ntfs_boot_file* bootf,
+                      uint64_t count)
+{
+    uint64_t bytes_per_cluster = bootf->bytes_per_sector *
+                                 bootf->sectors_per_cluster;
+    return count*bytes_per_cluster;
+}
 
 
 /* printers for all structs */
@@ -178,7 +184,7 @@ int ntfs_print_file_name(struct ntfs_file_name* rec)
     return EXIT_SUCCESS;
 }
 
-int ntfs_print_data_run(struct ntfs_data_run_header* header, FILE* disk)
+int ntfs_print_data_run_header(struct ntfs_data_run_header* header)
 {
     fprintf_light_yellow(stdout, "data_run.raw: %x\n", header->packed_sizes);
     fprintf_yellow(stdout, "data_run.length_size: %u\n", UPPER_NIBBLE(header->packed_sizes));
@@ -330,8 +336,6 @@ int ntfs_fixup_data(uint8_t* data, uint64_t data_len,
     uint64_t seq_counter = 0;
 
     ntfs_print_update_sequence(seq);
-    fprintf_light_blue(stdout, "-- BEFORE FIXUP --\n");
-    hexdump(data, 1024);
     for(; data_counter < data_len; data_counter += 512)
     {
         if (seq_counter < seq->usn_size)
@@ -355,8 +359,6 @@ int ntfs_fixup_data(uint8_t* data, uint64_t data_len,
         }
     }
 
-    fprintf_light_blue(stdout, "-- AFTER FIXUP --\n");
-    hexdump(data, 1024);
     return EXIT_SUCCESS;
 }
 
@@ -366,6 +368,16 @@ int ntfs_read_attribute_header(uint8_t* data, uint64_t* offset,
 {
     memcpy(sah, &(data[*offset]), sizeof(*sah));
     *offset += sizeof(*sah);
+
+    return EXIT_SUCCESS; 
+}
+
+/* read attribute */
+int ntfs_read_non_resident_attribute_header(uint8_t* data, uint64_t* offset,
+                                            struct ntfs_non_resident_header* nrh)
+{
+    memcpy(nrh, &(data[*offset]), sizeof(*nrh));
+    *offset += sizeof(*nrh);
 
     return EXIT_SUCCESS; 
 }
@@ -437,6 +449,8 @@ int ntfs_handle_resident_data_attribute(uint8_t* data, uint64_t* offset,
         {
             fclose(reconstructed);
             fprintf_light_red(stderr, "Error writing resident attribute.\n");
+
+
             return EXIT_FAILURE;
         }
 
@@ -448,8 +462,140 @@ int ntfs_handle_resident_data_attribute(uint8_t* data, uint64_t* offset,
 
 
 /* handler for non-resident */
-/* TODO */
+int ntfs_handle_non_resident_data_attribute(uint8_t* data, uint64_t* offset,
+                                            wchar_t* name,
+                                            struct ntfs_standard_attribute_header* sah,
+                                            struct ntfs_boot_file* bootf,
+                                            int64_t partition_offset,
+                                            FILE* disk)
+{
+    FILE* reconstructed = ntfs_create_reconstructed_file(name);
+    uint8_t buf[4096];
+    struct ntfs_non_resident_header nrh;
+    struct ntfs_data_run_header drh; 
+    uint8_t len_size;
+    uint8_t offset_size;
+    uint64_t length = 0;
+    int64_t lcn_offset = 0;
+    uint64_t real_size;
+    int64_t prev_lcn = 0;
 
+
+    ntfs_read_non_resident_attribute_header(data, offset, &nrh);
+    ntfs_print_non_resident_header(&nrh);
+
+    real_size = nrh.real_size;
+
+    fprintf_yellow(stdout, "\tData is non-resident\n");
+    fprintf_white(stdout, "\tnrh->offset_of_attribute: %x\tsizeof(nrh+sah) %x\n", nrh.data_run_offset, sizeof(nrh) + sizeof(*sah));
+    fprintf_green(stdout, "\tSeeking to %d\n", nrh.data_run_offset - sizeof(*sah) - sizeof(nrh));
+
+    hexdump(&(data[*offset]), 6);
+
+    *offset += nrh.data_run_offset - sizeof(*sah) - sizeof(nrh);
+    memcpy(&drh, &(data[*offset]), sizeof(drh));
+    *offset += 1;
+
+    while (drh.packed_sizes && real_size)
+    {
+        ntfs_print_data_run_header(&drh);
+
+        offset_size = UPPER_NIBBLE(drh.packed_sizes);
+        len_size = LOWER_NIBBLE(drh.packed_sizes);
+
+        fprintf_light_red(stdout, "offset: %"PRIu64" data[*offset]: %"PRIu8"\n",
+                                  *offset, data[*offset]);
+        memcpy(((uint8_t*) &length), &(data[*offset]), len_size);
+        *offset += len_size;
+
+        fprintf_light_red(stdout, "offset: %"PRIu64" data[*offset]: %"PRIu8"\n",
+                                  *offset, data[*offset]);
+        memcpy(((uint8_t*) &lcn_offset), &(data[*offset]), offset_size);
+        *offset += offset_size;
+
+        fprintf_light_cyan(stdout, "data run 0: lcn %0.16"PRIx64" len %0.16"PRIx64"\n",
+                                   lcn_offset, length);
+
+        lcn_offset = ntfs_lcn_to_offset(bootf, partition_offset, prev_lcn + lcn_offset);
+        length = ntfs_lcn_len(bootf, length);
+
+        fprintf_light_red(stdout, "offset: 0x%"PRIx64" len: 0x%"PRIx64"\n",
+                                  lcn_offset,
+                                  length);
+        
+        fprintf_light_blue(stderr, "1length: %"PRIu64" real_size: %"PRIu64"\n", length, real_size);
+        if (reconstructed)
+        {
+            if (fseeko(disk, lcn_offset, SEEK_SET))
+            {
+                fprintf_light_red(stderr, "Error seeking to data run LCN offset: %"
+                                           PRIu64"\n", lcn_offset);
+                        exit(1);
+                return EXIT_FAILURE;
+            }
+
+            while (length)
+            {
+
+                if (length > 10000000000) exit(0);
+                fprintf_light_blue(stderr, "-1length: %"PRIu64" real_size: %"PRIu64"\n", length, real_size);
+                length = length < real_size ? length : real_size;
+                fprintf_light_blue(stderr, "0length: %"PRIu64" real_size: %"PRIu64"\n", length, real_size);
+                if (length >= 4096)
+                {
+                    if (fread(buf, 4096, 1, disk) != 1)
+                    {
+                        fprintf_light_red(stderr, "Error reading run data.\n");
+                        exit(1);
+                        return EXIT_FAILURE;
+                    }
+
+                    if (fwrite(buf, 4096, 1, reconstructed) != 1)
+                    {
+                        fprintf_light_red(stderr, "Error writing run data.\n");
+                        exit(1);
+                        return EXIT_FAILURE;
+                    }
+
+                    length -= 4096;
+                    real_size -= 4096;
+                }
+                else
+                {
+                    if (fread(buf, length, 1, disk) != 1)
+                    {
+                        fprintf_light_red(stderr, "Error reading run data.\n");
+                        exit(1);
+                        return EXIT_FAILURE;
+                    }
+
+                    if (fwrite(buf, length, 1, reconstructed) != 1)
+                    {
+                        fprintf_light_red(stderr, "Error writing run data.\n");
+                        exit(1);
+                        return EXIT_FAILURE;
+                    }
+
+                    length -= length;
+                    real_size -= length;
+                }
+            }
+        }
+
+        hexdump(&(data[*offset]), 6);
+
+        memcpy(&drh, &(data[*offset]), sizeof(drh));
+        *offset += 1;
+        length = 0;
+        lcn_offset = 0;
+        fflush(stdout);
+    }
+
+    if (reconstructed)
+        fclose(reconstructed);
+
+    return EXIT_SUCCESS;
+}
 
 /* dispatch handler for file name */
 int ntfs_dispatch_file_name_attribute(uint8_t* data, uint64_t* offset,
@@ -552,7 +698,10 @@ int ntfs_dispatch_file_name_attribute(uint8_t* data, uint64_t* offset,
 /* dispatch handler for data */
 int ntfs_dispatch_data_attribute(uint8_t* data, uint64_t* offset,
                                  wchar_t* name,
-                                 struct ntfs_standard_attribute_header* sah)
+                                 struct ntfs_standard_attribute_header* sah,
+                                 struct ntfs_boot_file* bootf,
+                                 int64_t partition_offset,
+                                 FILE* disk)
 {
     uint8_t resident_buffer[4096];
 
@@ -585,10 +734,13 @@ int ntfs_dispatch_data_attribute(uint8_t* data, uint64_t* offset,
 
     if (sah->non_resident_flag)
     {
-        fprintf_light_cyan(stderr, "Currently not handling non-resident data.\n");
+        fprintf_light_red(stdout, "fname to non-resident data handler: %ls\n", name);
+        ntfs_handle_non_resident_data_attribute(data, offset, name, sah, bootf,
+                                                partition_offset, disk);
     }
     else
     {
+        return EXIT_SUCCESS;;
         fprintf_light_red(stdout, "fname to resident data handler: %ls\n", name);
         ntfs_handle_resident_data_attribute(data, offset, resident_buffer, 4096,
                                             name, sah);
@@ -600,7 +752,10 @@ int ntfs_dispatch_data_attribute(uint8_t* data, uint64_t* offset,
 
 /* attribute dispatcher */
 int ntfs_attribute_dispatcher(uint8_t* data, uint64_t* offset, wchar_t** fname,
-                              struct ntfs_standard_attribute_header* sah)
+                              struct ntfs_standard_attribute_header* sah,
+                              struct ntfs_boot_file* bootf,
+                              int64_t partition_offset,
+                              FILE* disk)
 {
     int ret = 1;
     uint64_t old_offset = *offset;
@@ -617,7 +772,7 @@ int ntfs_attribute_dispatcher(uint8_t* data, uint64_t* offset, wchar_t** fname,
     {
         fprintf_light_yellow(stdout, "Dispatching data attribute.\n");
         fprintf(stdout, "with fname: %ls\n", *fname);
-        if (ntfs_dispatch_data_attribute(data, offset, *fname, sah))
+        if (ntfs_dispatch_data_attribute(data, offset, *fname, sah, bootf, partition_offset, disk))
             ret = -1;
         *offset = old_offset + sah->length - sizeof(*sah);
     }
@@ -671,7 +826,7 @@ int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf,
         {
             ntfs_print_standard_attribute_header(&sah);
 
-            if (ntfs_attribute_dispatcher(data, &data_offset, &fname, &sah) ==0)
+            if (ntfs_attribute_dispatcher(data, &data_offset, &fname, &sah, bootf, partition_offset, disk) ==0)
                 break;
             counter++;
         }
