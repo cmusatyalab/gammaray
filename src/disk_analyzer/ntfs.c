@@ -2,6 +2,7 @@
 #include "ntfs.h"
 #include "util.h"
 
+#include <assert.h>
 #include <errno.h>
 #include <iconv.h>
 #include <inttypes.h>
@@ -187,8 +188,8 @@ int ntfs_print_file_name(struct ntfs_file_name* rec)
 int ntfs_print_data_run_header(struct ntfs_data_run_header* header)
 {
     fprintf_light_yellow(stdout, "data_run.raw: %x\n", header->packed_sizes);
-    fprintf_yellow(stdout, "data_run.length_size: %u\n", UPPER_NIBBLE(header->packed_sizes));
-    fprintf_yellow(stdout, "data_run.start_size: %u\n", LOWER_NIBBLE(header->packed_sizes));
+    fprintf_yellow(stdout, "data_run.offset_size: %u\n", UPPER_NIBBLE(header->packed_sizes));
+    fprintf_yellow(stdout, "data_run.length_size: %u\n", LOWER_NIBBLE(header->packed_sizes));
     return EXIT_SUCCESS;
 }
 
@@ -460,6 +461,44 @@ int ntfs_handle_resident_data_attribute(uint8_t* data, uint64_t* offset,
     return EXIT_SUCCESS;
 }
 
+int ntfs_parse_data_run(uint8_t* data, uint64_t* offset,
+                        uint64_t* length, int64_t* lcn)
+{
+    struct ntfs_data_run_header drh; 
+    uint8_t len_size = 0;
+    uint8_t offset_size = 0;
+
+    hexdump(&(data[*offset]), 6);
+    memcpy(&drh, &(data[*offset]), sizeof(drh));
+    *offset += 1;
+
+    ntfs_print_data_run_header(&drh);
+
+    if (drh.packed_sizes)
+    {
+        offset_size = UPPER_NIBBLE(drh.packed_sizes);
+        len_size = LOWER_NIBBLE(drh.packed_sizes);
+
+        fprintf_light_red(stdout, "offset: %"PRIu64" data[*offset]: %0.2"PRIx8"\n",
+                                  *offset, data[*offset]);
+        memcpy(((uint8_t*) length), &(data[*offset]), len_size);
+        *offset += len_size;
+
+        fprintf_light_red(stdout, "offset: %"PRIu64" data[*offset]: %0.2"PRIx8"\n",
+                                  *offset, data[*offset]);
+        memcpy(((uint8_t*) lcn), &(data[*offset]), offset_size);
+        *offset += offset_size;
+
+        if (top_bit_set(((uint8_t *) lcn)[offset_size-1]))
+            *lcn = sign_extend64(*lcn, highest_set_bit64(*lcn));
+        
+        fprintf_light_cyan(stdout, "data run 0: lcn %0.16"PRIx64" len %0.16"PRIx64"\n",
+                                   *lcn, *length);
+        return 1;
+    }
+    
+    return 0;
+}
 
 /* handler for non-resident */
 int ntfs_handle_non_resident_data_attribute(uint8_t* data, uint64_t* offset,
@@ -471,16 +510,17 @@ int ntfs_handle_non_resident_data_attribute(uint8_t* data, uint64_t* offset,
 {
     FILE* reconstructed = ntfs_create_reconstructed_file(name);
     uint8_t buf[4096];
-    struct ntfs_non_resident_header nrh;
-    struct ntfs_data_run_header drh; 
-    uint8_t len_size;
-    uint8_t offset_size;
-    uint64_t length = 0;
-    int64_t lcn_offset = 0;
-    uint64_t real_size;
+    uint64_t real_size = 0;
+    int64_t run_lcn = 0;
+    int64_t run_lcn_bytes = 0;
     int64_t prev_lcn = 0;
+    uint64_t run_length = 0;
+    uint64_t run_length_bytes = 0;
+    struct ntfs_non_resident_header nrh;
 
+    int counter = 0;
 
+    hexdump(&(data[*offset]), 128);
     ntfs_read_non_resident_attribute_header(data, offset, &nrh);
     ntfs_print_non_resident_header(&nrh);
 
@@ -490,58 +530,41 @@ int ntfs_handle_non_resident_data_attribute(uint8_t* data, uint64_t* offset,
     fprintf_white(stdout, "\tnrh->offset_of_attribute: %x\tsizeof(nrh+sah) %x\n", nrh.data_run_offset, sizeof(nrh) + sizeof(*sah));
     fprintf_green(stdout, "\tSeeking to %d\n", nrh.data_run_offset - sizeof(*sah) - sizeof(nrh));
 
-    hexdump(&(data[*offset]), 6);
 
     *offset += nrh.data_run_offset - sizeof(*sah) - sizeof(nrh);
-    memcpy(&drh, &(data[*offset]), sizeof(drh));
-    *offset += 1;
-
-    while (drh.packed_sizes && real_size)
+    if (reconstructed)
     {
-        ntfs_print_data_run_header(&drh);
-
-        offset_size = UPPER_NIBBLE(drh.packed_sizes);
-        len_size = LOWER_NIBBLE(drh.packed_sizes);
-
-        fprintf_light_red(stdout, "offset: %"PRIu64" data[*offset]: %"PRIu8"\n",
-                                  *offset, data[*offset]);
-        memcpy(((uint8_t*) &length), &(data[*offset]), len_size);
-        *offset += len_size;
-
-        fprintf_light_red(stdout, "offset: %"PRIu64" data[*offset]: %"PRIu8"\n",
-                                  *offset, data[*offset]);
-        memcpy(((uint8_t*) &lcn_offset), &(data[*offset]), offset_size);
-        *offset += offset_size;
-
-        fprintf_light_cyan(stdout, "data run 0: lcn %0.16"PRIx64" len %0.16"PRIx64"\n",
-                                   lcn_offset, length);
-
-        lcn_offset = ntfs_lcn_to_offset(bootf, partition_offset, prev_lcn + lcn_offset);
-        length = ntfs_lcn_len(bootf, length);
-
-        fprintf_light_red(stdout, "offset: 0x%"PRIx64" len: 0x%"PRIx64"\n",
-                                  lcn_offset,
-                                  length);
-        
-        fprintf_light_blue(stderr, "1length: %"PRIu64" real_size: %"PRIu64"\n", length, real_size);
-        if (reconstructed)
+        while (ntfs_parse_data_run(data, offset, &run_length, &run_lcn) && real_size)
         {
-            if (fseeko(disk, lcn_offset, SEEK_SET))
+            fprintf_light_blue(stdout, "got a sequence %d\n", counter++);
+            run_length_bytes = run_length * bootf->bytes_per_sector * bootf->sectors_per_cluster;
+            fprintf_light_red(stdout, "prev_lcn: %"PRIx64"\n", prev_lcn);
+            fprintf_light_red(stdout, "run_lcn: %"PRIx64" (%"PRId64")\n",
+                                      run_lcn, run_lcn);
+            fprintf_light_red(stdout, "prev_lcn + run_lcn: %"PRIx64"\n",
+                                       prev_lcn + run_lcn);
+            run_lcn_bytes = ntfs_lcn_to_offset(bootf, partition_offset,
+                                               prev_lcn + run_lcn);
+            fprintf_light_blue(stdout, "run_lcn_bytes: %"PRIx64
+                                       " run_length_bytes: %"PRIx64"\n",
+                                       run_lcn_bytes,
+                                       run_length_bytes);
+
+            assert(prev_lcn + run_lcn > 0);
+            assert(prev_lcn + run_lcn < 26214400);
+
+            if (fseeko(disk, run_lcn_bytes, SEEK_SET))
             {
                 fprintf_light_red(stderr, "Error seeking to data run LCN offset: %"
-                                           PRIu64"\n", lcn_offset);
-                        exit(1);
+                                           PRIu64"\n", run_lcn_bytes);
+                exit(1);
                 return EXIT_FAILURE;
             }
 
-            while (length)
+            while (run_length_bytes)
             {
-
-                if (length > 10000000000) exit(0);
-                fprintf_light_blue(stderr, "-1length: %"PRIu64" real_size: %"PRIu64"\n", length, real_size);
-                length = length < real_size ? length : real_size;
-                fprintf_light_blue(stderr, "0length: %"PRIu64" real_size: %"PRIu64"\n", length, real_size);
-                if (length >= 4096)
+                run_length_bytes = run_length_bytes > real_size ? real_size : run_length_bytes;
+                if (run_length_bytes >= 4096)
                 {
                     if (fread(buf, 4096, 1, disk) != 1)
                     {
@@ -557,38 +580,37 @@ int ntfs_handle_non_resident_data_attribute(uint8_t* data, uint64_t* offset,
                         return EXIT_FAILURE;
                     }
 
-                    length -= 4096;
+                    run_length_bytes -= 4096;
                     real_size -= 4096;
                 }
                 else
                 {
-                    if (fread(buf, length, 1, disk) != 1)
+                    if (fread(buf, run_length_bytes, 1, disk) != 1)
                     {
                         fprintf_light_red(stderr, "Error reading run data.\n");
                         exit(1);
                         return EXIT_FAILURE;
                     }
 
-                    if (fwrite(buf, length, 1, reconstructed) != 1)
+                    if (fwrite(buf, run_length_bytes, 1, reconstructed) != 1)
                     {
                         fprintf_light_red(stderr, "Error writing run data.\n");
                         exit(1);
                         return EXIT_FAILURE;
                     }
 
-                    length -= length;
-                    real_size -= length;
+                    real_size -= run_length_bytes;
+                    run_length_bytes -= run_length_bytes;
                 }
+
             }
+
+            prev_lcn = prev_lcn + run_lcn;
+            run_length = 0;
+            run_length_bytes = 0;
+            run_lcn = 0;
+            run_lcn_bytes = 0;
         }
-
-        hexdump(&(data[*offset]), 6);
-
-        memcpy(&drh, &(data[*offset]), sizeof(drh));
-        *offset += 1;
-        length = 0;
-        lcn_offset = 0;
-        fflush(stdout);
     }
 
     if (reconstructed)
