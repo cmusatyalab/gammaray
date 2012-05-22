@@ -10,6 +10,31 @@ bool top_bit_set(uint8_t byte)
 }
 
 /* http://stackoverflow.com/posts/4970859/revisions */
+uint64_t highest_set_bit64(uint64_t val)
+{
+    int counter = 0;
+
+    while (val >>= 1)
+    {
+        counter++;
+    }
+
+    return counter;
+}
+
+/* http://graphics.stanford.edu/~seander/bithacks.html#VariableSignExtend */
+int64_t sign_extend64(uint64_t val, uint64_t bits)
+{
+    int64_t r;
+    int64_t const m = 1U << (bits - 1);
+
+    val = val & ((1U << bits) - 1);
+    r = (val ^ m) - m;
+
+    return r;
+}
+
+/* http://stackoverflow.com/posts/4970859/revisions */
 uint32_t highest_set_bit(uint32_t val)
 {
     int counter = 0;
