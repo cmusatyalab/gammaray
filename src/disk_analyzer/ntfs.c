@@ -401,10 +401,11 @@ int ntfs_read_attribute_data(uint8_t* data, uint64_t* offset,
     return EXIT_SUCCESS;
 }
 
-FILE* ntfs_create_reconstructed_file(wchar_t* name)
+FILE* ntfs_create_reconstructed_file(wchar_t* name, bool extension)
 {
     FILE* reconstructed = NULL;
     char fname[1024] = { 0 };
+    char* mode = extension ? "a" : "wx";
 
     if (name)
     {
@@ -419,13 +420,14 @@ FILE* ntfs_create_reconstructed_file(wchar_t* name)
 
         /* create "versions" of files depending on number of valid file records */
         /* TODO: could loop forever */
-        while ((reconstructed = fopen(fname, "wx")) == NULL)
+        while ((reconstructed = fopen(fname, mode)) == NULL)
         {
-            fprintf_light_red(stderr, "Error creating file %s\n", fname);
-            fprintf_light_red(stderr, "\t%s\n", strerror(errno));
             strcat(fname, "0");
         }
     }
+
+    if (extension && name)
+        fprintf_light_red(stderr, "Opened '%s' in 'a' mode.\n", fname);
 
     return reconstructed;
 }
@@ -434,9 +436,10 @@ FILE* ntfs_create_reconstructed_file(wchar_t* name)
 int ntfs_handle_resident_data_attribute(uint8_t* data, uint64_t* offset,
                                         uint8_t* buf, uint64_t buf_len,
                                         wchar_t* name,
-                                        struct ntfs_standard_attribute_header* sah)
+                                        struct ntfs_standard_attribute_header* sah,
+                                        bool extension)
 {
-    FILE* reconstructed = ntfs_create_reconstructed_file(name);
+    FILE* reconstructed = ntfs_create_reconstructed_file(name, extension);
     
     fprintf_yellow(stdout, "\tData is resident.\n");
     fprintf_white(stdout, "\tsah->offset_of_attribute: %x\tsizeof(sah) %x\n", sah->offset_of_attribute, sizeof(*sah));
@@ -506,9 +509,10 @@ int ntfs_handle_non_resident_data_attribute(uint8_t* data, uint64_t* offset,
                                             struct ntfs_standard_attribute_header* sah,
                                             struct ntfs_boot_file* bootf,
                                             int64_t partition_offset,
-                                            FILE* disk)
+                                            FILE* disk,
+                                            bool extension)
 {
-    FILE* reconstructed = ntfs_create_reconstructed_file(name);
+    FILE* reconstructed = ntfs_create_reconstructed_file(name, extension);
     uint8_t buf[4096];
     uint64_t real_size = 0;
     int64_t run_lcn = 0;
@@ -677,16 +681,22 @@ int ntfs_dispatch_file_name_attribute(uint8_t* data, uint64_t* offset,
             switch (errno)
             {
                 case E2BIG:
-                    fprintf_light_red(stderr, "There is not sufficient room at *outbuf\n");
+                    fprintf_light_red(stderr, "There is not sufficient room at"
+                                              " *outbuf\n");
                     break;
                 case EILSEQ:
-                    fprintf_light_red(stderr, "An invalid multibyte sequence has been encountered in the input.\n");
+                    fprintf_light_red(stderr, "An invalid multibyte sequence "
+                                              "has been encountered in the "
+                                              "input.\n");
                     break;
                 case EINVAL:
-                    fprintf_light_red(stderr, "An incomplete multibyte sequence has been encountered in the input.\n");
+                    fprintf_light_red(stderr, "An incomplete multibyte "
+                                              "sequence has been encountered "
+                                              "in the input.\n");
                     break;
                 default:
-                    fprintf_light_red(stderr, "An unknown iconv error was encountered.\n");
+                    fprintf_light_red(stderr, "An unknown iconv error was "
+                                              "encountered.\n");
             };
 
             return -1;
@@ -723,7 +733,8 @@ int ntfs_dispatch_data_attribute(uint8_t* data, uint64_t* offset,
                                  struct ntfs_standard_attribute_header* sah,
                                  struct ntfs_boot_file* bootf,
                                  int64_t partition_offset,
-                                 FILE* disk)
+                                 FILE* disk,
+                                 bool extension)
 {
     uint8_t resident_buffer[4096];
 
@@ -758,14 +769,15 @@ int ntfs_dispatch_data_attribute(uint8_t* data, uint64_t* offset,
     {
         fprintf_light_red(stdout, "fname to non-resident data handler: %ls\n", name);
         ntfs_handle_non_resident_data_attribute(data, offset, name, sah, bootf,
-                                                partition_offset, disk);
+                                                partition_offset, disk,
+                                                extension);
     }
     else
     {
         return EXIT_SUCCESS;;
         fprintf_light_red(stdout, "fname to resident data handler: %ls\n", name);
         ntfs_handle_resident_data_attribute(data, offset, resident_buffer, 4096,
-                                            name, sah);
+                                            name, sah, extension);
     }
 
     return EXIT_SUCCESS;
@@ -777,7 +789,8 @@ int ntfs_attribute_dispatcher(uint8_t* data, uint64_t* offset, wchar_t** fname,
                               struct ntfs_standard_attribute_header* sah,
                               struct ntfs_boot_file* bootf,
                               int64_t partition_offset,
-                              FILE* disk)
+                              FILE* disk,
+                              bool extension)
 {
     int ret = 1;
     uint64_t old_offset = *offset;
@@ -794,7 +807,8 @@ int ntfs_attribute_dispatcher(uint8_t* data, uint64_t* offset, wchar_t** fname,
     {
         fprintf_light_yellow(stdout, "Dispatching data attribute.\n");
         fprintf(stdout, "with fname: %ls\n", *fname);
-        if (ntfs_dispatch_data_attribute(data, offset, *fname, sah, bootf, partition_offset, disk))
+        if (ntfs_dispatch_data_attribute(data, offset, *fname, sah, bootf,
+                                         partition_offset, disk, extension))
             ret = -1;
         *offset = old_offset + sah->length - sizeof(*sah);
     }
@@ -826,20 +840,35 @@ int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf,
     uint64_t data_offset = 0;
     wchar_t* fname = NULL;
     int counter = 0;
+    bool extension = false;
 
     file_record_offset =
         ntfs_lcn_to_offset(bootf, partition_offset, bootf->lcn_mft); 
 
-    fprintf_light_red(stdout, "Current file_record_offset: %"PRId64"\n", file_record_offset);
+    fprintf_light_red(stdout, "Current file_record_offset: %"PRId64"\n",
+                              file_record_offset);
     while ((data = ntfs_read_file_record(disk, &file_record_offset, bootf)) !=
                 NULL)
     {
         data_offset = 0;
-        fprintf_light_red(stdout, "Current file_record_offset: %"PRId64"\n", file_record_offset);
+        fprintf_light_red(stdout, "Current file_record_offset: %"PRId64"\n",
+                                  file_record_offset);
         ntfs_read_file_record_header(data, &data_offset, &rec);
         ntfs_print_file_record(&rec);
         ntfs_read_update_sequence(data, &data_offset, &rec, &seq);
         ntfs_fixup_data(data, 1024, &seq);
+
+        /* check if valid record we want to check */
+        if (!(rec.flags & 0x01)) /* in use */
+           continue;
+        if (rec.flags & 0x02) /* not a dir */
+            continue;
+        if (rec.file_ref_base) /* BASE FILE Record */
+        {
+            fprintf_light_red(stderr, "Uh oh: Extension FILE Record "
+                                      "encountered.\n");
+            extension = true;
+        }
         
         data_offset = rec.offset_first_attribute;
         counter = 0;
@@ -848,20 +877,25 @@ int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf,
         {
             ntfs_print_standard_attribute_header(&sah);
 
-            if (ntfs_attribute_dispatcher(data, &data_offset, &fname, &sah, bootf, partition_offset, disk) ==0)
+            if (ntfs_attribute_dispatcher(data, &data_offset, &fname, &sah,
+                                          bootf, partition_offset, disk,
+                                          extension) == 0)
                 break;
             counter++;
         }
+
         if (data)
         {
             free(data);
             data = NULL;
         }
+        
         if (seq.data)
         {
             free(seq.data);
             seq.data = NULL;
         }
+        
         if (fname)
         {
             free(fname);
