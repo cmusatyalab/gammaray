@@ -11,6 +11,17 @@
 #include <string.h>
 #include <wchar.h>
 
+#define REC_DIFF(element) \
+    if (reca->element != recb->element) \
+        fprintf_light_red(stdout, "%s diff.\n", #element); \
+    else \
+        fprintf_yellow(stdout, "%s match.\n", #element);
+
+#define SAH_DIFF(element) \
+    if (saha->element != sahb->element) \
+        fprintf_light_red(stdout, "%s diff.\n", #element); \
+    else \
+        fprintf_yellow(stdout, "%s match.\n", #element);
 
 
 
@@ -904,5 +915,174 @@ int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf,
         }
     }
     
+    return EXIT_SUCCESS;
+}
+
+
+int __diff_file_records(struct ntfs_file_record* reca,
+                        struct ntfs_file_record* recb)
+{
+    fprintf_light_cyan(stdout, "\n-- Diff'ing File Record Headers --\n");
+    REC_DIFF(magic)
+    REC_DIFF(offset_update_seq)
+    REC_DIFF(size_usn)
+    REC_DIFF(lsn)
+    REC_DIFF(seq_num)
+    REC_DIFF(hard_link_count);
+    REC_DIFF(offset_first_attribute);
+    REC_DIFF(flags);
+    REC_DIFF(real_size);
+    REC_DIFF(allocated_size);
+    REC_DIFF(file_ref_base);
+    REC_DIFF(next_attr_id);
+    REC_DIFF(align);
+    REC_DIFF(rec_num);
+    REC_DIFF(usn_num);
+    fprintf_light_cyan(stdout, "-- Finished diff'ing File Record Headers --\n");
+    return EXIT_SUCCESS;
+}
+
+int __diff_standard_attribute_headers(struct ntfs_standard_attribute_header* saha,
+                                      struct ntfs_standard_attribute_header* sahb)
+{
+    fprintf_light_cyan(stdout, "\n-- Diff'ing SAH --\n");
+
+    SAH_DIFF(attribute_type);
+    SAH_DIFF(length);
+    SAH_DIFF(non_resident_flag);
+    SAH_DIFF(name_length);
+    SAH_DIFF(name_offset);
+    SAH_DIFF(flags);
+    SAH_DIFF(attribute_id);
+    SAH_DIFF(length_of_attribute);
+    SAH_DIFF(offset_of_attribute);
+    SAH_DIFF(indexed_flag);
+    SAH_DIFF(padding);
+
+    fprintf_light_cyan(stdout, "-- Finished diff'ing SAH --\n");
+    return EXIT_SUCCESS;
+}
+
+int ntfs_compare_attribute_dispatcher(uint8_t* bufa, uint8_t* bufb,
+                                      uint64_t* offseta, uint64_t* offsetb,
+                                      wchar_t** fnamea, wchar_t** fnameb,
+                                      struct ntfs_standard_attribute_header* saha,
+                                      struct ntfs_standard_attribute_header* sahb)
+{
+    int ret = 1;
+    uint64_t old_offseta = *offseta;
+    uint64_t old_offsetb = *offsetb;
+
+    if (saha->attribute_type != sahb->attribute_type)
+    {
+        fprintf_light_red(stdout, "Attribute types differ\n");
+        return 0;
+    }
+
+    if (saha->attribute_type == 0x30)
+    {
+        fprintf_light_yellow(stdout, "Dispatching file name attribute.\n");
+        if (ntfs_dispatch_file_name_attribute(bufa, offseta, fnamea, saha))
+           ret = -1;
+        if (ntfs_dispatch_file_name_attribute(bufb, offsetb, fnameb, sahb))
+           ret = -1;
+        fprintf(stdout, "dispatched file name: %ls\n", *fnamea);
+        fprintf(stdout, "dispatched file name: %ls\n", *fnameb);
+        if (!(*fnamea == *fnameb) && wcscmp(*fnamea, *fnameb))
+            fprintf_light_red(stdout, "fname mismatch.\n");
+        *offseta = old_offseta + saha->length - sizeof(*saha);
+        *offsetb = old_offsetb + sahb->length - sizeof(*sahb);
+    }
+    else if (saha->attribute_type == 0x80)
+    {
+        fprintf_light_yellow(stdout, "Dispatching data attribute.\n");
+        //fprintf(stdout, "with fname: %ls\n", *fname);
+        //if (ntfs_dispatch_data_attribute(data, offset, *fname, sah, bootf,
+        //                                 partition_offset, disk, extension))
+        //    ret = -1;
+        *offseta = old_offseta + saha->length - sizeof(*saha);
+        *offsetb = old_offsetb + sahb->length - sizeof(*sahb);
+    }
+    else
+    {
+        *offseta = old_offseta + saha->length - sizeof(*saha);
+        *offsetb = old_offsetb + sahb->length - sizeof(*sahb);
+        fprintf_light_yellow(stdout, "Dispatching unhandled attribute.\n");
+    }
+
+    if (*((int32_t*) &(bufa[*offseta])) == -1)
+        ret = 0;
+
+    if (*((int32_t*) &(bufb[*offsetb])) == -1)
+        ret = 0;
+
+    fprintf_light_red(stdout, "returning %d\n", ret);
+    return ret;
+}
+
+int ntfs_diff_raw_file_records(uint8_t* bufa, uint8_t* bufb,
+                               struct ntfs_boot_file* bootf)
+{
+    struct ntfs_file_record reca, recb;
+    struct ntfs_update_sequence seqa, seqb;
+    struct ntfs_standard_attribute_header saha, sahb;
+    wchar_t* fnamea = NULL, *fnameb = NULL;
+    uint64_t offseta = 0, offsetb = 0, counter = 0;
+
+    ntfs_read_file_record_header(bufa, &offseta, &reca);
+    ntfs_read_update_sequence(bufa, &offseta, &reca, &seqa);
+    ntfs_fixup_data(bufa, ntfs_file_record_size(bootf), &seqa);
+
+    ntfs_read_file_record_header(bufb, &offsetb, &recb);
+    ntfs_read_update_sequence(bufb, &offsetb, &recb, &seqb);
+    ntfs_fixup_data(bufb, ntfs_file_record_size(bootf), &seqb);
+
+    __diff_file_records(&reca, &recb);
+
+    offseta = reca.offset_first_attribute;
+    offsetb = recb.offset_first_attribute;
+
+    while (ntfs_read_attribute_header(bufa, &offseta, &saha) == 0 &&
+           ntfs_read_attribute_header(bufb, &offsetb, &sahb) == 0 &&
+           counter < 1024)
+    {
+        __diff_standard_attribute_headers(&saha, &sahb);
+        if (ntfs_compare_attribute_dispatcher(bufa, bufb, &offseta, &offsetb, &fnamea, &fnameb, &saha, &sahb) == 0)
+            break;
+        counter++;
+    }
+
+    return EXIT_SUCCESS;
+}
+
+
+int ntfs_diff_file_records(FILE* disk, uint64_t recorda, uint64_t recordb,
+                           int64_t partition_offset,
+                           struct ntfs_boot_file* bootf)
+{
+    uint64_t file_record_size = ntfs_file_record_size(bootf);
+    uint8_t* data_a = malloc(file_record_size);
+    uint8_t* data_b = malloc(file_record_size);
+
+    if (data_a == NULL)
+    {
+        fprintf_light_red(stderr, "Error malloc()ing data_a.\n");
+        return EXIT_FAILURE;
+    }
+
+    if (data_b == NULL)
+    {
+        fprintf_light_red(stderr, "Error malloc()ing data_b.\n");
+        return EXIT_FAILURE;
+    }
+
+    ntfs_read_file_record(disk, recorda, partition_offset, bootf, data_a);
+    ntfs_read_file_record(disk, recordb, partition_offset, bootf, data_b);
+
+    ntfs_diff_raw_file_records(data_a, data_b, bootf);
+
+    free(data_a);    
+    free(data_b);
+
     return EXIT_SUCCESS;
 }

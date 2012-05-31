@@ -135,4 +135,7 @@ int ntfs_print_boot_file(struct ntfs_boot_file* bootf,
                          int64_t partition_offset);
 int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf,
                   int64_t partition_offset);
+int ntfs_diff_file_records(FILE* disk, uint64_t recorda, uint64_t recordb,
+                           int64_t partition_offset,
+                           struct ntfs_boot_file* bootf);
 #endif
