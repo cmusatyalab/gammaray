@@ -257,49 +257,52 @@ int ntfs_probe(FILE* disk, int64_t partition_offset,
 }
 
 
+uint64_t ntfs_file_record_size(struct ntfs_boot_file* bootf)
+{
+    return bootf->clusters_per_mft_record > 0 ?
+           bootf->clusters_per_mft_record *
+           bootf->sectors_per_cluster *
+           bootf->bytes_per_sector :
+           2 << -1 * (bootf->clusters_per_mft_record + 1);
+}
+
 
 /* read FILE record */
-uint8_t* ntfs_read_file_record(FILE* disk, int64_t* offset,
-                               struct ntfs_boot_file* bootf)
+int ntfs_read_file_record(FILE* disk, uint64_t record_num,
+                          int64_t partition_offset, 
+                          struct ntfs_boot_file* bootf,
+                          uint8_t* buf)
 {
-    uint64_t record_size = bootf->clusters_per_mft_record > 0 ?
-                           bootf->clusters_per_mft_record *
-                           bootf->sectors_per_cluster *
-                           bootf->bytes_per_sector :
-                           2 << -1 * (bootf->clusters_per_mft_record + 1);
+    uint64_t record_size = ntfs_file_record_size(bootf); 
+    int64_t offset = ntfs_lcn_to_offset(bootf, partition_offset,
+                                        bootf->lcn_mft) +
+                     record_num * record_size;
 
-    uint8_t* data = malloc(record_size);
-
-    if (data == NULL)
+    if (buf == NULL)
     {
         fprintf_light_red(stderr, "Error malloc()ing to read file record.\n");
-        return NULL;
+        return 0;
     }
 
-    if (fseeko(disk, *offset, SEEK_SET))
+    if (fseeko(disk, offset, SEEK_SET))
     {
         fprintf_light_red(stderr, "Error seeking to FILE record.\n");
-        free(data);
-        return NULL;
+        return 0;
     }
 
-    if (fread(data, 1, record_size, disk) != record_size)
+    if (fread(buf, 1, record_size, disk) != record_size)
     {
         fprintf_light_red(stderr, "Error reading FILE record data.\n");
-        free(data);
-        return NULL;
+        return 0;
     }
 
-    if (strncmp((char*) data, "FILE", 4) != 0)
+    if (strncmp((char*) buf, "FILE", 4) != 0)
     {
-        fprintf_light_cyan(stdout, "FILE magic bytes mistmatch.\n");
-        free(data);
-        return NULL;
+        fprintf_light_cyan(stderr, "FILE magic bytes mismatch.\n");
+        return 0;
     }
 
-    *offset += record_size;
-
-    return data;
+    return record_size;
 }
 
 
@@ -835,23 +838,27 @@ int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf,
     struct ntfs_file_record rec;
     struct ntfs_update_sequence seq;
     struct ntfs_standard_attribute_header sah;
-    uint8_t* data = NULL;
+    uint8_t* data = malloc(ntfs_file_record_size(bootf));
     int64_t file_record_offset;
     uint64_t data_offset = 0;
     wchar_t* fname = NULL;
     int counter = 0;
+    uint64_t file_record_counter = 0;
     bool extension = false;
 
     file_record_offset =
         ntfs_lcn_to_offset(bootf, partition_offset, bootf->lcn_mft); 
 
-    fprintf_light_red(stdout, "Current file_record_offset: %"PRId64"\n",
+    fprintf_light_red(stdout, "Current %"PRIu64" file_record_offset: %"
+                              PRId64"\n",
+                              file_record_counter,
                               file_record_offset);
-    while ((data = ntfs_read_file_record(disk, &file_record_offset, bootf)) !=
-                NULL)
+    while (ntfs_read_file_record(disk, file_record_counter, partition_offset, bootf, data))
     {
         data_offset = 0;
-        fprintf_light_red(stdout, "Current file_record_offset: %"PRId64"\n",
+        fprintf_light_red(stdout, "Current %"PRIu64" file_record_offset: %"
+                                  PRId64"\n",
+                                  file_record_counter++,
                                   file_record_offset);
         ntfs_read_file_record_header(data, &data_offset, &rec);
         ntfs_print_file_record(&rec);
@@ -884,12 +891,6 @@ int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf,
             counter++;
         }
 
-        if (data)
-        {
-            free(data);
-            data = NULL;
-        }
-        
         if (seq.data)
         {
             free(seq.data);
