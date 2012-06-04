@@ -850,6 +850,7 @@ int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf,
                               file_record_offset);
     while (ntfs_read_file_record(disk, file_record_counter, partition_offset, bootf, data))
     {
+        extension = false;
         data_offset = 0;
         fprintf_light_red(stdout, "Current %"PRIu64" file_record_offset: %"
                                   PRId64"\n",
