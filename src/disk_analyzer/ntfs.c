@@ -948,6 +948,337 @@ int __diff_standard_attribute_headers(struct ntfs_standard_attribute_header* sah
     return EXIT_SUCCESS;
 }
 
+/* handler for resident */
+int ntfs_handle_compare_resident_data_attribute(uint8_t* data, uint64_t* offset,
+                                                uint8_t* buf, uint64_t buf_len,
+                                                wchar_t* name,
+                                                struct ntfs_standard_attribute_header* sah,
+                                                bool extension)
+{
+    FILE* reconstructed = ntfs_create_reconstructed_file(name, extension);
+    
+    fprintf_yellow(stdout, "\tData is resident.\n");
+    fprintf_white(stdout, "\tsah->offset_of_attribute: %x\tsizeof(sah) %x\n", sah->offset_of_attribute, sizeof(*sah));
+    fprintf_green(stdout, "\tSeeking to %d\n", sah->offset_of_attribute - sizeof(*sah));
+
+    ntfs_read_attribute_data(data, offset, buf, buf_len, sah);
+  
+    if (reconstructed)
+    {
+        if (fwrite(buf, 1, sah->length_of_attribute, reconstructed) != sah->length_of_attribute)
+        {
+            fclose(reconstructed);
+            fprintf_light_red(stderr, "Error writing resident attribute.\n");
+
+
+            return EXIT_FAILURE;
+        }
+
+        fclose(reconstructed);
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int ntfs_parse_compare_data_run(uint8_t* data, uint64_t* offset,
+                                uint64_t* length, int64_t* lcn)
+{
+    struct ntfs_data_run_header drh; 
+    uint8_t len_size = 0;
+    uint8_t offset_size = 0;
+
+    memcpy(&drh, &(data[*offset]), sizeof(drh));
+    *offset += 1;
+
+    ntfs_print_data_run_header(&drh);
+
+    if (drh.packed_sizes)
+    {
+        offset_size = UPPER_NIBBLE(drh.packed_sizes);
+        len_size = LOWER_NIBBLE(drh.packed_sizes);
+
+        fprintf_light_red(stdout, "offset: %"PRIu64" data[*offset]: %0.2"PRIx8"\n",
+                                  *offset, data[*offset]);
+        memcpy(((uint8_t*) length), &(data[*offset]), len_size);
+        *offset += len_size;
+
+        fprintf_light_red(stdout, "offset: %"PRIu64" data[*offset]: %0.2"PRIx8"\n",
+                                  *offset, data[*offset]);
+        memcpy(((uint8_t*) lcn), &(data[*offset]), offset_size);
+        *offset += offset_size;
+
+        if (top_bit_set(((uint8_t *) lcn)[offset_size-1]))
+            *lcn = sign_extend64(*lcn, highest_set_bit64(*lcn));
+        
+        fprintf_light_cyan(stdout, "data run 0: lcn %0.16"PRIx64" len %0.16"PRIx64"\n",
+                                   *lcn, *length);
+        return 1;
+    }
+    
+    return 0;
+}
+
+/* handler for non-resident */
+int ntfs_handle_compare_non_resident_data_attribute(uint8_t* data, uint64_t* offset,
+                                                    wchar_t* name,
+                                                    struct ntfs_standard_attribute_header* sah,
+                                                    struct ntfs_boot_file* bootf,
+                                                    int64_t partition_offset,
+                                                    FILE* disk,
+                                                    bool extension)
+{
+    FILE* reconstructed = ntfs_create_reconstructed_file(name, extension);
+    uint8_t buf[4096];
+    uint64_t real_size = 0;
+    int64_t run_lcn = 0;
+    int64_t run_lcn_bytes = 0;
+    int64_t prev_lcn = 0;
+    uint64_t run_length = 0;
+    uint64_t run_length_bytes = 0;
+    struct ntfs_non_resident_header nrh;
+
+    int counter = 0;
+
+    ntfs_read_non_resident_attribute_header(data, offset, &nrh);
+    ntfs_print_non_resident_header(&nrh);
+
+    real_size = nrh.real_size;
+
+    fprintf_yellow(stdout, "\tData is non-resident\n");
+    fprintf_white(stdout, "\tnrh->offset_of_attribute: %x\tsizeof(nrh+sah) %x\n", nrh.data_run_offset, sizeof(nrh) + sizeof(*sah));
+    fprintf_green(stdout, "\tSeeking to %d\n", nrh.data_run_offset - sizeof(*sah) - sizeof(nrh));
+
+
+    *offset += nrh.data_run_offset - sizeof(*sah) - sizeof(nrh);
+    if (reconstructed)
+    {
+        while (ntfs_parse_data_run(data, offset, &run_length, &run_lcn) && real_size)
+        {
+            fprintf_light_blue(stdout, "got a sequence %d\n", counter++);
+            run_length_bytes = run_length * bootf->bytes_per_sector * bootf->sectors_per_cluster;
+            fprintf_light_red(stdout, "prev_lcn: %"PRIx64"\n", prev_lcn);
+            fprintf_light_red(stdout, "run_lcn: %"PRIx64" (%"PRId64")\n",
+                                      run_lcn, run_lcn);
+            fprintf_light_red(stdout, "prev_lcn + run_lcn: %"PRIx64"\n",
+                                       prev_lcn + run_lcn);
+            run_lcn_bytes = ntfs_lcn_to_offset(bootf, partition_offset,
+                                               prev_lcn + run_lcn);
+            fprintf_light_blue(stdout, "run_lcn_bytes: %"PRIx64
+                                       " run_length_bytes: %"PRIx64"\n",
+                                       run_lcn_bytes,
+                                       run_length_bytes);
+
+            assert(prev_lcn + run_lcn > 0);
+            assert(prev_lcn + run_lcn < 26214400);
+
+            if (fseeko(disk, run_lcn_bytes, SEEK_SET))
+            {
+                fprintf_light_red(stderr, "Error seeking to data run LCN offset: %"
+                                           PRIu64"\n", run_lcn_bytes);
+                exit(1);
+                return EXIT_FAILURE;
+            }
+
+            while (run_length_bytes)
+            {
+                run_length_bytes = run_length_bytes > real_size ? real_size : run_length_bytes;
+                if (run_length_bytes >= 4096)
+                {
+                    if (fread(buf, 4096, 1, disk) != 1)
+                    {
+                        fprintf_light_red(stderr, "Error reading run data.\n");
+                        exit(1);
+                        return EXIT_FAILURE;
+                    }
+
+                    if (fwrite(buf, 4096, 1, reconstructed) != 1)
+                    {
+                        fprintf_light_red(stderr, "Error writing run data.\n");
+                        exit(1);
+                        return EXIT_FAILURE;
+                    }
+
+                    run_length_bytes -= 4096;
+                    real_size -= 4096;
+                }
+                else
+                {
+                    if (fread(buf, run_length_bytes, 1, disk) != 1)
+                    {
+                        fprintf_light_red(stderr, "Error reading run data.\n");
+                        exit(1);
+                        return EXIT_FAILURE;
+                    }
+
+                    if (fwrite(buf, run_length_bytes, 1, reconstructed) != 1)
+                    {
+                        fprintf_light_red(stderr, "Error writing run data.\n");
+                        exit(1);
+                        return EXIT_FAILURE;
+                    }
+
+                    real_size -= run_length_bytes;
+                    run_length_bytes -= run_length_bytes;
+                }
+
+            }
+
+            prev_lcn = prev_lcn + run_lcn;
+            run_length = 0;
+            run_length_bytes = 0;
+            run_lcn = 0;
+            run_lcn_bytes = 0;
+        }
+    }
+
+    if (reconstructed)
+        fclose(reconstructed);
+
+    return EXIT_SUCCESS;
+}
+
+/* dispatch handler for file name */
+int ntfs_dispatch_compare_file_name_attribute(uint8_t* data, uint64_t* offset,
+                                              wchar_t** name,
+                                              struct ntfs_standard_attribute_header* sah)
+{
+    struct ntfs_file_name fname;
+    wchar_t* file_name = malloc(sizeof(wchar_t) * 512);
+    wchar_t* file_namep = file_name;
+    wchar_t** file_namepp = &file_namep;
+    char file_name_encoded[512];
+    char* file_name_encodedp = file_name_encoded;
+    char** file_name_encodedpp = &file_name_encodedp;
+    iconv_t cd = iconv_open("WCHAR_T", "UTF-16");
+    size_t outbytes = sizeof(wchar_t) * 512;
+    size_t inbytes; 
+
+    memset(file_name, 0, sizeof(wchar_t) * 512);
+    memset(file_name_encoded, 0, 512);
+    
+    if (cd < 0)
+    {
+        fprintf_light_red(stderr, "Error creating conversion struct.\n");
+        return -1;
+    } 
+
+    if (sah->attribute_type == 0x30) /* file name */
+    {
+        /* TODO: refactor */
+        *offset += sah->offset_of_attribute - sizeof(*sah);
+        fname = *((struct ntfs_file_name*) &(data[*offset]));
+        *offset += sizeof(struct ntfs_file_name);
+
+        //ntfs_print_file_name(&fname);
+
+        memcpy(file_name_encoded, &(data[*offset]), 2*fname.name_len);
+        *offset += 2*fname.name_len;
+
+        file_name_encodedp = file_name_encoded;
+        file_name_encodedpp = &file_name_encodedp;
+        inbytes = 2*fname.name_len;
+
+        if (iconv(cd, (char**) file_name_encodedpp, &inbytes, (char**) file_namepp, &outbytes) == (size_t) -1)
+        {
+            fprintf_light_red(stderr, "Error converting to wchar_t.\n");
+            switch (errno)
+            {
+                case E2BIG:
+                    fprintf_light_red(stderr, "There is not sufficient room at"
+                                              " *outbuf\n");
+                    break;
+                case EILSEQ:
+                    fprintf_light_red(stderr, "An invalid multibyte sequence "
+                                              "has been encountered in the "
+                                              "input.\n");
+                    break;
+                case EINVAL:
+                    fprintf_light_red(stderr, "An incomplete multibyte "
+                                              "sequence has been encountered "
+                                              "in the input.\n");
+                    break;
+                default:
+                    fprintf_light_red(stderr, "An unknown iconv error was "
+                                              "encountered.\n");
+            };
+
+            return -1;
+        }
+        else
+        {
+            if (*name)
+                free(*name);
+            *name = file_name;
+        }
+    }
+
+    iconv_close(cd);
+
+    return EXIT_SUCCESS;
+}
+
+/* dispatch handler for data */
+int ntfs_dispatch_compare_data_attribute(uint8_t* bufa, uint64_t* offseta,
+                                         wchar_t** fnamea,
+                                         struct ntfs_standard_attribute_header* saha,
+                                         uint8_t* bufb, uint64_t* offsetb,
+                                         wchar_t** fnameb,
+                                         struct ntfs_standard_attribute_header* sahb)
+{
+    uint8_t resident_buffer[4096];
+
+    if (saha->attribute_type != 0x80 &&
+        sahb->attribute_type != 0x80)
+    {
+        fprintf_light_red(stderr, "Data handler, not a data attribute.\n");
+        return EXIT_FAILURE;
+    }
+    
+    if ((saha->flags & 0x0001) != 0x0000 &&
+        (sahb->flags & 0x0001) != 0x0000) /* check compressed */
+    {
+        fprintf_light_red(stdout, "NTFS: Error no support for compressed files"
+                                  " yet.\n");
+        return EXIT_FAILURE;
+    }
+
+    if ((saha->flags & 0x4000) != 0x0000 &&
+        (sahb->flags & 0x4000) != 0x0000) /* check encrypted */
+    {
+        fprintf_light_red(stdout, "NTFS: Error no support for encrypted files "
+                                  "yet.\n");
+        return EXIT_FAILURE;
+    }
+
+    if ((saha->flags & 0x8000) != 0x0000 &&
+        (sahb->flags & 0x8000) != 0x0000) /* check sparse */
+    {
+        fprintf_light_red(stdout, "NTFS: Error no support for sparse files "
+                                  "yet.\n");
+        return EXIT_FAILURE;
+    }
+
+    if (saha->non_resident_flag != sahb->non_resident_flag)
+    {
+        fprintf_light_red(stdout, "non-resident mismatch.\n");
+        return EXIT_FAILURE;
+    }
+
+    if (saha->non_resident_flag)
+    {
+        //ntfs_handle_compare_non_resident_data_attribute(data, offset, name, sah, bootf,
+        //                                        partition_offset, disk,
+        //                                        extension);
+    }
+    else
+    {
+        //ntfs_handle_compare_resident_data_attribute(data, offset, resident_buffer, 4096,
+        //                                    name, sah, extension);
+    }
+
+    return EXIT_SUCCESS;
+}
+
 int ntfs_compare_attribute_dispatcher(uint8_t* bufa, uint8_t* bufb,
                                       uint64_t* offseta, uint64_t* offsetb,
                                       wchar_t** fnamea, wchar_t** fnameb,
@@ -966,22 +1297,30 @@ int ntfs_compare_attribute_dispatcher(uint8_t* bufa, uint8_t* bufb,
 
     if (saha->attribute_type == 0x30)
     {
-        fprintf_light_yellow(stdout, "Dispatching file name attribute.\n");
+        fprintf_light_cyan(stdout, "\n-- Diff'ing file name --\n");
         if (ntfs_dispatch_file_name_attribute(bufa, offseta, fnamea, saha))
            ret = -1;
         if (ntfs_dispatch_file_name_attribute(bufb, offsetb, fnameb, sahb))
            ret = -1;
         if (!(*fnamea == *fnameb) && wcscmp(*fnamea, *fnameb))
+        {
             fprintf_light_red(stdout, "fname mismatch.\n");
+            fprintf_light_blue(stdout, "\t%ls != %ls\n", *fnamea, *fnameb);
+        }
+        else
+        {
+            fprintf_yellow(stdout, "fname matches.\n");
+        }
+        fprintf_light_cyan(stdout, "-- Finished Diff'ing file name --\n");
         *offseta = old_offseta + saha->length - sizeof(*saha);
         *offsetb = old_offsetb + sahb->length - sizeof(*sahb);
     }
     else if (saha->attribute_type == 0x80)
     {
         fprintf_light_yellow(stdout, "Dispatching data attribute.\n");
-        //if (ntfs_dispatch_data_attribute(data, offset, *fname, sah, bootf,
-        //                                 partition_offset, disk, extension))
-        //    ret = -1;
+        if (ntfs_dispatch_compare_data_attribute(bufa, offseta, fnamea, saha,
+                                                 bufb, offsetb, fnameb, sahb))
+            ret = -1;
         *offseta = old_offseta + saha->length - sizeof(*saha);
         *offsetb = old_offsetb + sahb->length - sizeof(*sahb);
     }
