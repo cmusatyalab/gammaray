@@ -566,7 +566,7 @@ int ntfs_handle_non_resident_data_attribute(uint8_t* data, uint64_t* offset,
                                        run_lcn_bytes,
                                        run_length_bytes);
 
-            assert(prev_lcn + run_lcn > 0);
+            assert(prev_lcn + run_lcn >= 0);
             assert(prev_lcn + run_lcn < 26214400);
 
             if (fseeko(disk, run_lcn_bytes, SEEK_SET))
@@ -574,7 +574,6 @@ int ntfs_handle_non_resident_data_attribute(uint8_t* data, uint64_t* offset,
                 fprintf_light_red(stderr, "Error seeking to data run LCN offset: %"
                                            PRIu64"\n", run_lcn_bytes);
                 exit(1);
-                return EXIT_FAILURE;
             }
 
             while (run_length_bytes)
