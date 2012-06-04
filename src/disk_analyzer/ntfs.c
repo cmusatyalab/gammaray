@@ -485,7 +485,6 @@ int ntfs_parse_data_run(uint8_t* data, uint64_t* offset,
     uint8_t len_size = 0;
     uint8_t offset_size = 0;
 
-    hexdump(&(data[*offset]), 6);
     memcpy(&drh, &(data[*offset]), sizeof(drh));
     *offset += 1;
 
@@ -538,7 +537,6 @@ int ntfs_handle_non_resident_data_attribute(uint8_t* data, uint64_t* offset,
 
     int counter = 0;
 
-    hexdump(&(data[*offset]), 128);
     ntfs_read_non_resident_attribute_header(data, offset, &nrh);
     ntfs_print_non_resident_header(&nrh);
 
@@ -669,7 +667,7 @@ int ntfs_dispatch_file_name_attribute(uint8_t* data, uint64_t* offset,
         fname = *((struct ntfs_file_name*) &(data[*offset]));
         *offset += sizeof(struct ntfs_file_name);
 
-        ntfs_print_file_name(&fname);
+        //ntfs_print_file_name(&fname);
 
         memcpy(file_name_encoded, &(data[*offset]), 2*fname.name_len);
         *offset += 2*fname.name_len;
@@ -717,15 +715,9 @@ int ntfs_dispatch_file_name_attribute(uint8_t* data, uint64_t* offset,
         }
         else
         {
-            fprintf_light_cyan(stdout, "found fname[len=%d, namespace=%s]: "
-                                       "%ls\n", wcslen(file_name),
-                                       ntfs_namespace(fname.fnamespace),
-                                       file_name);
-
             if (*name)
                 free(*name);
             *name = file_name;
-            fprintf_light_red(stdout, "set fname to: %ls\n", *name);
         }
     }
 
@@ -979,8 +971,6 @@ int ntfs_compare_attribute_dispatcher(uint8_t* bufa, uint8_t* bufb,
            ret = -1;
         if (ntfs_dispatch_file_name_attribute(bufb, offsetb, fnameb, sahb))
            ret = -1;
-        fprintf(stdout, "dispatched file name: %ls\n", *fnamea);
-        fprintf(stdout, "dispatched file name: %ls\n", *fnameb);
         if (!(*fnamea == *fnameb) && wcscmp(*fnamea, *fnameb))
             fprintf_light_red(stdout, "fname mismatch.\n");
         *offseta = old_offseta + saha->length - sizeof(*saha);
@@ -989,7 +979,6 @@ int ntfs_compare_attribute_dispatcher(uint8_t* bufa, uint8_t* bufb,
     else if (saha->attribute_type == 0x80)
     {
         fprintf_light_yellow(stdout, "Dispatching data attribute.\n");
-        //fprintf(stdout, "with fname: %ls\n", *fname);
         //if (ntfs_dispatch_data_attribute(data, offset, *fname, sah, bootf,
         //                                 partition_offset, disk, extension))
         //    ret = -1;
@@ -1009,7 +998,6 @@ int ntfs_compare_attribute_dispatcher(uint8_t* bufa, uint8_t* bufb,
     if (*((int32_t*) &(bufb[*offsetb])) == -1)
         ret = 0;
 
-    fprintf_light_red(stdout, "returning %d\n", ret);
     return ret;
 }
 
