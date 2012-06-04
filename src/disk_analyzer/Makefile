@@ -26,6 +26,15 @@ default:
 		   -Werror \
 		   -I../util \
 		   -I../bson
+	@clang file_record_differ.c ntfs.c \
+		   ../util/color.c mbr.c \
+		   ../bson/bson-encoder.c \
+		   ../util/util.c \
+		   -o file_record_differ \
+		   -Wall \
+		   -Werror \
+		   -I../util \
+		   -I../bson
 
 test: default
 	@rm -rf /tmp/win7
@@ -53,3 +62,6 @@ inode_explorer: default
 
 data_block_explorer: default
 	./data_block_explorer /home/wolf/Dropbox/Projects/xray/sample/tinycore.raw
+
+file_record_differ: default
+	./file_record_differ /home/wolf/VM/win7enterprise.raw
