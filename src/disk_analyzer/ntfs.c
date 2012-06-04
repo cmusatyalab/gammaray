@@ -639,8 +639,8 @@ int ntfs_handle_non_resident_data_attribute(uint8_t* data, uint64_t* offset,
 
 /* dispatch handler for file name */
 int ntfs_dispatch_file_name_attribute(uint8_t* data, uint64_t* offset,
-                                    wchar_t** name,
-                                    struct ntfs_standard_attribute_header* sah)
+                                      wchar_t** name,
+                                      struct ntfs_standard_attribute_header* sah)
 {
     struct ntfs_file_name fname;
     wchar_t* file_name = malloc(sizeof(wchar_t) * 512);
@@ -721,13 +721,6 @@ int ntfs_dispatch_file_name_attribute(uint8_t* data, uint64_t* offset,
                                        "%ls\n", wcslen(file_name),
                                        ntfs_namespace(fname.fnamespace),
                                        file_name);
-
-            if (ntfs_ignore_file(file_name))
-            {
-                fprintf(stdout, "ignoring file.\n");
-                iconv_close(cd);
-                return EXIT_SUCCESS;
-            }
 
             if (*name)
                 free(*name);
@@ -1047,7 +1040,9 @@ int ntfs_diff_raw_file_records(uint8_t* bufa, uint8_t* bufb,
            counter < 1024)
     {
         __diff_standard_attribute_headers(&saha, &sahb);
-        if (ntfs_compare_attribute_dispatcher(bufa, bufb, &offseta, &offsetb, &fnamea, &fnameb, &saha, &sahb) == 0)
+        if (ntfs_compare_attribute_dispatcher(bufa, bufb, &offseta, &offsetb,
+                                              &fnamea, &fnameb, &saha, &sahb)
+            == 0)
             break;
         counter++;
     }
