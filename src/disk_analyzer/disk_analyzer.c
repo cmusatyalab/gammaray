@@ -159,8 +159,8 @@ int main(int argc, char* args[])
                                             "Offset 0x%.16"PRIx64" ---\n",
                                             partition_offset);
                 ntfs_print_boot_file(&ntfs_bootf, partition_offset);
-                ntfs_diff_file_records(disk, 0, 1, partition_offset,& ntfs_bootf);
-                //ntfs_walk_mft(disk, &ntfs_bootf, partition_offset);
+                //ntfs_diff_file_records(disk, 0, 1, partition_offset,& ntfs_bootf);
+                ntfs_walk_mft(disk, &ntfs_bootf, partition_offset);
             }
         }
     }
