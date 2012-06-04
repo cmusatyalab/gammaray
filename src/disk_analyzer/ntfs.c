@@ -11,6 +11,12 @@
 #include <string.h>
 #include <wchar.h>
 
+#define NRH_DIFF(element) \
+    if (nrha->element != nrhb->element) \
+        fprintf_light_red(stdout, "%s diff.\n", #element); \
+    else \
+        fprintf_yellow(stdout, "%s match.\n", #element);
+
 #define REC_DIFF(element) \
     if (reca->element != recb->element) \
         fprintf_light_red(stdout, "%s diff.\n", #element); \
@@ -927,6 +933,21 @@ int __diff_file_records(struct ntfs_file_record* reca,
     return EXIT_SUCCESS;
 }
 
+int __diff_non_resident_headers(struct ntfs_non_resident_header* nrha,
+                                struct ntfs_non_resident_header* nrhb)
+{
+    fprintf_light_cyan(stdout, "\n-- Diff'ing NRH --\n");
+    NRH_DIFF(last_vcn);
+    NRH_DIFF(data_run_offset);
+    NRH_DIFF(compression_size);
+    NRH_DIFF(padding);
+    NRH_DIFF(allocated_size);
+    NRH_DIFF(real_size);
+    NRH_DIFF(initialized_size);
+    fprintf_light_cyan(stdout, "-- Finished diff'ing NRH --\n");
+    return EXIT_SUCCESS;
+}
+
 int __diff_standard_attribute_headers(struct ntfs_standard_attribute_header* saha,
                                       struct ntfs_standard_attribute_header* sahb)
 {
@@ -945,38 +966,6 @@ int __diff_standard_attribute_headers(struct ntfs_standard_attribute_header* sah
     SAH_DIFF(padding);
 
     fprintf_light_cyan(stdout, "-- Finished diff'ing SAH --\n");
-    return EXIT_SUCCESS;
-}
-
-/* handler for resident */
-int ntfs_handle_compare_resident_data_attribute(uint8_t* data, uint64_t* offset,
-                                                uint8_t* buf, uint64_t buf_len,
-                                                wchar_t* name,
-                                                struct ntfs_standard_attribute_header* sah,
-                                                bool extension)
-{
-    FILE* reconstructed = ntfs_create_reconstructed_file(name, extension);
-    
-    fprintf_yellow(stdout, "\tData is resident.\n");
-    fprintf_white(stdout, "\tsah->offset_of_attribute: %x\tsizeof(sah) %x\n", sah->offset_of_attribute, sizeof(*sah));
-    fprintf_green(stdout, "\tSeeking to %d\n", sah->offset_of_attribute - sizeof(*sah));
-
-    ntfs_read_attribute_data(data, offset, buf, buf_len, sah);
-  
-    if (reconstructed)
-    {
-        if (fwrite(buf, 1, sah->length_of_attribute, reconstructed) != sah->length_of_attribute)
-        {
-            fclose(reconstructed);
-            fprintf_light_red(stderr, "Error writing resident attribute.\n");
-
-
-            return EXIT_FAILURE;
-        }
-
-        fclose(reconstructed);
-    }
-
     return EXIT_SUCCESS;
 }
 
@@ -1019,120 +1008,82 @@ int ntfs_parse_compare_data_run(uint8_t* data, uint64_t* offset,
 }
 
 /* handler for non-resident */
-int ntfs_handle_compare_non_resident_data_attribute(uint8_t* data, uint64_t* offset,
-                                                    wchar_t* name,
-                                                    struct ntfs_standard_attribute_header* sah,
-                                                    struct ntfs_boot_file* bootf,
+int ntfs_handle_compare_non_resident_data_attribute(uint8_t* bufa, uint64_t* offseta,
+                                                    struct ntfs_standard_attribute_header* saha,
+                                                    uint8_t* bufb, uint64_t* offsetb,
+                                                    struct ntfs_standard_attribute_header* sahb,
                                                     int64_t partition_offset,
-                                                    FILE* disk,
-                                                    bool extension)
+                                                    struct ntfs_boot_file* bootf)
 {
-    FILE* reconstructed = ntfs_create_reconstructed_file(name, extension);
-    uint8_t buf[4096];
-    uint64_t real_size = 0;
-    int64_t run_lcn = 0;
-    int64_t run_lcn_bytes = 0;
-    int64_t prev_lcn = 0;
-    uint64_t run_length = 0;
-    uint64_t run_length_bytes = 0;
-    struct ntfs_non_resident_header nrh;
+    uint64_t real_sizea = 0, real_sizeb = 0;
+    int64_t run_lcna = 0, run_lcnb = 0;
+    int64_t run_lcn_bytesa = 0, run_lcn_bytesb = 0;
+    int64_t prev_lcna = 0, prev_lcnb = 0;
+    uint64_t run_lengtha = 0, run_lengthb = 0;
+    uint64_t run_length_bytesa = 0, run_length_bytesb;
+    struct ntfs_non_resident_header nrha, nrhb;
 
     int counter = 0;
 
-    ntfs_read_non_resident_attribute_header(data, offset, &nrh);
-    ntfs_print_non_resident_header(&nrh);
+    ntfs_read_non_resident_attribute_header(bufa, offseta, &nrha);
+    ntfs_read_non_resident_attribute_header(bufb, offsetb, &nrhb);
 
-    real_size = nrh.real_size;
+    __diff_non_resident_headers(&nrha, &nrhb);
+
+    real_sizea = nrha.real_size;
+    real_sizeb = nrhb.real_size;
 
     fprintf_yellow(stdout, "\tData is non-resident\n");
-    fprintf_white(stdout, "\tnrh->offset_of_attribute: %x\tsizeof(nrh+sah) %x\n", nrh.data_run_offset, sizeof(nrh) + sizeof(*sah));
-    fprintf_green(stdout, "\tSeeking to %d\n", nrh.data_run_offset - sizeof(*sah) - sizeof(nrh));
 
+    *offseta += nrha.data_run_offset - sizeof(*saha) - sizeof(nrha);
+    *offsetb += nrhb.data_run_offset - sizeof(*sahb) - sizeof(nrhb);
 
-    *offset += nrh.data_run_offset - sizeof(*sah) - sizeof(nrh);
-    if (reconstructed)
+    while (ntfs_parse_data_run(bufa, offseta, &run_lengtha, &run_lcna) &&
+           ntfs_parse_data_run(bufb, offsetb, &run_lengthb, &run_lcnb) &&
+           real_sizea &&
+           real_sizeb)
     {
-        while (ntfs_parse_data_run(data, offset, &run_length, &run_lcn) && real_size)
+        if (run_lengtha != run_lengthb)
         {
-            fprintf_light_blue(stdout, "got a sequence %d\n", counter++);
-            run_length_bytes = run_length * bootf->bytes_per_sector * bootf->sectors_per_cluster;
-            fprintf_light_red(stdout, "prev_lcn: %"PRIx64"\n", prev_lcn);
-            fprintf_light_red(stdout, "run_lcn: %"PRIx64" (%"PRId64")\n",
-                                      run_lcn, run_lcn);
-            fprintf_light_red(stdout, "prev_lcn + run_lcn: %"PRIx64"\n",
-                                       prev_lcn + run_lcn);
-            run_lcn_bytes = ntfs_lcn_to_offset(bootf, partition_offset,
-                                               prev_lcn + run_lcn);
-            fprintf_light_blue(stdout, "run_lcn_bytes: %"PRIx64
-                                       " run_length_bytes: %"PRIx64"\n",
-                                       run_lcn_bytes,
-                                       run_length_bytes);
-
-            assert(prev_lcn + run_lcn > 0);
-            assert(prev_lcn + run_lcn < 26214400);
-
-            if (fseeko(disk, run_lcn_bytes, SEEK_SET))
-            {
-                fprintf_light_red(stderr, "Error seeking to data run LCN offset: %"
-                                           PRIu64"\n", run_lcn_bytes);
-                exit(1);
-                return EXIT_FAILURE;
-            }
-
-            while (run_length_bytes)
-            {
-                run_length_bytes = run_length_bytes > real_size ? real_size : run_length_bytes;
-                if (run_length_bytes >= 4096)
-                {
-                    if (fread(buf, 4096, 1, disk) != 1)
-                    {
-                        fprintf_light_red(stderr, "Error reading run data.\n");
-                        exit(1);
-                        return EXIT_FAILURE;
-                    }
-
-                    if (fwrite(buf, 4096, 1, reconstructed) != 1)
-                    {
-                        fprintf_light_red(stderr, "Error writing run data.\n");
-                        exit(1);
-                        return EXIT_FAILURE;
-                    }
-
-                    run_length_bytes -= 4096;
-                    real_size -= 4096;
-                }
-                else
-                {
-                    if (fread(buf, run_length_bytes, 1, disk) != 1)
-                    {
-                        fprintf_light_red(stderr, "Error reading run data.\n");
-                        exit(1);
-                        return EXIT_FAILURE;
-                    }
-
-                    if (fwrite(buf, run_length_bytes, 1, reconstructed) != 1)
-                    {
-                        fprintf_light_red(stderr, "Error writing run data.\n");
-                        exit(1);
-                        return EXIT_FAILURE;
-                    }
-
-                    real_size -= run_length_bytes;
-                    run_length_bytes -= run_length_bytes;
-                }
-
-            }
-
-            prev_lcn = prev_lcn + run_lcn;
-            run_length = 0;
-            run_length_bytes = 0;
-            run_lcn = 0;
-            run_lcn_bytes = 0;
+            fprintf_light_red(stdout, "Run lengths differ.\n");
+            return EXIT_FAILURE;
         }
-    }
 
-    if (reconstructed)
-        fclose(reconstructed);
+        if (run_lcna != run_lcnb)
+        {
+            fprintf_light_red(stdout, "Run LCN's differ.\n");
+            return EXIT_FAILURE;
+        }
+
+        fprintf_light_blue(stdout, "got a sequence %d\n", counter++);
+        run_length_bytesa = run_lengtha * bootf->bytes_per_sector * bootf->sectors_per_cluster;
+        run_lcn_bytesa = ntfs_lcn_to_offset(bootf, partition_offset,
+                                            prev_lcna + run_lcna);
+
+        assert(prev_lcna + run_lcna > 0);
+        assert(prev_lcna + run_lcna < 26214400);
+
+        assert(prev_lcnb + run_lcnb > 0);
+        assert(prev_lcna + run_lcnb < 26214400);
+
+        run_length_bytesa = run_length_bytesa > real_sizea ? real_sizea : run_length_bytesa;
+        run_length_bytesb = run_length_bytesb > real_sizeb ? real_sizeb : run_length_bytesb;
+
+        real_sizea -= run_length_bytesa;
+        real_sizeb -= run_length_bytesb;
+
+        prev_lcna = prev_lcna + run_lcna;
+        run_lengtha = 0;
+        run_length_bytesa = 0;
+        run_lcna = 0;
+        run_lcn_bytesa = 0;
+
+        prev_lcnb = prev_lcnb + run_lcnb;
+        run_lengthb = 0;
+        run_length_bytesb = 0;
+        run_lcnb = 0;
+        run_lcn_bytesb = 0;
+    }
 
     return EXIT_SUCCESS;
 }
@@ -1219,14 +1170,12 @@ int ntfs_dispatch_compare_file_name_attribute(uint8_t* data, uint64_t* offset,
 
 /* dispatch handler for data */
 int ntfs_dispatch_compare_data_attribute(uint8_t* bufa, uint64_t* offseta,
-                                         wchar_t** fnamea,
                                          struct ntfs_standard_attribute_header* saha,
                                          uint8_t* bufb, uint64_t* offsetb,
-                                         wchar_t** fnameb,
-                                         struct ntfs_standard_attribute_header* sahb)
+                                         struct ntfs_standard_attribute_header* sahb,
+                                         int64_t partition_offset,
+                                         struct ntfs_boot_file* bootf)
 {
-    //uint8_t resident_buffer[4096];
-
     if (saha->attribute_type != 0x80 &&
         sahb->attribute_type != 0x80)
     {
@@ -1266,14 +1215,13 @@ int ntfs_dispatch_compare_data_attribute(uint8_t* bufa, uint64_t* offseta,
 
     if (saha->non_resident_flag)
     {
-        //ntfs_handle_compare_non_resident_data_attribute(data, offset, name, sah, bootf,
-        //                                        partition_offset, disk,
-        //                                        extension);
+        ntfs_handle_compare_non_resident_data_attribute(bufa, offseta, saha,
+                                                        bufb, offsetb, sahb,
+                                                        partition_offset, bootf);
     }
     else
     {
-        //ntfs_handle_compare_resident_data_attribute(data, offset, resident_buffer, 4096,
-        //                                    name, sah, extension);
+        /* do nothing, already compared metadata...no need for file data */
     }
 
     return EXIT_SUCCESS;
@@ -1283,7 +1231,8 @@ int ntfs_compare_attribute_dispatcher(uint8_t* bufa, uint8_t* bufb,
                                       uint64_t* offseta, uint64_t* offsetb,
                                       wchar_t** fnamea, wchar_t** fnameb,
                                       struct ntfs_standard_attribute_header* saha,
-                                      struct ntfs_standard_attribute_header* sahb)
+                                      struct ntfs_standard_attribute_header* sahb,
+                                      int64_t partition_offset, struct ntfs_boot_file* bootf)
 {
     int ret = 1;
     uint64_t old_offseta = *offseta;
@@ -1318,8 +1267,9 @@ int ntfs_compare_attribute_dispatcher(uint8_t* bufa, uint8_t* bufb,
     else if (saha->attribute_type == 0x80)
     {
         fprintf_light_yellow(stdout, "Dispatching data attribute.\n");
-        if (ntfs_dispatch_compare_data_attribute(bufa, offseta, fnamea, saha,
-                                                 bufb, offsetb, fnameb, sahb))
+        if (ntfs_dispatch_compare_data_attribute(bufa, offseta, saha,
+                                                 bufb, offsetb, sahb,
+                                                 partition_offset, bootf))
             ret = -1;
         *offseta = old_offseta + saha->length - sizeof(*saha);
         *offsetb = old_offsetb + sahb->length - sizeof(*sahb);
@@ -1341,6 +1291,7 @@ int ntfs_compare_attribute_dispatcher(uint8_t* bufa, uint8_t* bufb,
 }
 
 int ntfs_diff_raw_file_records(uint8_t* bufa, uint8_t* bufb,
+                               int64_t partition_offset,
                                struct ntfs_boot_file* bootf)
 {
     struct ntfs_file_record reca, recb;
@@ -1368,7 +1319,7 @@ int ntfs_diff_raw_file_records(uint8_t* bufa, uint8_t* bufb,
     {
         __diff_standard_attribute_headers(&saha, &sahb);
         if (ntfs_compare_attribute_dispatcher(bufa, bufb, &offseta, &offsetb,
-                                              &fnamea, &fnameb, &saha, &sahb)
+                                              &fnamea, &fnameb, &saha, &sahb, partition_offset, bootf)
             == 0)
             break;
         counter++;
@@ -1401,7 +1352,7 @@ int ntfs_diff_file_records(FILE* disk, uint64_t recorda, uint64_t recordb,
     ntfs_read_file_record(disk, recorda, partition_offset, bootf, data_a);
     ntfs_read_file_record(disk, recordb, partition_offset, bootf, data_b);
 
-    ntfs_diff_raw_file_records(data_a, data_b, bootf);
+    ntfs_diff_raw_file_records(data_a, data_b, partition_offset, bootf);
 
     free(data_a);    
     free(data_b);
