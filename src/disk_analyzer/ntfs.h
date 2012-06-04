@@ -129,6 +129,7 @@ struct ntfs_update_sequence
     uint8_t* data;
 } __attribute__((packed));
 
+uint64_t ntfs_file_record_size (struct ntfs_boot_file* bootf);
 int ntfs_probe(FILE* disk, int64_t partition_offset,
                struct ntfs_boot_file* bootf);
 int ntfs_print_boot_file(struct ntfs_boot_file* bootf,
