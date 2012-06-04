@@ -1225,7 +1225,7 @@ int ntfs_dispatch_compare_data_attribute(uint8_t* bufa, uint64_t* offseta,
                                          wchar_t** fnameb,
                                          struct ntfs_standard_attribute_header* sahb)
 {
-    uint8_t resident_buffer[4096];
+    //uint8_t resident_buffer[4096];
 
     if (saha->attribute_type != 0x80 &&
         sahb->attribute_type != 0x80)
