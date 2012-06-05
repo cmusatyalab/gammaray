@@ -1009,8 +1009,7 @@ int ntfs_handle_compare_non_resident_data_attribute(uint8_t* bufa, uint64_t* off
     uint64_t run_length_bytesa = 0, run_length_bytesb;
     struct ntfs_non_resident_header nrha, nrhb;
 
-    int counter = 0;
-
+    fprintf_light_cyan(stdout, "\n-- Diff'ing data runs --\n");
     ntfs_read_non_resident_attribute_header(bufa, offseta, &nrha);
     ntfs_read_non_resident_attribute_header(bufb, offsetb, &nrhb);
 
@@ -1019,29 +1018,38 @@ int ntfs_handle_compare_non_resident_data_attribute(uint8_t* bufa, uint64_t* off
     real_sizea = nrha.real_size;
     real_sizeb = nrhb.real_size;
 
-    fprintf_yellow(stdout, "\tData is non-resident\n");
-
     *offseta += nrha.data_run_offset - sizeof(*saha) - sizeof(nrha);
     *offsetb += nrhb.data_run_offset - sizeof(*sahb) - sizeof(nrhb);
 
-    while (ntfs_parse_data_run(bufa, offseta, &run_lengtha, &run_lcna) &&
-           ntfs_parse_data_run(bufb, offsetb, &run_lengthb, &run_lcnb) &&
+    while (ntfs_parse_compare_data_run(bufa, offseta, &run_lengtha, &run_lcna) &&
+           ntfs_parse_compare_data_run(bufb, offsetb, &run_lengthb, &run_lcnb) &&
            real_sizea &&
            real_sizeb)
     {
         if (run_lengtha != run_lengthb)
         {
-            fprintf_light_red(stdout, "Run lengths differ.\n");
+            fprintf_light_red(stdout, "Run length's differ [%"PRIu64" != %"
+                                      PRIu64"].\n", run_lengtha, run_lengthb);
+            fprintf_light_cyan(stdout, "-- Finished diff'ing data runs. --\n");
             return EXIT_FAILURE;
+        }
+        else
+        {
+            fprintf_yellow(stdout, "\tRun lengths are the same.\n");
         }
 
         if (run_lcna != run_lcnb)
         {
-            fprintf_light_red(stdout, "Run LCN's differ.\n");
+            fprintf_light_red(stdout, "Run LCN's differ [%"PRId64" != %"
+                                      PRId64"].\n", run_lcna, run_lcnb);
+            fprintf_light_cyan(stdout, "-- Finished diff'ing data runs. --\n");
             return EXIT_FAILURE;
         }
+        else
+        {
+            fprintf_yellow(stdout, "\tRun LCN's are the same.\n");
+        }
 
-        fprintf_light_blue(stdout, "got a sequence %d\n", counter++);
         run_length_bytesa = run_lengtha * bootf->bytes_per_sector * bootf->sectors_per_cluster;
         run_lcn_bytesa = ntfs_lcn_to_offset(bootf, partition_offset,
                                             prev_lcna + run_lcna);
@@ -1071,6 +1079,7 @@ int ntfs_handle_compare_non_resident_data_attribute(uint8_t* bufa, uint64_t* off
         run_lcn_bytesb = 0;
     }
 
+    fprintf_light_cyan(stdout, "-- Finished diff'ing data runs. --\n");
     return EXIT_SUCCESS;
 }
 
