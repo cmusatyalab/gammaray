@@ -501,21 +501,15 @@ int ntfs_parse_data_run(uint8_t* data, uint64_t* offset,
         offset_size = UPPER_NIBBLE(drh.packed_sizes);
         len_size = LOWER_NIBBLE(drh.packed_sizes);
 
-        fprintf_light_red(stdout, "offset: %"PRIu64" data[*offset]: %0.2"PRIx8"\n",
-                                  *offset, data[*offset]);
         memcpy(((uint8_t*) length), &(data[*offset]), len_size);
         *offset += len_size;
 
-        fprintf_light_red(stdout, "offset: %"PRIu64" data[*offset]: %0.2"PRIx8"\n",
-                                  *offset, data[*offset]);
         memcpy(((uint8_t*) lcn), &(data[*offset]), offset_size);
         *offset += offset_size;
 
         if (top_bit_set(((uint8_t *) lcn)[offset_size-1]))
             *lcn = sign_extend64(*lcn, highest_set_bit64(*lcn));
         
-        fprintf_light_cyan(stdout, "data run 0: lcn %0.16"PRIx64" len %0.16"PRIx64"\n",
-                                   *lcn, *length);
         return 1;
     }
     
@@ -979,28 +973,20 @@ int ntfs_parse_compare_data_run(uint8_t* data, uint64_t* offset,
     memcpy(&drh, &(data[*offset]), sizeof(drh));
     *offset += 1;
 
-    ntfs_print_data_run_header(&drh);
-
     if (drh.packed_sizes)
     {
         offset_size = UPPER_NIBBLE(drh.packed_sizes);
         len_size = LOWER_NIBBLE(drh.packed_sizes);
 
-        fprintf_light_red(stdout, "offset: %"PRIu64" data[*offset]: %0.2"PRIx8"\n",
-                                  *offset, data[*offset]);
         memcpy(((uint8_t*) length), &(data[*offset]), len_size);
         *offset += len_size;
 
-        fprintf_light_red(stdout, "offset: %"PRIu64" data[*offset]: %0.2"PRIx8"\n",
-                                  *offset, data[*offset]);
         memcpy(((uint8_t*) lcn), &(data[*offset]), offset_size);
         *offset += offset_size;
 
         if (top_bit_set(((uint8_t *) lcn)[offset_size-1]))
             *lcn = sign_extend64(*lcn, highest_set_bit64(*lcn));
         
-        fprintf_light_cyan(stdout, "data run 0: lcn %0.16"PRIx64" len %0.16"PRIx64"\n",
-                                   *lcn, *length);
         return 1;
     }
     
