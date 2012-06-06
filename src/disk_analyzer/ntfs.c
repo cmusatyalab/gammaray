@@ -855,6 +855,7 @@ int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf,
                                   PRId64"\n",
                                   file_record_counter++,
                                   file_record_offset);
+        file_record_offset += ntfs_file_record_size(bootf);
         ntfs_read_file_record_header(data, &data_offset, &rec);
         ntfs_print_file_record(&rec);
         ntfs_read_update_sequence(data, &data_offset, &rec, &seq);
