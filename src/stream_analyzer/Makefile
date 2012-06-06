@@ -5,11 +5,12 @@ default:
 		 ../bson/bson-encoder.c \
 		 ../bson/bson-decoder.c \
 		 ../disk_analyzer/ext2.c \
+		 ../disk_analyzer/ntfs.c \
 		 ../datastructures/bst.c \
 		 ../datastructures/linkedlist.c \
 		 deep_inspection.c \
 		 -lzmq \
-		 -o inference_engine \
+		 -o inference_engine_ntfs \
 		 -Wall \
 		 -Werror \
 		 -I../disk_analyzer \
@@ -61,10 +62,12 @@ memtest: default
 		| less -R
 
 test: default
-	@./inference_engine \
-		/tmp/tinycore.bson \
-		/home/wolf/Dropbox/Projects/xray/sample/file_create_write_65k.log \
-		tinycore \
+	@./inference_engine_ntfs \
+		/home/wolf/VM/test.txt.fr.bin \
+		/home/wolf/VM/win7enterprise.bootf.bin \
+		0x0000000006500000 \
+		/home/wolf/VM/win7enterprise.log \
+		win7enterprise \
 		| less -R
 
 test_stream: default
