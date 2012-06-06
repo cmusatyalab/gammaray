@@ -1,6 +1,26 @@
 default:
+	@clang inference_engine_ntfs_demo.c -g \
+		 ../util/color.c \
+		 ../util/util.c \
+		 ../bson/bson-encoder.c \
+		 ../bson/bson-decoder.c \
+		 ../disk_analyzer/ext2.c \
+		 ../datastructures/bst.c \
+		 ../datastructures/linkedlist.c \
+		 deep_inspection.c \
+		 -lzmq \
+		 -o inference_engine \
+		 -Wall \
+		 -Werror \
+		 -I../disk_analyzer \
+		 -I../util \
+		 -I../bson \
+		 -I../datastructures \
+		 #-DNOCOLOR
+
 	@clang stream_analyzer.c \
 		 ../util/color.c \
+		 ../util/util.c \
 		 ../datastructures/bst.c \
 		 qemu_tracer.c \
 		 deep_inspect.c \
@@ -12,6 +32,7 @@ default:
 
 	@clang inference_engine.c -g \
 		 ../util/color.c \
+		 ../util/util.c \
 		 ../bson/bson-encoder.c \
 		 ../bson/bson-decoder.c \
 		 ../disk_analyzer/ext2.c \

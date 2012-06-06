@@ -772,7 +772,6 @@ int ntfs_dispatch_data_attribute(uint8_t* data, uint64_t* offset,
     }
     else
     {
-        return EXIT_SUCCESS;;
         fprintf_light_red(stdout, "fname to resident data handler: %ls\n", name);
         ntfs_handle_resident_data_attribute(data, offset, resident_buffer, 4096,
                                             name, sah, extension);
