@@ -1324,6 +1324,13 @@ int ntfs_diff_raw_file_records(uint8_t* bufa, uint8_t* bufb,
 }
 
 
+int ntfs_diff_file_record_buffs(uint8_t* bufa, uint8_t* bufb,
+                                int64_t partition_offset,
+                                struct ntfs_boot_file* bootf)
+{
+    return ntfs_diff_raw_file_records(bufa, bufb,partition_offset, bootf);
+}
+
 int ntfs_diff_file_records(FILE* disk, uint64_t recorda, uint64_t recordb,
                            int64_t partition_offset,
                            struct ntfs_boot_file* bootf)

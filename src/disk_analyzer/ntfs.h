@@ -139,4 +139,11 @@ int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf,
 int ntfs_diff_file_records(FILE* disk, uint64_t recorda, uint64_t recordb,
                            int64_t partition_offset,
                            struct ntfs_boot_file* bootf);
+int ntfs_read_file_record(FILE* disk, uint64_t record_num,
+                          int64_t partition_offset, 
+                          struct ntfs_boot_file* bootf,
+                          uint8_t* buf);
+int ntfs_diff_file_record_buffs(uint8_t* recorda, uint8_t* recordb,
+                                int64_t partition_offset,
+                                struct ntfs_boot_file* bootf);
 #endif
