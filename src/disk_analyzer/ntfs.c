@@ -1171,6 +1171,7 @@ int ntfs_dispatch_compare_data_attribute(uint8_t* bufa, uint64_t* offseta,
                                          int64_t partition_offset,
                                          struct ntfs_boot_file* bootf)
 {
+    int i;
     if (saha->attribute_type != 0x80 &&
         sahb->attribute_type != 0x80)
     {
@@ -1216,7 +1217,17 @@ int ntfs_dispatch_compare_data_attribute(uint8_t* bufa, uint64_t* offseta,
     }
     else
     {
-        /* do nothing, already compared metadata...no need for file data */
+        /* show extra bytes */
+        if (saha->length_of_attribute < sahb->length_of_attribute)
+        {
+            fprintf_light_blue(stdout, "Got new resident bytes:\n");
+            *offsetb += sahb->offset_of_attribute - sizeof(*sahb) + saha->length_of_attribute;
+            for (i = 0; i < sahb->length_of_attribute - saha->length_of_attribute; i++)
+            {
+                fputc(bufb[*offsetb + i], stdout);
+            }
+            fprintf(stdout, "\n");
+        }
     }
 
     return EXIT_SUCCESS;
@@ -1314,7 +1325,8 @@ int ntfs_diff_raw_file_records(uint8_t* bufa, uint8_t* bufb,
     {
         __diff_standard_attribute_headers(&saha, &sahb);
         if (ntfs_compare_attribute_dispatcher(bufa, bufb, &offseta, &offsetb,
-                                              &fnamea, &fnameb, &saha, &sahb, partition_offset, bootf)
+                                              &fnamea, &fnameb, &saha, &sahb,
+                                              partition_offset, bootf)
             == 0)
             break;
         counter++;
