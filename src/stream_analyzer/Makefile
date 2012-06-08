@@ -63,11 +63,22 @@ memtest: default
 
 test: default
 	@./inference_engine_ntfs \
-		/home/wolf/VM/test.txt.fr.bin \
+		/home/wolf/VM/demo.txt.txt.fr.bin \
 		/home/wolf/VM/win7enterprise.bootf.bin \
 		0x0000000006500000 \
 		/home/wolf/VM/win7enterprise.log \
 		win7enterprise \
+		2>/dev/null \
+		| less -R
+
+test_live: default
+	@./inference_engine_ntfs \
+		/home/wolf/VM/demo.txt.txt.fr.bin \
+		/home/wolf/VM/win7enterprise.bootf.bin \
+		0x0000000006500000 \
+		/tmp/win7enterprise.log \
+		win7enterprise \
+		2>/dev/null \
 		| less -R
 
 test_stream: default

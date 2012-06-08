@@ -24,7 +24,7 @@
 
 #define PUB_SOCKET 13738
 #define SECTOR_SIZE 512 
-#define OFFSET_OF_INTEREST 3370612736 
+#define OFFSET_OF_INTEREST 3370434560 
 
 void qemu_print_sector_type_ntfs(int type)
 {
@@ -48,14 +48,15 @@ int qemu_deep_inspect_ntfs(struct qemu_bdrv_write* write, void* pub_socket,
 
     if (write->header.sector_num * SECTOR_SIZE <= OFFSET_OF_INTEREST &&
         write->header.sector_num * SECTOR_SIZE + (write->header.nb_sectors) *
-        SECTOR_SIZE >= OFFSET_OF_INTEREST)
+        SECTOR_SIZE >= OFFSET_OF_INTEREST + ntfs_file_record_size(bootf))
     {
         offset = OFFSET_OF_INTEREST - (write->header.sector_num * SECTOR_SIZE);
         fprintf_light_yellow(stdout, "offset of interest in the write: %"PRIu64"\n", OFFSET_OF_INTEREST);
         fprintf_light_green(stdout, "write start sector pos: %"PRIu64"\n", write->header.sector_num * SECTOR_SIZE);
         fprintf_light_blue(stdout, "Checking offset in the write: %"PRIu64"\n", offset);
-        fprintf_light_red(stdout, "Potential write to C:/Documents and Settings/wolf/Desktop/test.txt metadata.\n");
+        fprintf_light_red(stdout, "Potential write to C:/Documents and Settings/wolf/Desktop/demo.txt.txt metadata.\n");
         ntfs_diff_file_record_buffs(original, (uint8_t*) &(write->data[offset]), partition_offset, bootf);
+        memcpy(original, &(write->data[offset]), ntfs_file_record_size(bootf));
         hexdump((uint8_t*) &(write->data[offset]), ntfs_file_record_size(bootf));
     }
 
