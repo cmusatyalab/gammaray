@@ -6,6 +6,6 @@ Notes:
 
 Requirements:
 
-    (1) protobuf serialization and deserialization
+    (1) bson serialization and deserialization
     (2) snappy for compression on network traffic
     (3) ZeroMQ for communication
