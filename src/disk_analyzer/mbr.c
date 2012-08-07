@@ -162,8 +162,21 @@ int64_t mbr_partition_offset(struct mbr mbr, int pte)
     {
         return SECTOR_SIZE*mbr.pt[pte].first_sector_lba;
     }
+
+    /* Extended partition match */
+    if (mbr.pt[pte].partition_type == 0x05)
+    {
+        return SECTOR_SIZE*mbr.pt[pte].first_sector_lba;
+    }
+
     /* NTFS partition match */
     if (mbr.pt[pte].partition_type == 0x07)
+    {
+        return SECTOR_SIZE*mbr.pt[pte].first_sector_lba;
+    }
+
+    /* LVM partition match */
+    if (mbr.pt[pte].partition_type == 0x8e)
     {
         return SECTOR_SIZE*mbr.pt[pte].first_sector_lba;
     }
