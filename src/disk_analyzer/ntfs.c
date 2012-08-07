@@ -546,6 +546,7 @@ int ntfs_handle_non_resident_data_attribute(uint8_t* data, uint64_t* offset,
     fprintf_white(stdout, "\tnrh->offset_of_attribute: %x\tsizeof(nrh+sah) %x\n", nrh.data_run_offset, sizeof(nrh) + sizeof(*sah));
     fprintf_green(stdout, "\tSeeking to %d\n", nrh.data_run_offset - sizeof(*sah) - sizeof(nrh));
 
+    exit(1);
 
     *offset += nrh.data_run_offset - sizeof(*sah) - sizeof(nrh);
     if (reconstructed)
@@ -791,6 +792,9 @@ int ntfs_attribute_dispatcher(uint8_t* data, uint64_t* offset, wchar_t** fname,
 {
     int ret = 1;
     uint64_t old_offset = *offset;
+    
+    if (*fname)
+        fprintf(stdout, "%ls\n", *fname);
 
     if (sah->attribute_type == 0x30)
     {
@@ -798,9 +802,14 @@ int ntfs_attribute_dispatcher(uint8_t* data, uint64_t* offset, wchar_t** fname,
         if (ntfs_dispatch_file_name_attribute(data, offset, fname, sah))
            ret = -1;
         fprintf(stdout, "dispatched file name: %ls\n", *fname);
+        if (*fname && wcscmp(*fname, L"test.txt") != 0)
+        {
+            fprintf_light_blue(stdout, "\tNOT the file we're looking for.\n");
+            return 0;
+        }
         *offset = old_offset + sah->length - sizeof(*sah);
     }
-    else if (sah->attribute_type == 0x80)
+    else if (sah->attribute_type == 0x80 && *fname && wcscmp(*fname, L"test.txt") == 0)
     {
         fprintf_light_yellow(stdout, "Dispatching data attribute.\n");
         fprintf(stdout, "with fname: %ls\n", *fname);
