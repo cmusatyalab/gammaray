@@ -127,3 +127,35 @@ int hexdump(uint8_t* buf, uint64_t len)
 
     return EXIT_SUCCESS;
 }
+
+/* buf should be at least 13 bytes long */
+int pretty_print_bytes(uint64_t bytes, char* buf, uint64_t bufsize)
+{
+    uint64_t kb = 1024;
+    uint64_t mb = kb*kb;
+    uint64_t gb = kb*mb;
+    uint64_t tb = kb*gb;
+
+    if (bytes > tb)
+    {
+        snprintf(buf, bufsize, "%0.3f TiB", ((double) bytes) / tb);
+    }
+    else if (bytes > gb)
+    {
+        snprintf(buf, bufsize, "%0.3f GiB", ((double) bytes) / gb);
+    }
+    else if (bytes > mb)
+    {
+        snprintf(buf, bufsize, "%0.3f MiB", ((double) bytes) / mb);
+    }
+    else if(bytes > kb)
+    {
+        snprintf(buf, bufsize, "%0.3f KiB", ((double) bytes) / kb);
+    }
+    else
+    {
+        snprintf(buf, bufsize, "%"PRIu64" B", bytes);
+    }
+
+    return EXIT_SUCCESS;
+}
