@@ -1,5 +1,6 @@
 #include "bson.h"
 #include "mbr.h"
+#include "util.h"
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -47,6 +48,9 @@ uint16_t get_cylinder(uint8_t bytes[2])
  * http://en.wikipedia.org/wiki/Master_boot_record */
 int print_partition(struct partition_table_entry pte)
 {
+    char size_buf[512];
+    memset(size_buf, 0x00, 512);
+
     fprintf_blue(stdout, "Status [0x80 bootable, 0x00 non-bootable]: 0x%.2"
                          PRIx8"\n",
                          pte.status);
@@ -80,9 +84,11 @@ int print_partition(struct partition_table_entry pte)
     fprintf_green(stdout, "First Sector LBA: 0x%.8"
                     PRIx32"\n",
                     pte.first_sector_lba);
+    pretty_print_bytes(SECTOR_SIZE*pte.sector_count, size_buf, 512);
     fprintf_green(stdout, "Number of Sectors: 0x%.8"
-                    PRIx32"\n",
-                    pte.sector_count);
+                    PRIx32" (%s)\n",
+                    pte.sector_count,
+                    size_buf);
     return 0;
 }
 
