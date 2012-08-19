@@ -1,5 +1,5 @@
 default:
-	@clang disk_analyzer.c ../util/color.c ext2.c ntfs.c mbr.c \
+	@clang disk_analyzer.c ../util/color.c ext2/ext2.c ntfs/ntfs.c mbr/mbr.c \
 		   ../bson/bson-encoder.c \
 		   ../util/util.c \
 		   -o disk_analyzer \
@@ -7,34 +7,43 @@ default:
 		   -Werror \
 		   -I../util \
 		   -I../bson \
+		   -I./ext2/ \
+		   -I./ntfs/ \
+		   -I./mbr/ \
 		   -g
-	@clang inode_explorer.c ext2.c \
-		   ../util/color.c mbr.c \
+	@clang ext2/tools/inode_explorer.c ext2/ext2.c \
+		   ../util/color.c mbr/mbr.c \
 		   ../bson/bson-encoder.c \
 		   ../util/util.c \
-		   -o inode_explorer \
+		   -o ext2_inode_explorer \
 		   -Wall \
 		   -Werror \
 		   -I../util \
-		   -I../bson
-	@clang data_block_explorer.c ext2.c \
-		   ../util/color.c mbr.c \
+		   -I../bson \
+		   -I./ext2/ \
+		   -I./mbr/
+	@clang ext2/tools/data_block_explorer.c ext2/ext2.c \
+		   ../util/color.c mbr/mbr.c \
 		   ../bson/bson-encoder.c \
 		   ../util/util.c \
-		   -o data_block_explorer \
+		   -o ext2_data_block_explorer \
 		   -Wall \
 		   -Werror \
 		   -I../util \
-		   -I../bson
-	@clang file_record_differ.c ntfs.c \
-		   ../util/color.c mbr.c \
+		   -I../bson \
+		   -I./ext2/ \
+		   -I./mbr/
+	@clang ntfs/tools/file_record_differ.c ntfs/ntfs.c \
+		   ../util/color.c mbr/mbr.c \
 		   ../bson/bson-encoder.c \
 		   ../util/util.c \
-		   -o file_record_differ \
+		   -o ntfs_file_record_differ \
 		   -Wall \
 		   -Werror \
 		   -I../util \
-		   -I../bson
+		   -I../bson \
+		   -I./ntfs/ \
+		   -I./mbr/
 
 test: default
 	@rm -rf /tmp/win7
@@ -49,13 +58,16 @@ test: default
 
 test_tinycore: default
 	@valgrind --track-origins=yes ./disk_analyzer \
-		/home/wolf/ropbox/Projects/xray/sample/tinycore.raw \
+		/home/wolf/Dropbox/Projects/xray/sample/tinycore.raw \
 		/tmp/tinycore.bson
 
 	@../bson/bson_printer /tmp/tinycore.bson | less -R
 
 clean:
-	@rm disk_analyzer *.gch
+	@rm disk_analyzer \
+		ext2_data_block_explorer \
+		ntfs_file_record_differ \
+	    ext2_inode_explorer  
 
 inode_explorer: default
 	./inode_explorer /home/wolf/Dropbox/Projects/xray/sample/tinycore.raw 
