@@ -97,7 +97,6 @@ int read_loop(int fd, struct mbr* mbr, void* pub_socket, char* vmname)
     return EXIT_SUCCESS;
 }
 
-
 void print_zmq_version()
 {
     int major, minor, patch;
