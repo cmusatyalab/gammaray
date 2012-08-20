@@ -3,8 +3,7 @@
 #include "deep_inspection.h"
 #include "__bson.h" /* TODO: fix BSON library to be more friendly */
 #include "bson.h"
-
-#include "zmq.h"
+#include "redis_queue.h"
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -22,54 +21,6 @@
 #define VM_NAME_MAX 512
 #define PATH_MAX 4096
 
-void zmq_send_print_error(int err)
-{
-    switch(err)
-    {
-        case EAGAIN:
-            fprintf_light_red(stderr, "Non-blocking mode was requested and the"
-                                      " message cannot be sent at the moment."
-                                      "\n");
-            break;
-        
-        case ENOTSUP:
-            fprintf_light_red(stderr, "The zmq_send() operation is not "
-                                      "supported by this socket type.\n");
-            break;
-
-        case EFSM:
-            fprintf_light_red(stderr, "The zmq_send() operation cannot be "
-                                      "performed on this socket at the moment "
-                                      "due to the socket not being in the "
-                                      "appropriate state. This error may "
-                                      "occur with socket types that switch "
-                                      "between several states, such as "
-                                      "ZMQ_REP. See the messaging patterns "
-                                      "section of zmq_socket(3) for more "
-                                      "information.\n");
-            break;
-        
-        case ETERM:
-            fprintf_light_red(stderr, "The 0MQ context associated with the "
-                                      "specified socket was terminated.\n");
-            break;
-        
-        case ENOTSOCK:
-            fprintf_light_red(stderr,  "The provided socket was invalid.\n");
-            break;
-        
-        case EINTR:
-            fprintf_light_red(stderr, "The operation was interrupted by "
-                                      "delivery of a signal before the "
-                                      "message was sent.\n");
-            break;
-        
-        case EFAULT:
-            fprintf_light_red(stderr, "Invalid message.\n");
-            break;
-    }
-}
-
 char* construct_channel_name(char* vmname, char* path)
 {
     char* buf = malloc(HOST_NAME_MAX + VM_NAME_MAX + PATH_MAX + 3);
@@ -86,7 +37,7 @@ char* construct_channel_name(char* vmname, char* path)
     strncat(buf, vmname, strlen(vmname));
     strncat(buf, ":", 1);
     strncat(buf, path, strlen(path));
-    return buf;    
+    return buf;
 }
 
 void qemu_free(void* data, void* hint)
@@ -144,15 +95,13 @@ int qemu_print_sector_type(enum SECTOR_TYPE type)
 }
 
 int ext2_compare_inodes(struct ext2_inode* old_inode,
-                        struct ext2_inode* new_inode, void* pub_socket,
+                        struct ext2_inode* new_inode, struct kv_store* store,
                         char* vmname, char* path)
 {
     uint64_t i;
     char* channel_name;
-    zmq_msg_t msg;
     struct bson_info* bson;
     struct bson_kv val;
-    uint8_t* buf;
     uint64_t old, new;
 
     bson = bson_init();
@@ -184,36 +133,16 @@ int ext2_compare_inodes(struct ext2_inode* old_inode,
         bson_finalize(bson);
         
         channel_name = construct_channel_name(vmname, path);
-        buf = malloc(bson->size + strlen(channel_name) + 1);
-        memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
-                                bson->buffer, bson->size);
 
-        if (zmq_msg_init_data(&msg, buf, bson->size +
-                              strlen(channel_name) + 1, 
-                              qemu_free, 0))
+        if (redis_publish(store, channel_name, bson->buffer, bson->position))
         {
-            fprintf_light_red(stderr, "Failure initializing "
-                                      "zmq message data.\n");
+            fprintf_light_red(stderr, "Failure publishing "
+                                      "Redis message.\n");
             return -1;
         }
 
         free(channel_name);
         bson_reset(bson);
-
-        if (zmq_send(pub_socket, &msg, 0))
-        {
-            fprintf_light_red(stderr, "Failure sending zmq "
-                                      "message.\n");
-            zmq_send_print_error(errno);
-            return -1;
-        }
-
-        if (zmq_msg_close(&msg))
-        {
-            fprintf_light_red(stderr, "Failure closing zmq "
-                                      "message.\n");
-            return -1;
-        }
     }
 
     if (old_inode->i_uid != new_inode->i_uid)
@@ -243,36 +172,16 @@ int ext2_compare_inodes(struct ext2_inode* old_inode,
         bson_finalize(bson);
         
         channel_name = construct_channel_name(vmname, path);
-        buf = malloc(bson->size + strlen(channel_name) + 1);
-        memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
-                                bson->buffer, bson->size);
 
-        if (zmq_msg_init_data(&msg, buf, bson->size +
-                              strlen(channel_name) + 1, 
-                              qemu_free, 0))
+        if (redis_publish(store, channel_name, bson->buffer, bson->position))
         {
-            fprintf_light_red(stderr, "Failure initializing "
-                                      "zmq message data.\n");
+            fprintf_light_red(stderr, "Failure publishing "
+                                      "Redis message.\n");
             return -1;
         }
 
         free(channel_name);
         bson_reset(bson);
-
-        if (zmq_send(pub_socket, &msg, 0))
-        {
-            fprintf_light_red(stderr, "Failure sending zmq "
-                                      "message.\n");
-            zmq_send_print_error(errno);
-            return -1;
-        }
-
-        if (zmq_msg_close(&msg))
-        {
-            fprintf_light_red(stderr, "Failure closing zmq "
-                                      "message.\n");
-            return -1;
-        }
     }
 
     if (old_inode->i_size != new_inode->i_size)
@@ -303,36 +212,16 @@ int ext2_compare_inodes(struct ext2_inode* old_inode,
         bson_finalize(bson);
         
         channel_name = construct_channel_name(vmname, path);
-        buf = malloc(bson->size + strlen(channel_name) + 1);
-        memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
-                                bson->buffer, bson->size);
 
-        if (zmq_msg_init_data(&msg, buf, bson->size +
-                              strlen(channel_name) + 1, 
-                              qemu_free, 0))
+        if (redis_publish(store, channel_name, bson->buffer, bson->position))
         {
-            fprintf_light_red(stderr, "Failure initializing "
-                                      "zmq message data.\n");
+            fprintf_light_red(stderr, "Failure publishing "
+                                      "Redis message.\n");
             return -1;
         }
 
         free(channel_name);
         bson_reset(bson);
-
-        if (zmq_send(pub_socket, &msg, 0))
-        {
-            fprintf_light_red(stderr, "Failure sending zmq "
-                                      "message.\n");
-            zmq_send_print_error(errno);
-            return -1;
-        }
-
-        if (zmq_msg_close(&msg))
-        {
-            fprintf_light_red(stderr, "Failure closing zmq "
-                                      "message.\n");
-            return -1;
-        }
     }
 
     if (old_inode->i_atime != new_inode->i_atime)
@@ -362,36 +251,16 @@ int ext2_compare_inodes(struct ext2_inode* old_inode,
         bson_finalize(bson);
         
         channel_name = construct_channel_name(vmname, path);
-        buf = malloc(bson->size + strlen(channel_name) + 1);
-        memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
-                                bson->buffer, bson->size);
 
-        if (zmq_msg_init_data(&msg, buf, bson->size +
-                              strlen(channel_name) + 1, 
-                              qemu_free, 0))
+        if (redis_publish(store, channel_name, bson->buffer, bson->position))
         {
-            fprintf_light_red(stderr, "Failure initializing "
-                                      "zmq message data.\n");
+            fprintf_light_red(stderr, "Failure publishing "
+                                      "Redis message.\n");
             return -1;
         }
 
         free(channel_name);
         bson_reset(bson);
-
-        if (zmq_send(pub_socket, &msg, 0))
-        {
-            fprintf_light_red(stderr, "Failure sending zmq "
-                                      "message.\n");
-            zmq_send_print_error(errno);
-            return -1;
-        }
-
-        if (zmq_msg_close(&msg))
-        {
-            fprintf_light_red(stderr, "Failure closing zmq "
-                                      "message.\n");
-            return -1;
-        }
     }
 
     if (old_inode->i_ctime != new_inode->i_ctime)
@@ -421,36 +290,16 @@ int ext2_compare_inodes(struct ext2_inode* old_inode,
         bson_finalize(bson);
         
         channel_name = construct_channel_name(vmname, path);
-        buf = malloc(bson->size + strlen(channel_name) + 1);
-        memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
-                                bson->buffer, bson->size);
 
-        if (zmq_msg_init_data(&msg, buf, bson->size +
-                              strlen(channel_name) + 1, 
-                              qemu_free, 0))
+        if (redis_publish(store, channel_name, bson->buffer, bson->position))
         {
-            fprintf_light_red(stderr, "Failure initializing "
-                                      "zmq message data.\n");
+            fprintf_light_red(stderr, "Failure publishing "
+                                      "Redis message.\n");
             return -1;
         }
 
         free(channel_name);
         bson_reset(bson);
-
-        if (zmq_send(pub_socket, &msg, 0))
-        {
-            fprintf_light_red(stderr, "Failure sending zmq "
-                                      "message.\n");
-            zmq_send_print_error(errno);
-            return -1;
-        }
-
-        if (zmq_msg_close(&msg))
-        {
-            fprintf_light_red(stderr, "Failure closing zmq "
-                                      "message.\n");
-            return -1;
-        }
     }
 
     if (old_inode->i_mtime != new_inode->i_mtime)
@@ -480,36 +329,16 @@ int ext2_compare_inodes(struct ext2_inode* old_inode,
         bson_finalize(bson);
         
         channel_name = construct_channel_name(vmname, path);
-        buf = malloc(bson->size + strlen(channel_name) + 1);
-        memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
-                                bson->buffer, bson->size);
 
-        if (zmq_msg_init_data(&msg, buf, bson->size +
-                              strlen(channel_name) + 1, 
-                              qemu_free, 0))
+        if (redis_publish(store, channel_name, bson->buffer, bson->position))
         {
-            fprintf_light_red(stderr, "Failure initializing "
-                                      "zmq message data.\n");
+            fprintf_light_red(stderr, "Failure publishing "
+                                      "Redis message.\n");
             return -1;
         }
 
         free(channel_name);
         bson_reset(bson);
-
-        if (zmq_send(pub_socket, &msg, 0))
-        {
-            fprintf_light_red(stderr, "Failure sending zmq "
-                                      "message.\n");
-            zmq_send_print_error(errno);
-            return -1;
-        }
-
-        if (zmq_msg_close(&msg))
-        {
-            fprintf_light_red(stderr, "Failure closing zmq "
-                                      "message.\n");
-            return -1;
-        }
     }
         
     if (old_inode->i_dtime != new_inode->i_dtime)
@@ -539,36 +368,16 @@ int ext2_compare_inodes(struct ext2_inode* old_inode,
         bson_finalize(bson);
         
         channel_name = construct_channel_name(vmname, path);
-        buf = malloc(bson->size + strlen(channel_name) + 1);
-        memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
-                                bson->buffer, bson->size);
 
-        if (zmq_msg_init_data(&msg, buf, bson->size +
-                              strlen(channel_name) + 1, 
-                              qemu_free, 0))
+        if (redis_publish(store, channel_name, bson->buffer, bson->position))
         {
-            fprintf_light_red(stderr, "Failure initializing "
-                                      "zmq message data.\n");
+            fprintf_light_red(stderr, "Failure publishing "
+                                      "Redis message.\n");
             return -1;
         }
 
         free(channel_name);
         bson_reset(bson);
-
-        if (zmq_send(pub_socket, &msg, 0))
-        {
-            fprintf_light_red(stderr, "Failure sending zmq "
-                                      "message.\n");
-            zmq_send_print_error(errno);
-            return -1;
-        }
-
-        if (zmq_msg_close(&msg))
-        {
-            fprintf_light_red(stderr, "Failure closing zmq "
-                                      "message.\n");
-            return -1;
-        }
     }
 
     if (old_inode->i_gid != new_inode->i_gid)
@@ -598,36 +407,16 @@ int ext2_compare_inodes(struct ext2_inode* old_inode,
         bson_finalize(bson);
         
         channel_name = construct_channel_name(vmname, path);
-        buf = malloc(bson->size + strlen(channel_name) + 1);
-        memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
-                                bson->buffer, bson->size);
 
-        if (zmq_msg_init_data(&msg, buf, bson->size +
-                              strlen(channel_name) + 1, 
-                              qemu_free, 0))
+        if (redis_publish(store, channel_name, bson->buffer, bson->position))
         {
-            fprintf_light_red(stderr, "Failure initializing "
-                                      "zmq message data.\n");
+            fprintf_light_red(stderr, "Failure publishing "
+                                      "Redis message.\n");
             return -1;
         }
 
         free(channel_name);
         bson_reset(bson);
-
-        if (zmq_send(pub_socket, &msg, 0))
-        {
-            fprintf_light_red(stderr, "Failure sending zmq "
-                                      "message.\n");
-            zmq_send_print_error(errno);
-            return -1;
-        }
-
-        if (zmq_msg_close(&msg))
-        {
-            fprintf_light_red(stderr, "Failure closing zmq "
-                                      "message.\n");
-            return -1;
-        }
     }
 
     if (old_inode->i_links_count != new_inode->i_links_count)
@@ -657,36 +446,16 @@ int ext2_compare_inodes(struct ext2_inode* old_inode,
         bson_finalize(bson);
         
         channel_name = construct_channel_name(vmname, path);
-        buf = malloc(bson->size + strlen(channel_name) + 1);
-        memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
-                                bson->buffer, bson->size);
 
-        if (zmq_msg_init_data(&msg, buf, bson->size +
-                              strlen(channel_name) + 1, 
-                              qemu_free, 0))
+        if (redis_publish(store, channel_name, bson->buffer, bson->position))
         {
-            fprintf_light_red(stderr, "Failure initializing "
-                                      "zmq message data.\n");
+            fprintf_light_red(stderr, "Failure publishing "
+                                      "Redis message.\n");
             return -1;
         }
 
         free(channel_name);
         bson_reset(bson);
-
-        if (zmq_send(pub_socket, &msg, 0))
-        {
-            fprintf_light_red(stderr, "Failure sending zmq "
-                                      "message.\n");
-            zmq_send_print_error(errno);
-            return -1;
-        }
-
-        if (zmq_msg_close(&msg))
-        {
-            fprintf_light_red(stderr, "Failure closing zmq "
-                                      "message.\n");
-            return -1;
-        }
     }
 
     if (old_inode->i_blocks != new_inode->i_blocks)
@@ -716,36 +485,16 @@ int ext2_compare_inodes(struct ext2_inode* old_inode,
         bson_finalize(bson);
         
         channel_name = construct_channel_name(vmname, path);
-        buf = malloc(bson->size + strlen(channel_name) + 1);
-        memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
-                                bson->buffer, bson->size);
 
-        if (zmq_msg_init_data(&msg, buf, bson->size +
-                              strlen(channel_name) + 1, 
-                              qemu_free, 0))
+        if (redis_publish(store, channel_name, bson->buffer, bson->position))
         {
-            fprintf_light_red(stderr, "Failure initializing "
-                                      "zmq message data.\n");
+            fprintf_light_red(stderr, "Failure publishing "
+                                      "Redis message.\n");
             return -1;
         }
 
         free(channel_name);
         bson_reset(bson);
-
-        if (zmq_send(pub_socket, &msg, 0))
-        {
-            fprintf_light_red(stderr, "Failure sending zmq "
-                                      "message.\n");
-            zmq_send_print_error(errno);
-            return -1;
-        }
-
-        if (zmq_msg_close(&msg))
-        {
-            fprintf_light_red(stderr, "Failure closing zmq "
-                                      "message.\n");
-            return -1;
-        }
     }
 
     if (old_inode->i_flags != new_inode->i_flags)
@@ -775,36 +524,16 @@ int ext2_compare_inodes(struct ext2_inode* old_inode,
         bson_finalize(bson);
         
         channel_name = construct_channel_name(vmname, path);
-        buf = malloc(bson->size + strlen(channel_name) + 1);
-        memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
-                                bson->buffer, bson->size);
 
-        if (zmq_msg_init_data(&msg, buf, bson->size +
-                              strlen(channel_name) + 1, 
-                              qemu_free, 0))
+        if (redis_publish(store, channel_name, bson->buffer, bson->position))
         {
-            fprintf_light_red(stderr, "Failure initializing "
-                                      "zmq message data.\n");
+            fprintf_light_red(stderr, "Failure publishing "
+                                      "Redis message.\n");
             return -1;
         }
 
         free(channel_name);
         bson_reset(bson);
-
-        if (zmq_send(pub_socket, &msg, 0))
-        {
-            fprintf_light_red(stderr, "Failure sending zmq "
-                                      "message.\n");
-            zmq_send_print_error(errno);
-            return -1;
-        }
-
-        if (zmq_msg_close(&msg))
-        {
-            fprintf_light_red(stderr, "Failure closing zmq "
-                                      "message.\n");
-            return -1;
-        }
     }
 
     if (old_inode->i_osd1 != new_inode->i_osd1)
@@ -834,36 +563,16 @@ int ext2_compare_inodes(struct ext2_inode* old_inode,
         bson_finalize(bson);
         
         channel_name = construct_channel_name(vmname, path);
-        buf = malloc(bson->size + strlen(channel_name) + 1);
-        memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
-                                bson->buffer, bson->size);
 
-        if (zmq_msg_init_data(&msg, buf, bson->size +
-                              strlen(channel_name) + 1, 
-                              qemu_free, 0))
+        if (redis_publish(store, channel_name, bson->buffer, bson->position))
         {
-            fprintf_light_red(stderr, "Failure initializing "
-                                      "zmq message data.\n");
+            fprintf_light_red(stderr, "Failure publishing "
+                                      "Redis message.\n");
             return -1;
         }
 
         free(channel_name);
         bson_reset(bson);
-
-        if (zmq_send(pub_socket, &msg, 0))
-        {
-            fprintf_light_red(stderr, "Failure sending zmq "
-                                      "message.\n");
-            zmq_send_print_error(errno);
-            return -1;
-        }
-
-        if (zmq_msg_close(&msg))
-        {
-            fprintf_light_red(stderr, "Failure closing zmq "
-                                      "message.\n");
-            return -1;
-        }
     }
 
     /* loop 15 */
@@ -908,36 +617,16 @@ int ext2_compare_inodes(struct ext2_inode* old_inode,
             bson_finalize(bson);
             
             channel_name = construct_channel_name(vmname, path);
-            buf = malloc(bson->size + strlen(channel_name) + 1);
-            memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
-                                    bson->buffer, bson->size);
 
-            if (zmq_msg_init_data(&msg, buf, bson->size +
-                                  strlen(channel_name) + 1, 
-                                  qemu_free, 0))
+            if (redis_publish(store, channel_name, bson->buffer, bson->position))
             {
-                fprintf_light_red(stderr, "Failure initializing "
-                                          "zmq message data.\n");
+                fprintf_light_red(stderr, "Failure publishing "
+                                          "Redis message.\n");
                 return -1;
             }
 
             free(channel_name);
             bson_reset(bson);
-
-            if (zmq_send(pub_socket, &msg, 0))
-            {
-                fprintf_light_red(stderr, "Failure sending zmq "
-                                          "message.\n");
-                zmq_send_print_error(errno);
-                return -1;
-            }
-
-            if (zmq_msg_close(&msg))
-            {
-                fprintf_light_red(stderr, "Failure closing zmq "
-                                          "message.\n");
-                return -1;
-            }
         }
     }
 
@@ -968,36 +657,16 @@ int ext2_compare_inodes(struct ext2_inode* old_inode,
         bson_finalize(bson);
         
         channel_name = construct_channel_name(vmname, path);
-        buf = malloc(bson->size + strlen(channel_name) + 1);
-        memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
-                                bson->buffer, bson->size);
 
-        if (zmq_msg_init_data(&msg, buf, bson->size +
-                              strlen(channel_name) + 1, 
-                              qemu_free, 0))
+        if (redis_publish(store, channel_name, bson->buffer, bson->position))
         {
-            fprintf_light_red(stderr, "Failure initializing "
-                                      "zmq message data.\n");
+            fprintf_light_red(stderr, "Failure publishing "
+                                      "Redis message.\n");
             return -1;
         }
 
         free(channel_name);
         bson_reset(bson);
-
-        if (zmq_send(pub_socket, &msg, 0))
-        {
-            fprintf_light_red(stderr, "Failure sending zmq "
-                                      "message.\n");
-            zmq_send_print_error(errno);
-            return -1;
-        }
-
-        if (zmq_msg_close(&msg))
-        {
-            fprintf_light_red(stderr, "Failure closing zmq "
-                                      "message.\n");
-            return -1;
-        }
     }
 
     if (old_inode->i_file_acl != new_inode->i_file_acl)
@@ -1027,36 +696,16 @@ int ext2_compare_inodes(struct ext2_inode* old_inode,
         bson_finalize(bson);
         
         channel_name = construct_channel_name(vmname, path);
-        buf = malloc(bson->size + strlen(channel_name) + 1);
-        memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
-                                bson->buffer, bson->size);
 
-        if (zmq_msg_init_data(&msg, buf, bson->size +
-                              strlen(channel_name) + 1, 
-                              qemu_free, 0))
+        if (redis_publish(store, channel_name, bson->buffer, bson->position))
         {
-            fprintf_light_red(stderr, "Failure initializing "
-                                      "zmq message data.\n");
+            fprintf_light_red(stderr, "Failure publishing "
+                                      "Redis message.\n");
             return -1;
         }
 
         free(channel_name);
         bson_reset(bson);
-
-        if (zmq_send(pub_socket, &msg, 0))
-        {
-            fprintf_light_red(stderr, "Failure sending zmq "
-                                      "message.\n");
-            zmq_send_print_error(errno);
-            return -1;
-        }
-
-        if (zmq_msg_close(&msg))
-        {
-            fprintf_light_red(stderr, "Failure closing zmq "
-                                      "message.\n");
-            return -1;
-        }
     }
 
     if (old_inode->i_dir_acl != new_inode->i_dir_acl)
@@ -1086,36 +735,16 @@ int ext2_compare_inodes(struct ext2_inode* old_inode,
         bson_finalize(bson);
         
         channel_name = construct_channel_name(vmname, path);
-        buf = malloc(bson->size + strlen(channel_name) + 1);
-        memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
-                                bson->buffer, bson->size);
 
-        if (zmq_msg_init_data(&msg, buf, bson->size +
-                              strlen(channel_name) + 1, 
-                              qemu_free, 0))
+        if (redis_publish(store, channel_name, bson->buffer, bson->position))
         {
-            fprintf_light_red(stderr, "Failure initializing "
-                                      "zmq message data.\n");
+            fprintf_light_red(stderr, "Failure publishing "
+                                      "Redis message.\n");
             return -1;
         }
 
         free(channel_name);
         bson_reset(bson);
-
-        if (zmq_send(pub_socket, &msg, 0))
-        {
-            fprintf_light_red(stderr, "Failure sending zmq "
-                                      "message.\n");
-            zmq_send_print_error(errno);
-            return -1;
-        }
-
-        if (zmq_msg_close(&msg))
-        {
-            fprintf_light_red(stderr, "Failure closing zmq "
-                                      "message.\n");
-            return -1;
-        }
     }
 
     if (old_inode->i_faddr != new_inode->i_faddr)
@@ -1145,36 +774,16 @@ int ext2_compare_inodes(struct ext2_inode* old_inode,
         bson_finalize(bson);
         
         channel_name = construct_channel_name(vmname, path);
-        buf = malloc(bson->size + strlen(channel_name) + 1);
-        memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
-                                bson->buffer, bson->size);
 
-        if (zmq_msg_init_data(&msg, buf, bson->size +
-                              strlen(channel_name) + 1, 
-                              qemu_free, 0))
+        if (redis_publish(store, channel_name, bson->buffer, bson->position))
         {
-            fprintf_light_red(stderr, "Failure initializing "
-                                      "zmq message data.\n");
+            fprintf_light_red(stderr, "Failure publishing "
+                                      "Redis message.\n");
             return -1;
         }
 
         free(channel_name);
         bson_reset(bson);
-
-        if (zmq_send(pub_socket, &msg, 0))
-        {
-            fprintf_light_red(stderr, "Failure sending zmq "
-                                      "message.\n");
-            zmq_send_print_error(errno);
-            return -1;
-        }
-
-        if (zmq_msg_close(&msg))
-        {
-            fprintf_light_red(stderr, "Failure closing zmq "
-                                      "message.\n");
-            return -1;
-        }
     }
 
     for (i = 0; i < 12; i++)
@@ -1211,37 +820,18 @@ int ext2_compare_inodes(struct ext2_inode* old_inode,
             bson_serialize(bson, &val);
             bson_finalize(bson);
             
+        
             channel_name = construct_channel_name(vmname, path);
-            buf = malloc(bson->size + strlen(channel_name) + 1);
-            memcpy((uint8_t*) mempcpy(buf, channel_name, strlen(channel_name) + 1),
-                                    bson->buffer, bson->size);
 
-            if (zmq_msg_init_data(&msg, buf, bson->size +
-                                  strlen(channel_name) + 1, 
-                                  qemu_free, 0))
+            if (redis_publish(store, channel_name, bson->buffer, bson->position))
             {
-                fprintf_light_red(stderr, "Failure initializing "
-                                          "zmq message data.\n");
+                fprintf_light_red(stderr, "Failure publishing "
+                                          "Redis message.\n");
                 return -1;
             }
 
             free(channel_name);
             bson_reset(bson);
-
-            if (zmq_send(pub_socket, &msg, 0))
-            {
-                fprintf_light_red(stderr, "Failure sending zmq "
-                                          "message.\n");
-                zmq_send_print_error(errno);
-                return -1;
-            }
-
-            if (zmq_msg_close(&msg))
-            {
-                fprintf_light_red(stderr, "Failure closing zmq "
-                                          "message.\n");
-                return -1;
-            }
         }
     }
     
@@ -1253,16 +843,14 @@ int ext2_compare_inodes(struct ext2_inode* old_inode,
 }
 
 int qemu_deep_inspect(struct qemu_bdrv_write* write, struct mbr* mbr,
-                      void* pub_socket, char* vmname)
+                      struct kv_store* store, char* vmname)
 {
     uint64_t i, j, start = 0, end = 0;
     uint64_t inode_offset;
-    uint8_t* buf;
     char* channel_name;
     struct partition* partition;
     struct ext2_fs* fs;
     struct ext2_file* file;
-    zmq_msg_t msg;
     struct ext2_inode new_inode;
     struct bson_info* bson;
     struct bson_kv val;
@@ -1296,8 +884,9 @@ int qemu_deep_inspect(struct qemu_bdrv_write* write, struct mbr* mbr,
                                   &(write->data[inode_offset]));
 
                     /* compare inode, emit diff */
-                    ext2_compare_inodes(&(file->inode), &new_inode, pub_socket,
+                    ext2_compare_inodes(&(file->inode), &new_inode, store,
                                         vmname, file->path);
+                    return SECTOR_EXT2_PARTITION;
                 }
 
                 if (bst_find(file->sectors, write->header.sector_num))
@@ -1307,8 +896,11 @@ int qemu_deep_inspect(struct qemu_bdrv_write* write, struct mbr* mbr,
                                               write->header.sector_num,
                                               file->path);
                     if (file->is_dir)
+                    {
                         fprintf_light_green(stdout, "Directory modification."
                                                     "\n");
+                        return SECTOR_EXT2_PARTITION;
+                    }
 
                     if (!file->is_dir)
                     {
@@ -1345,45 +937,28 @@ int qemu_deep_inspect(struct qemu_bdrv_write* write, struct mbr* mbr,
                         channel_name = construct_channel_name(vmname,
                                                               file->path);
 
-                        buf = malloc(bson->size + strlen(channel_name) + 1);
-                        memcpy((uint8_t*) mempcpy(buf, channel_name,
-                                                  strlen(channel_name) + 1),
-                                bson->buffer, bson->size);
-
-                        if (zmq_msg_init_data(&msg, buf, bson->size +
-                                                         strlen(channel_name) + 1, 
-                                              qemu_free, 0))
+                        if (redis_publish(store, channel_name, bson->buffer,
+                                          bson->position))
                         {
-                            fprintf_light_red(stderr, "Failure initializing "
-                                                      "zmq message data.\n");
+                            fprintf_light_red(stderr, "Failure publishing "
+                                                      "Redis message.\n");
                             return -1;
                         }
 
                         free(channel_name);
-                        bson_cleanup(bson);
+                        bson_reset(bson);
+                        return SECTOR_EXT2_PARTITION;
+                    } /* is not dir */
+                } /* if is in file */
+            } /* loop on files */
+        } /* if in partition */
+    } /* loop on partitions */
 
-                        if (zmq_send(pub_socket, &msg, 0))
-                        {
-                            fprintf_light_red(stderr, "Failure sending zmq "
-                                                      "message.\n");
-                            zmq_send_print_error(errno);
-                            return -1;
-                        }
-
-                        if (zmq_msg_close(&msg))
-                        {
-                            fprintf_light_red(stderr, "Failure closing zmq "
-                                                      "message.\n");
-                            return -1;
-                        }
-                    }
-                }
-            }
-
-            return SECTOR_EXT2_PARTITION;
-        }
-    }
-
+    /* handling unknown write, send to queue */
+    redis_enqueue_pipelined(store, write->header.sector_num,
+                                   write->data,
+                                   write->header.nb_sectors * SECTOR_SIZE);
+    redis_flush_pipeline(store);
    return 0;
 }
 

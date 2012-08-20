@@ -1,6 +1,6 @@
 /*****************************************************************************
  * Author: Wolfgang Richter <wolf@cs.cmu.edu>                                *
- * Purpose: Analyze a stream of disk block writes and infere file-level      *
+ * Purpose: Analyze a stream of disk block writes and infer file-level       * 
  *          mutations given context from a pre-indexed raw disk image.       *
  *                                                                           *
  *****************************************************************************/
@@ -8,7 +8,7 @@
 #include "color.h"
 #include "deep_inspection.h"
 
-#include <zmq.h>
+#include "redis_queue.h"
 
 #include <inttypes.h>
 #include <sys/types.h>
@@ -20,13 +20,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define PUB_SOCKET 13738
 #define SECTOR_SIZE 512 
 
-int read_loop(int fd, struct mbr* mbr, void* pub_socket, char* vmname)
+int read_loop(int fd, struct mbr* mbr, struct kv_store* store, char* vmname)
 {
     uint8_t buf[QEMU_HEADER_SIZE];
     int64_t total = 0, read_ret = 0;
+    int sector_type = SECTOR_UNKNOWN;
     struct qemu_bdrv_write write;
 
     while (1)
@@ -82,13 +82,15 @@ int read_loop(int fd, struct mbr* mbr, void* pub_socket, char* vmname)
         if (read_ret <= 0)
         {
             fprintf_light_red(stderr, "Stream ended while reading sector "
-                                       "data.\n");
+                                      "data.\n");
             return EXIT_FAILURE;
         }
 
         qemu_print_write(&write);
-        qemu_print_sector_type(qemu_infer_sector_type(&write, mbr));
-        qemu_deep_inspect(&write, mbr, pub_socket, vmname);
+        sector_type = qemu_infer_sector_type(&write, mbr);
+        qemu_print_sector_type(sector_type);
+        if (sector_type == SECTOR_EXT2_INODE || sector_type == SECTOR_EXT2_DATA)
+            qemu_deep_inspect(&write, mbr, store, vmname);
         free((void*) write.data);
         fflush(stdout);
         sleep(1);
@@ -97,35 +99,36 @@ int read_loop(int fd, struct mbr* mbr, void* pub_socket, char* vmname)
     return EXIT_SUCCESS;
 }
 
-void print_zmq_version()
+void print_hiredis_version()
 {
-    int major, minor, patch;
-    zmq_version (&major, &minor, &patch);
-    fprintf(stdout, "Current 0MQ version is %d.%d.%d\n", major, minor, patch);
+    fprintf(stdout, "Current libhiredis version is %d.%d.%d\n", HIREDIS_MAJOR,
+                                                                HIREDIS_MINOR,
+                                                                HIREDIS_PATCH);
 }
 
 /* main thread of execution */
 int main(int argc, char* args[])
 {
     int fd, ret;
-    char* index, *stream, *vmname;
+    char* index, *db, *stream, *vmname;
     struct mbr mbr;
     FILE* indexf;
     fprintf_blue(stdout, "VM Disk Analysis Engine -- "
                          "By: Wolfgang Richter "
                          "<wolf@cs.cmu.edu>\n");
-    print_zmq_version();
+    print_hiredis_version();
 
-    if (argc < 4)
+    if (argc < 5)
     {
         fprintf_light_red(stderr, "Usage: %s <disk index file> <stream file>"
-                                  " <vmname>\n", args[0]);
+                                  " <redis db num> <vmname>\n", args[0]);
         return EXIT_FAILURE;
     }
 
     index = args[1];
     stream = args[2];
-    vmname = args[3];
+    db = args[3];
+    vmname = args[4];
 
     fprintf_cyan(stdout, "%s: loading index: %s\n\n", vmname, index);
 
@@ -144,24 +147,14 @@ int main(int argc, char* args[])
         return EXIT_FAILURE;
     }
 
-    /* ----------------- 0MQ ----------------- */
-    void* zmq_context = zmq_init(1);
-    if (zmq_context == NULL)
+    /* ----------------- hiredis ----------------- */
+    struct kv_store* handle = redis_init(db);
+    if (handle == NULL)
     {
-        fprintf_light_red(stderr, "Failed getting ZeroMQ context.\n");
+        fprintf_light_red(stderr, "Failed getting Redis context "
+                                  "(connection failure?).\n");
         return EXIT_FAILURE;
     }
-
-    void* pub_socket = zmq_socket(zmq_context, ZMQ_PUB);
-    if (pub_socket == NULL)
-    {
-        fprintf_light_red(stderr, "Failed getting PUB socket.\n");
-        return EXIT_FAILURE;
-    }
-
-    zmq_bind(pub_socket, "tcp://0.0.0.0:13738");
-    fprintf_cyan(stdout, "%s: PUB Socket, TCP: %d\n", vmname, PUB_SOCKET);
-
 
     fprintf_cyan(stdout, "%s: attaching to stream: %s\n\n", vmname, stream);
 
@@ -181,11 +174,10 @@ int main(int argc, char* args[])
         return EXIT_FAILURE;
     }
 
-    ret = read_loop(fd, &mbr, pub_socket, vmname);
+    ret = read_loop(fd, &mbr, handle, vmname);
     close(fd);
     fclose(indexf);
-    zmq_close(pub_socket);
-    zmq_term(zmq_context);
+    redis_shutdown(handle);
 
     return EXIT_SUCCESS;
 }

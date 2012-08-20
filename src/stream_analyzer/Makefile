@@ -1,23 +1,27 @@
 default:
-	@clang inference_engine_ntfs_demo.c -g \
-		 ../util/color.c \
-		 ../util/util.c \
-		 ../bson/bson-encoder.c \
-		 ../bson/bson-decoder.c \
-		 ../disk_analyzer/ext2.c \
-		 ../disk_analyzer/ntfs.c \
-		 ../datastructures/bst.c \
-		 ../datastructures/linkedlist.c \
-		 deep_inspection.c \
-		 -lzmq \
-		 -o inference_engine_ntfs \
-		 -Wall \
-		 -Werror \
-		 -I../disk_analyzer \
-		 -I../util \
-		 -I../bson \
-		 -I../datastructures \
-		 #-DNOCOLOR
+	@#clang inference_engine_ntfs_demo.c -g \
+	#	 ../util/color.c \
+	#	 ../util/util.c \
+	#	 ../bson/bson-encoder.c \
+	#	 ../bson/bson-decoder.c \
+	#	 ../disk_analyzer/ext2/ext2.c \
+	#	 ../disk_analyzer/ntfs/ntfs.c \
+	#	 ../datastructures/bst.c \
+	#	 ../datastructures/linkedlist.c \
+	#	 deep_inspection.c \
+	#	 redis_queue.c \
+	#	 -lhiredis \
+	#	 -o inference_engine_ntfs \
+	#	 -Wall \
+	#	 -Werror \
+	#	 -I../disk_analyzer/ext2 \
+	#	 -I../disk_analyzer/mbr \
+	#	 -I../disk_analyzer/ntfs \
+	#	 -I../util \
+	#	 -I../bson \
+	#	 -I../datastructures \
+	#	 -I/usr/include/hiredis \
+	#	 #-DNOCOLOR
 
 	@clang stream_analyzer.c \
 		 ../util/color.c \
@@ -36,18 +40,21 @@ default:
 		 ../util/util.c \
 		 ../bson/bson-encoder.c \
 		 ../bson/bson-decoder.c \
-		 ../disk_analyzer/ext2.c \
+		 ../disk_analyzer/ext2/ext2.c \
 		 ../datastructures/bst.c \
 		 ../datastructures/linkedlist.c \
 		 deep_inspection.c \
-		 -lzmq \
+		 redis_queue.c \
+		 -lhiredis \
 		 -o inference_engine \
 		 -Wall \
 		 -Werror \
-		 -I../disk_analyzer \
+		 -I../disk_analyzer/ext2 \
+		 -I../disk_analyzer/mbr \
 		 -I../util \
 		 -I../bson \
 		 -I../datastructures \
+		 -I/usr/include/hiredis \
 		 #-DNOCOLOR
 
 gdb: default
