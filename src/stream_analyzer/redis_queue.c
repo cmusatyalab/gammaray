@@ -114,7 +114,6 @@ int redis_publish(struct kv_store* handle, char* channel, uint8_t* data,
                   size_t len)
 {
     redisReply* reply;
-    fprintf(stderr, "PUBLISHING size %zu\n", len);
     reply = redisCommand(handle->connection, "PUBLISH %s %b", channel,
                                                               data, len);
     return check_redis_return(handle->connection, reply);

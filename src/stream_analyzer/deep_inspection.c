@@ -955,9 +955,12 @@ int qemu_deep_inspect(struct qemu_bdrv_write* write, struct mbr* mbr,
     } /* loop on partitions */
 
     /* handling unknown write, send to queue */
-    redis_enqueue_pipelined(store, write->header.sector_num,
-                                   write->data,
-                                   write->header.nb_sectors * SECTOR_SIZE);
+    for (i = 0; i < write->header.nb_sectors; i++)
+    {
+        redis_enqueue_pipelined(store, write->header.sector_num + i,
+                                       &(write->data[i*SECTOR_SIZE]),
+                                       SECTOR_SIZE);
+    }
     redis_flush_pipeline(store);
    return 0;
 }
