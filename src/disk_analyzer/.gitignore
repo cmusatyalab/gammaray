@@ -1,4 +1,4 @@
 disk_analyzer
-inode_explorer
-data_block_explorer
-file_record_differ
+ext*_inode_explorer
+ext*_data_block_explorer
+ntfs_file_record_differ

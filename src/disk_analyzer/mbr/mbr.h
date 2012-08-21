@@ -30,7 +30,8 @@ struct mbr
 
 enum MBR_FS_TYPES
 {
-    MBR_FS_TYPE_EXT2
+    MBR_FS_TYPE_EXT2,
+    MBR_FS_TYPE_EXT4
 };
 
 int print_mbr(struct mbr mbr);
