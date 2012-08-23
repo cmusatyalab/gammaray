@@ -100,7 +100,8 @@ int simple_find(uint32_t inode_table_location,
                 FILE* disk, uint32_t inode, char* path_prefix);
 int ext2_probe(FILE* disk, int64_t partition_offset,
                struct ext2_superblock* superblock);
-
+int ext3_probe(FILE* disk, int64_t partition_offset,
+               struct ext2_superblock* superblock);
 int ext2_read_inode(FILE* disk, int64_t partition_offset,
                     struct ext2_superblock superblock, uint32_t inode_num,
                     struct ext2_inode* inode);

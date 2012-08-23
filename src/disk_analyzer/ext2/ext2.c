@@ -12,6 +12,45 @@
 #include <sys/stat.h> 
 #include <sys/types.h>
 
+/* for s_feature_compat */
+#define EXT3_FEATURE_COMPAT_HAS_JOURNAL         0x0004
+
+/* for s_feature_ro_compat */
+#define EXT2_FEATURE_RO_COMPAT_SPARSE_SUPER     0x0001
+#define EXT2_FEATURE_RO_COMPAT_LARGE_FILE       0x0002
+#define EXT2_FEATURE_RO_COMPAT_BTREE_DIR        0x0004
+#define EXT4_FEATURE_RO_COMPAT_HUGE_FILE        0x0008
+#define EXT4_FEATURE_RO_COMPAT_GDT_CSUM         0x0010
+#define EXT4_FEATURE_RO_COMPAT_DIR_NLINK        0x0020
+#define EXT4_FEATURE_RO_COMPAT_EXTRA_ISIZE      0x0040
+
+/* for s_feature_incompat */
+#define EXT2_FEATURE_INCOMPAT_FILETYPE          0x0002
+#define EXT3_FEATURE_INCOMPAT_RECOVER           0x0004
+#define EXT3_FEATURE_INCOMPAT_JOURNAL_DEV       0x0008
+#define EXT2_FEATURE_INCOMPAT_META_BG           0x0010
+#define EXT4_FEATURE_INCOMPAT_EXTENTS           0x0040 /* extents support */
+#define EXT4_FEATURE_INCOMPAT_64BIT             0x0080
+#define EXT4_FEATURE_INCOMPAT_MMP               0x0100
+#define EXT4_FEATURE_INCOMPAT_FLEX_BG           0x0200
+
+#define EXT2_FEATURE_RO_COMPAT_SUPP (EXT2_FEATURE_RO_COMPAT_SPARSE_SUPER| \
+                                               EXT2_FEATURE_RO_COMPAT_LARGE_FILE| \
+                                               EXT2_FEATURE_RO_COMPAT_BTREE_DIR)
+#define EXT2_FEATURE_INCOMPAT_SUPP  (EXT2_FEATURE_INCOMPAT_FILETYPE| \
+                                               EXT2_FEATURE_INCOMPAT_META_BG)
+#define EXT2_FEATURE_INCOMPAT_UNSUPPORTED ~EXT2_FEATURE_INCOMPAT_SUPP
+#define EXT2_FEATURE_RO_COMPAT_UNSUPPORTED      ~EXT2_FEATURE_RO_COMPAT_SUPP
+
+#define EXT3_FEATURE_RO_COMPAT_SUPP (EXT2_FEATURE_RO_COMPAT_SPARSE_SUPER| \
+                                               EXT2_FEATURE_RO_COMPAT_LARGE_FILE| \
+                                               EXT2_FEATURE_RO_COMPAT_BTREE_DIR)
+#define EXT3_FEATURE_INCOMPAT_SUPP  (EXT2_FEATURE_INCOMPAT_FILETYPE| \
+                                               EXT3_FEATURE_INCOMPAT_RECOVER| \
+                                               EXT2_FEATURE_INCOMPAT_META_BG)
+#define EXT3_FEATURE_INCOMPAT_UNSUPPORTED ~EXT3_FEATURE_INCOMPAT_SUPP
+#define EXT3_FEATURE_RO_COMPAT_UNSUPPORTED      ~EXT3_FEATURE_RO_COMPAT_SUPP
+
 struct ext2_dir_entry
 {
     uint32_t inode;     /* 4 bytes */
@@ -885,7 +924,7 @@ int ext2_list_tree(FILE* disk, int64_t partition_offset,
                 }
                 else
                 {
-                    fprintf_red(stdout, "%s\n", path);
+                    fprintf_red(stdout, "Not directory or file: %s\n", path);
                 }
                 ext2_list_tree(disk, partition_offset, superblock, child_inode,
                                strcat(path, "/")); /* recursive call */
@@ -1727,6 +1766,47 @@ int print_ext2_superblock(struct ext2_superblock superblock)
     return 0;
 }
 
+int ext3_probe(FILE* disk, int64_t partition_offset, struct ext2_superblock* superblock)
+{
+    if (partition_offset == 0)
+    {
+        fprintf_light_red(stderr, "ext2 probe failed on partition at offset: "
+                                  "0x%.16"PRIx64".\n", partition_offset);
+        return -1;
+    }
+
+    partition_offset += EXT2_SUPERBLOCK_OFFSET;
+
+    if (fseeko(disk, partition_offset, 0))
+    {
+        fprintf_light_red(stderr, "Error seeking to position 0x%.16"PRIx64".\n",
+                                  partition_offset);
+        return -1;
+    }
+
+    if (fread(superblock, 1, sizeof(struct ext2_superblock), disk) !=
+        sizeof(struct ext2_superblock))
+    {
+        fprintf_light_red(stderr, 
+                          "Error while trying to read ext2 superblock.\n");
+        return -1;
+    }
+
+    /* peel out ext2 vs ext3 vs ext4 ... ugly */
+    if (superblock->s_magic != 0xef53 || !(superblock->s_feature_compat &
+                                           EXT3_FEATURE_COMPAT_HAS_JOURNAL) ||
+                                       (superblock->s_feature_ro_compat &
+                                         EXT3_FEATURE_RO_COMPAT_UNSUPPORTED) ||
+                                       (superblock->s_feature_incompat  &
+                                         EXT3_FEATURE_INCOMPAT_UNSUPPORTED))
+    {
+        fprintf_light_red(stderr, "ext2 superblock s_magic mismatch.\n");
+        return -1;
+    }
+
+    return 0;
+}
+
 int ext2_probe(FILE* disk, int64_t partition_offset, struct ext2_superblock* superblock)
 {
     if (partition_offset == 0)
@@ -1753,7 +1833,13 @@ int ext2_probe(FILE* disk, int64_t partition_offset, struct ext2_superblock* sup
         return -1;
     }
 
-    if (superblock->s_magic != 0xef53)
+    /* peel out ext2 vs ext3 vs ext4 ... ugly */
+    if (superblock->s_magic != 0xef53 || (superblock->s_feature_compat &
+                                         EXT3_FEATURE_COMPAT_HAS_JOURNAL) ||
+                                         (superblock->s_feature_ro_compat &
+                                         EXT2_FEATURE_RO_COMPAT_UNSUPPORTED) ||
+                                         (superblock->s_feature_incompat  &
+                                          EXT2_FEATURE_INCOMPAT_UNSUPPORTED))
     {
         fprintf_light_red(stderr, "ext2 superblock s_magic mismatch.\n");
         return -1;
@@ -2368,7 +2454,7 @@ int ext2_serialize_tree(FILE* disk, int64_t partition_offset,
                 }
                 else
                 {
-                    fprintf_red(stderr, "%s\n", path);
+                    fprintf_red(stderr, "Not directory or file: %s\n", path);
                 }
                 ext2_serialize_tree(disk, partition_offset, superblock,
                                     child_inode, path, serializef,

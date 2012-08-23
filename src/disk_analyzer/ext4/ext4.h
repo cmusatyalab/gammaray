@@ -100,29 +100,30 @@ struct ext4_superblock
 
 struct ext4_block_group_descriptor
 {
-    uint32_t bg_block_bitmap_lo;
+    uint32_t bg_block_bitmap_lo;        /* 00 */
     uint32_t bg_inode_bitmap_lo;
     uint32_t bg_inode_table_lo;
     uint16_t bg_free_blocks_count_lo;
-    uint16_t bg_free_inodes_count_lo;
+    uint16_t bg_free_inodes_count_lo;   /* 10 */
     uint16_t bg_used_dirs_count_lo;
     uint16_t bg_flags;
     uint32_t bg_exclude_bitmap_lo;
     uint16_t bg_block_bitmap_csum_lo;
     uint16_t bg_inode_bitmap_csum_lo;
     uint16_t bg_itable_unused_lo;
-    uint16_t bg_checksum;
-    uint32_t bg_block_bitmap_hi;
+    uint16_t bg_checksum;               /* 20 */
+    /* enabled only on 64bit option set */
+/*    uint32_t bg_block_bitmap_hi;
     uint32_t bg_inode_bitmap_hi;
     uint32_t bg_inode_table_hi;
     uint16_t bg_free_blocks_count_hi;
-    uint16_t bg_free_inodes_count_hi;
-    uint16_t bg_used_dirs_count_hi;
+    uint16_t bg_free_inodes_count_hi;   * 30 */
+ /*   uint16_t bg_used_dirs_count_hi;
     uint16_t bg_itable_unused_hi;
     uint32_t bg_exclude_bitmap_hi;
     uint16_t bg_block_bitmap_csum_hi;
     uint16_t bg_inode_bitmap_csum_hi;
-    uint32_t bg_reserved;
+    uint32_t bg_reserved;               * 3a */
 } __attribute__((packed));
 
 struct ext4_inode
@@ -156,6 +157,7 @@ struct ext4_inode
 } __attribute__((packed));
 
 int ext4_print_superblock(struct ext4_superblock superblock);
+int ext4_print_features(struct ext4_superblock* superblock);
 int ext4_print_block_group_descriptor(struct ext4_block_group_descriptor);
 int ext4_print_inode(struct ext4_inode);
 int ext4_print_dir_entries(uint8_t* bytes, uint32_t len);

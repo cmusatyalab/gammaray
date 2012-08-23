@@ -1,5 +1,5 @@
 default:
-	@clang disk_analyzer.c ../util/color.c ext2/ext2.c ntfs/ntfs.c mbr/mbr.c \
+	@clang disk_analyzer.c ../util/color.c ext2/ext2.c ext4/ext4.c ntfs/ntfs.c mbr/mbr.c \
 		   ../bson/bson-encoder.c \
 		   ../util/util.c \
 		   -o disk_analyzer \
@@ -8,6 +8,7 @@ default:
 		   -I../util \
 		   -I../bson \
 		   -I./ext2/ \
+		   -I./ext4/ \
 		   -I./ntfs/ \
 		   -I./mbr/ \
 		   -g

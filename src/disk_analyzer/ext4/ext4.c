@@ -12,6 +12,48 @@
 #include <sys/stat.h> 
 #include <sys/types.h>
 
+/* for s_flags */
+#define EXT2_FLAGS_TEST_FILESYS           0x0004
+
+/* for s_feature_compat */
+#define EXT3_FEATURE_COMPAT_HAS_JOURNAL         0x0004
+
+/* for s_feature_ro_compat */
+#define EXT2_FEATURE_RO_COMPAT_SPARSE_SUPER     0x0001
+#define EXT2_FEATURE_RO_COMPAT_LARGE_FILE 0x0002
+#define EXT2_FEATURE_RO_COMPAT_BTREE_DIR  0x0004
+#define EXT4_FEATURE_RO_COMPAT_HUGE_FILE  0x0008
+#define EXT4_FEATURE_RO_COMPAT_GDT_CSUM         0x0010
+#define EXT4_FEATURE_RO_COMPAT_DIR_NLINK  0x0020
+#define EXT4_FEATURE_RO_COMPAT_EXTRA_ISIZE      0x0040
+
+/* for s_feature_incompat */
+#define EXT2_FEATURE_INCOMPAT_FILETYPE          0x0002
+#define EXT3_FEATURE_INCOMPAT_RECOVER           0x0004
+#define EXT3_FEATURE_INCOMPAT_JOURNAL_DEV 0x0008
+#define EXT2_FEATURE_INCOMPAT_META_BG           0x0010
+#define EXT4_FEATURE_INCOMPAT_EXTENTS           0x0040 /* extents support */
+#define EXT4_FEATURE_INCOMPAT_64BIT       0x0080
+#define EXT4_FEATURE_INCOMPAT_MMP         0x0100
+#define EXT4_FEATURE_INCOMPAT_FLEX_BG           0x0200
+
+#define EXT2_FEATURE_RO_COMPAT_SUPP (EXT2_FEATURE_RO_COMPAT_SPARSE_SUPER| \
+                                       EXT2_FEATURE_RO_COMPAT_LARGE_FILE| \
+                                       EXT2_FEATURE_RO_COMPAT_BTREE_DIR)
+#define EXT2_FEATURE_INCOMPAT_SUPP  (EXT2_FEATURE_INCOMPAT_FILETYPE| \
+                                       EXT2_FEATURE_INCOMPAT_META_BG)
+#define EXT2_FEATURE_INCOMPAT_UNSUPPORTED ~EXT2_FEATURE_INCOMPAT_SUPP
+#define EXT2_FEATURE_RO_COMPAT_UNSUPPORTED      ~EXT2_FEATURE_RO_COMPAT_SUPP
+
+#define EXT3_FEATURE_RO_COMPAT_SUPP (EXT2_FEATURE_RO_COMPAT_SPARSE_SUPER| \
+                                       EXT2_FEATURE_RO_COMPAT_LARGE_FILE| \
+                                       EXT2_FEATURE_RO_COMPAT_BTREE_DIR)
+#define EXT3_FEATURE_INCOMPAT_SUPP  (EXT2_FEATURE_INCOMPAT_FILETYPE| \
+                                       EXT3_FEATURE_INCOMPAT_RECOVER| \
+                                       EXT2_FEATURE_INCOMPAT_META_BG)
+#define EXT3_FEATURE_INCOMPAT_UNSUPPORTED ~EXT3_FEATURE_INCOMPAT_SUPP
+#define EXT3_FEATURE_RO_COMPAT_UNSUPPORTED      ~EXT3_FEATURE_RO_COMPAT_SUPP
+
 struct ext4_dir_entry
 {
     uint32_t inode;     /* 4 bytes */
@@ -21,21 +63,21 @@ struct ext4_dir_entry
     uint8_t name[255];  /* 263 bytes */
 } __attribute__((packed));
 
-char* s_creator_os_LUT[] = {
+char* ext4_s_creator_os_LUT[] = {
                                 "EXT4_OS_LINUX","EXT4_OS_HURD","EXT4_OS_MASIX",
                                 "EXT4_OS_FREEBSD","EXT4_OS_LITES"
                            };
 
-char* s_rev_level_LUT[] = {
+char* ext4_s_rev_level_LUT[] = {
                                 "EXT4_GOOD_OLD_REV","EXT4_DYNAMIC_REV"
                           };
 
-char* s_state_LUT[] = {
+char* ext4_s_state_LUT[] = {
                                 "","EXT4_VALID_FS","EXT4_ERROR_FS","",
                                 "EXT4_ORPHAN_FS"
                       };
 
-char* s_errors_LUT[] = {
+char* ext4_s_errors_LUT[] = {
                                 "","EXT4_ERRORS_CONTINUE","EXT4_ERRORS_RO",
                                 "EXT4_ERRORS_PANIC"
                        };
@@ -68,6 +110,48 @@ uint64_t ext4_s_free_blocks_count(struct ext4_superblock superblock)
     uint32_t s_free_blocks_count_hi = superblock.s_free_blocks_count_hi;
 
     return (((uint64_t) s_free_blocks_count_hi) << 32) | s_free_blocks_count_lo;
+}
+
+int ext4_print_features(struct ext4_superblock* superblock)
+{
+
+    if (superblock->s_feature_ro_compat & EXT2_FEATURE_RO_COMPAT_SPARSE_SUPER)
+        fprintf_yellow(stdout, "\tEXT2_FEATURE_RO_COMPAT_SPARSE_SUPER\n");
+
+    if (superblock->s_feature_compat & EXT3_FEATURE_COMPAT_HAS_JOURNAL)
+        fprintf_yellow(stdout, "\tEXT3_FEATURE_COMPAT_HAS_JOURNAL\n");
+
+    if (superblock->s_feature_ro_compat & EXT2_FEATURE_RO_COMPAT_LARGE_FILE)
+        fprintf_yellow(stdout, "\tEXT2_FEATURE_RO_COMPAT_LARGE_FILE\n");
+    if (superblock->s_feature_ro_compat & EXT2_FEATURE_RO_COMPAT_BTREE_DIR)
+        fprintf_yellow(stdout, "\tEXT2_FEATURE_RO_COMPAT_BTREE_DIR\n");
+    if (superblock->s_feature_ro_compat & EXT4_FEATURE_RO_COMPAT_HUGE_FILE)
+        fprintf_yellow(stdout, "\tEXT4_FEATURE_RO_COMPAT_HUGE_FILE\n");
+    if (superblock->s_feature_ro_compat & EXT4_FEATURE_RO_COMPAT_GDT_CSUM)
+        fprintf_yellow(stdout, "\tEXT4_FEATURE_RO_COMPAT_GDT_CSUM\n");
+    if (superblock->s_feature_ro_compat & EXT4_FEATURE_RO_COMPAT_DIR_NLINK)
+        fprintf_yellow(stdout, "\tEXT4_FEATURE_RO_COMPAT_DIR_NLINK\n");
+    if (superblock->s_feature_ro_compat & EXT4_FEATURE_RO_COMPAT_EXTRA_ISIZE)
+        fprintf_yellow(stdout, "\tEXT4_FEATURE_RO_COMPAT_EXTRA_ISIZE\n");
+
+    if (superblock->s_feature_incompat & EXT2_FEATURE_INCOMPAT_FILETYPE)
+        fprintf_yellow(stdout, "\tEXT2_FEATURE_INCOMPAT_FILETYPE\n");
+
+    if (superblock->s_feature_incompat & EXT3_FEATURE_INCOMPAT_RECOVER)
+        fprintf_yellow(stdout, "\tEXT3_FEATURE_INCOMPAT_RECOVER\n");
+    if (superblock->s_feature_incompat & EXT3_FEATURE_INCOMPAT_JOURNAL_DEV)
+        fprintf_yellow(stdout, "\tEXT3_FEATURE_INCOMPAT_JOURNAL_DEV\n");
+    if (superblock->s_feature_incompat & EXT2_FEATURE_INCOMPAT_META_BG)
+        fprintf_yellow(stdout, "\tEXT2_FEATURE_INCOMPAT_META_BG\n");
+    if (superblock->s_feature_incompat & EXT4_FEATURE_INCOMPAT_EXTENTS)
+        fprintf_yellow(stdout, "\tEXT4_FEATURE_INCOMPAT_EXTENTS\n");
+    if (superblock->s_feature_incompat & EXT4_FEATURE_INCOMPAT_64BIT)
+        fprintf_yellow(stdout, "\tEXT4_FEATURE_INCOMPAT_64BIT\n");
+    if (superblock->s_feature_incompat & EXT4_FEATURE_INCOMPAT_MMP)
+        fprintf_yellow(stdout, "\tEXT4_FEATURE_INCOMPAT_MMP\n");
+    if (superblock->s_feature_incompat & EXT4_FEATURE_INCOMPAT_FLEX_BG)
+        fprintf_yellow(stdout, "\tEXT4_FEATURE_INCOMPAT_FLEX_BG\n");
+    return EXIT_SUCCESS;
 }
 
 int ext4_print_superblock(struct ext4_superblock superblock)
@@ -104,7 +188,7 @@ int ext4_print_superblock(struct ext4_superblock superblock)
                            superblock.s_max_mnt_count);
     fprintf_yellow(stdout, "s_magic: %"PRIx16"\n",
                            superblock.s_magic);
-    if (superblock.s_magic == 0xf30a)
+    if (superblock.s_magic == 0xef53)
     {
         fprintf_light_green(stdout, "Magic value matches EXT4_SUPER_MAGIC\n"); 
     }
@@ -116,11 +200,11 @@ int ext4_print_superblock(struct ext4_superblock superblock)
     fprintf_yellow(stdout, "s_state: %"PRIu16"\n",
                            superblock.s_state);
     fprintf_light_yellow(stdout, "File System State: %s\n",
-                                 s_state_LUT[superblock.s_state]);
+                                 ext4_s_state_LUT[superblock.s_state]);
     fprintf_yellow(stdout, "s_errors: %"PRIu16"\n",
                            superblock.s_errors);
     fprintf_light_yellow(stdout, "Error State: %s\n",
-                                 s_errors_LUT[superblock.s_errors]);
+                                 ext4_s_errors_LUT[superblock.s_errors]);
     fprintf_yellow(stdout, "s_minor_rev_level: %"PRIu16"\n",
                            superblock.s_minor_rev_level);
     fprintf_yellow(stdout, "s_lastcheck: %"PRIu32"\n",
@@ -130,11 +214,11 @@ int ext4_print_superblock(struct ext4_superblock superblock)
     fprintf_yellow(stdout, "s_creator_os: %"PRIu32"\n",
                            superblock.s_creator_os);
     fprintf_light_yellow(stdout, "Resolved OS: %s\n",
-                                 s_creator_os_LUT[superblock.s_creator_os]);
+                                 ext4_s_creator_os_LUT[superblock.s_creator_os]);
     fprintf_yellow(stdout, "s_rev_level: %"PRIu32"\n",
                            superblock.s_rev_level);
     fprintf_light_yellow(stdout, "Revision Level: %s\n",
-                                 s_rev_level_LUT[superblock.s_rev_level]);
+                                 ext4_s_rev_level_LUT[superblock.s_rev_level]);
     fprintf_yellow(stdout, "s_def_resuid: %"PRIu16"\n",
                            superblock.s_def_resuid);
     fprintf_yellow(stdout, "s_def_resgid: %"PRIu16"\n",
@@ -178,6 +262,9 @@ int ext4_print_superblock(struct ext4_superblock superblock)
                            superblock.s_default_mount_opts);
     fprintf_yellow(stdout, "s_first_meta_bg: %"PRIu32"\n",
                            superblock.s_first_meta_bg);
+    fprintf_yellow(stdout, "s_mkfs_time: %"PRIu32"\n", superblock.s_mkfs_time);
+    fprintf_yellow(stdout, "s_log_groups_per_flex: %"PRIu8"\n",
+                            superblock.s_log_groups_per_flex);
     return 0;
 }
 
@@ -263,7 +350,7 @@ int ext4_next_block_group_descriptor_sectors(FILE* disk,
     return 0; 
 }
 
-int write_block(FILE* dest, uint32_t total_size, uint32_t block_size,
+int ext4_write_block(FILE* dest, uint32_t total_size, uint32_t block_size,
                 uint8_t* buf)
 {
     if (total_size <= block_size)
@@ -315,30 +402,6 @@ int ext4_print_dir_entries(uint8_t* bytes, uint32_t len)
         ext4_print_dir_entry(i, *((struct ext4_dir_entry*)
                                   (bytes + i*sizeof(struct ext4_dir_entry))));
     return 0;
-}
-
-int read_dir_entry(uint32_t offset, FILE* disk, struct ext4_dir_entry* dir)
-{
-   if (fseeko(disk, offset, 0))
-    {
-        fprintf_light_red(stderr, "Error seeking to position 0x%lx.\n",
-                          offset);
-        return -1;
-    }
-
-    if (fread(dir, 1, sizeof(struct ext4_dir_entry), disk) != sizeof(struct ext4_dir_entry))
-    {
-        fprintf_light_red(stdout, "Error while trying to read ext4 dir"
-                                  "entry.\n");
-        return -1;
-    }
-
-    if (dir->name_len < 256)
-        dir->name[dir->name_len] = '\0';
-    else
-        dir->name[0] = '\0';
-
-    return dir->rec_len;
 }
 
 mode_t ext4_inode_mode(uint16_t i_mode)
@@ -425,42 +488,42 @@ int ext4_read_block(FILE* disk, int64_t partition_offset,
 uint32_t ext4_bgd_free_blocks_count(struct ext4_block_group_descriptor bgd)
 {
     uint16_t bg_free_blocks_count_lo = bgd.bg_free_blocks_count_lo;
-    uint16_t bg_free_blocks_count_hi = bgd.bg_free_blocks_count_hi;
+    uint16_t bg_free_blocks_count_hi = 0;
     return ((uint32_t) bg_free_blocks_count_hi << 16) | bg_free_blocks_count_lo;
 }
 
 uint32_t ext4_bgd_free_inodes_count(struct ext4_block_group_descriptor bgd)
 {
     uint16_t bg_free_inodes_count_lo = bgd.bg_free_inodes_count_lo;
-    uint16_t bg_free_inodes_count_hi = bgd.bg_free_inodes_count_hi;
+    uint16_t bg_free_inodes_count_hi = 0;
     return ((uint32_t) bg_free_inodes_count_hi << 16) | bg_free_inodes_count_lo;
 }
 
 uint32_t ext4_bgd_used_dirs_count(struct ext4_block_group_descriptor bgd)
 {
     uint16_t bg_used_dirs_count_lo = bgd.bg_used_dirs_count_lo;
-    uint16_t bg_used_dirs_count_hi = bgd.bg_used_dirs_count_hi;
+    uint16_t bg_used_dirs_count_hi = 0;
     return ((uint32_t) bg_used_dirs_count_hi << 16) | bg_used_dirs_count_lo;
 }
 
 uint64_t ext4_bgd_block_bitmap(struct ext4_block_group_descriptor bgd)
 {
     uint32_t bg_block_bitmap_lo = bgd.bg_block_bitmap_lo;
-    uint32_t bg_block_bitmap_hi = bgd.bg_block_bitmap_hi;
+    uint32_t bg_block_bitmap_hi = 0;
     return ((uint64_t) bg_block_bitmap_hi << 32) | bg_block_bitmap_lo;
 }
 
 uint64_t ext4_bgd_inode_bitmap(struct ext4_block_group_descriptor bgd)
 {
     uint32_t bg_inode_bitmap_lo = bgd.bg_inode_bitmap_lo;
-    uint32_t bg_inode_bitmap_hi = bgd.bg_inode_bitmap_hi;
+    uint32_t bg_inode_bitmap_hi = 0;
     return ((uint64_t) bg_inode_bitmap_hi << 32) | bg_inode_bitmap_lo;
 }
 
 uint64_t ext4_bgd_inode_table(struct ext4_block_group_descriptor bgd)
 {
     uint32_t bg_inode_table_lo = bgd.bg_inode_table_lo;
-    uint32_t bg_inode_table_hi = bgd.bg_inode_table_hi;
+    uint32_t bg_inode_table_hi = 0;
     return ((uint64_t) bg_inode_table_hi << 32) | bg_inode_table_lo;
 }
 
@@ -577,11 +640,6 @@ int ext4_read_inode(FILE* disk, int64_t partition_offset,
         fprintf_light_red(stdout, "Error while trying to read ext4 inode.\n");
         return -1;
     }
-
-    //fprintf_cyan(stdout, "Analyzing inode @sector: %"PRId64" @offset: %"PRId64
-    //                     ".\n", (partition_offset + inode_table_offset +
-    //                     inode_offset) / SECTOR_SIZE, (partition_offset +
-    //                     inode_table_offset + inode_offset) % SECTOR_SIZE);
 
     return 0;
 }
@@ -953,7 +1011,7 @@ int ext4_list_tree(FILE* disk, int64_t partition_offset,
                 }
                 else
                 {
-                    fprintf_red(stdout, "%s\n", path);
+                    fprintf_red(stdout, "Not directory or file: %s\n", path);
                 }
                 ext4_list_tree(disk, partition_offset, superblock, child_inode,
                                strcat(path, "/")); /* recursive call */
@@ -1474,7 +1532,7 @@ int ext4_print_root_fs_sectors(FILE* disk, int64_t partition_offset,
     return 0;
 }
 
-int print_inode_mode(uint16_t i_mode)
+int ext4_print_inode_mode(uint16_t i_mode)
 {
     fprintf_yellow(stdout, "\t(  ");
 
@@ -1527,7 +1585,7 @@ int print_inode_mode(uint16_t i_mode)
     return 0;
 }
 
-int print_inode_flags(uint16_t i_flags)
+int ext4_print_inode_flags(uint16_t i_flags)
 {
     fprintf_yellow(stdout, "\t(  ");
     if (i_flags & 0x1)
@@ -1586,7 +1644,7 @@ int print_ext4_inode_osd2(uint8_t osd2[12])
     return 0;
 }
 
-int print_inode_permissions(uint16_t i_mode)
+int ext4_print_inode_permissions(uint16_t i_mode)
 {
     fprintf_yellow(stdout, "\tPermissions: 0%"PRIo16"\n", i_mode &
                                              (0x01c0 | 0x0038 | 0x007));
@@ -1598,8 +1656,8 @@ int ext4_print_inode(struct ext4_inode inode)
     int ret = 0;
     fprintf_yellow(stdout, "i_mode: 0x%"PRIx16"\n",
                            inode.i_mode);
-    print_inode_mode(inode.i_mode);
-    print_inode_permissions(inode.i_mode);
+    ext4_print_inode_mode(inode.i_mode);
+    ext4_print_inode_permissions(inode.i_mode);
     if (inode.i_mode & 0x4000)
         ret = inode.i_block[0];
     fprintf_yellow(stdout, "i_uid: %"PRIu16"\n",
@@ -1622,7 +1680,7 @@ int ext4_print_inode(struct ext4_inode inode)
                            inode.i_blocks_lo);
     fprintf_yellow(stdout, "i_flags: %"PRIu32"\n",
                            inode.i_flags);
-    print_inode_flags(inode.i_flags);
+    ext4_print_inode_flags(inode.i_flags);
     fprintf_yellow(stdout, "i_osd1: %"PRIu32"\n",
                            inode.i_osd1);
     fprintf_yellow(stdout, "i_block[0]; direct: %"PRIu32"\n",
@@ -1668,6 +1726,7 @@ int ext4_print_inode(struct ext4_inode inode)
 
 int print_ext4_block_group_descriptor(struct ext4_block_group_descriptor bgd)
 {
+    hexdump((uint8_t*)&bgd, sizeof(bgd));
     fprintf_light_cyan(stdout, "--- Analyzing Block Group Descriptor ---\n");
     fprintf_yellow(stdout, "bg_block_bitmap: %"PRIu64"\n",
                            ext4_bgd_block_bitmap(bgd));
@@ -1731,11 +1790,11 @@ int print_ext4_superblock(struct ext4_superblock superblock)
     fprintf_yellow(stdout, "s_state: %"PRIu16"\n",
                            superblock.s_state);
     fprintf_light_yellow(stdout, "File System State: %s\n",
-                                 s_state_LUT[superblock.s_state]);
+                                 ext4_s_state_LUT[superblock.s_state]);
     fprintf_yellow(stdout, "s_errors: %"PRIu16"\n",
                            superblock.s_errors);
     fprintf_light_yellow(stdout, "Error State: %s\n",
-                                 s_errors_LUT[superblock.s_state]);
+                                 ext4_s_errors_LUT[superblock.s_state]);
     fprintf_yellow(stdout, "s_minor_rev_level: %"PRIu16"\n",
                            superblock.s_minor_rev_level);
     fprintf_yellow(stdout, "s_lastcheck: %"PRIu32"\n",
@@ -1745,11 +1804,11 @@ int print_ext4_superblock(struct ext4_superblock superblock)
     fprintf_yellow(stdout, "s_creator_os: %"PRIu32"\n",
                            superblock.s_creator_os);
     fprintf_light_yellow(stdout, "Resolved OS: %s\n",
-                                 s_creator_os_LUT[superblock.s_creator_os]);
+                                 ext4_s_creator_os_LUT[superblock.s_creator_os]);
     fprintf_yellow(stdout, "s_rev_level: %"PRIu32"\n",
                            superblock.s_rev_level);
     fprintf_light_yellow(stdout, "Revision Level: %s\n",
-                                 s_rev_level_LUT[superblock.s_rev_level]);
+                                 ext4_s_rev_level_LUT[superblock.s_rev_level]);
     fprintf_yellow(stdout, "s_def_resuid: %"PRIu16"\n",
                            superblock.s_def_resuid);
     fprintf_yellow(stdout, "s_def_resgid: %"PRIu16"\n",
@@ -1820,9 +1879,14 @@ int ext4_probe(FILE* disk, int64_t partition_offset, struct ext4_superblock* sup
         return -1;
     }
 
-    if (superblock->s_magic != 0xef53)
+    if (superblock->s_magic != 0xef53 || !(superblock->s_feature_ro_compat &
+                                           EXT3_FEATURE_RO_COMPAT_UNSUPPORTED)
+                                      ||
+                                         !(superblock->s_feature_incompat &
+                                           EXT3_FEATURE_INCOMPAT_UNSUPPORTED))
     {
-        fprintf_light_red(stderr, "ext4 superblock s_magic mismatch.\n");
+        fprintf_light_red(stderr, "ext4 superblock s_magic[0x%0.4"PRIx16
+                                  "] mismatch.\n", superblock->s_magic);
         return -1;
     }
 
@@ -1842,6 +1906,7 @@ int ext4_list_block_groups(FILE* disk, int64_t partition_offset,
            return -1;
        }
        fprintf(stdout, "\n");
+       return 0;
     }
     return 0;
 }
@@ -2442,7 +2507,7 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
                 }
                 else
                 {
-                    fprintf_red(stderr, "%s\n", path);
+                    fprintf_red(stderr, "Not directory or file: %s\n", path);
                 }
                 ext4_serialize_tree(disk, partition_offset, superblock,
                                     child_inode, path, serializef,
