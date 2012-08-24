@@ -179,7 +179,7 @@ int ext4_read_block(FILE* disk, int64_t partition_offset,
                     struct ext4_superblock superblock, uint64_t block_num, 
                     uint8_t* buf);
 int ext4_print_block(uint8_t* buf, uint32_t block_size);
-uint32_t ext4_block_size(struct ext4_superblock superblock);
+uint64_t ext4_block_size(struct ext4_superblock superblock);
 int ext4_print_sectormap(FILE* disk, int64_t partition_offset,
                          struct ext4_superblock superblock);
 int64_t ext4_sector_from_block(uint32_t block);

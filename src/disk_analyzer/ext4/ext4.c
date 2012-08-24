@@ -269,9 +269,9 @@ int ext4_print_superblock(struct ext4_superblock superblock)
 }
 
 
-uint32_t ext4_block_size(struct ext4_superblock superblock)
+uint64_t ext4_block_size(struct ext4_superblock superblock)
 {
-    return ((uint32_t) 1024) << superblock.s_log_block_size;
+    return ((uint64_t) 1024) << superblock.s_log_block_size;
 }
 
 uint64_t ext4_num_block_groups(struct ext4_superblock superblock)
@@ -288,12 +288,15 @@ uint32_t ext4_next_block_group_descriptor(FILE* disk,
                                      struct ext4_block_group_descriptor* bgd)
 {
     static uint32_t i = 0;
-    uint64_t offset = (superblock.s_first_data_block+1) * ext4_block_size(superblock);
-    uint32_t num_block_groups = ext4_num_block_groups(superblock);
+    uint64_t offset = (superblock.s_first_data_block+1) *
+                      ext4_block_size(superblock);
+    uint64_t num_block_groups = ext4_num_block_groups(superblock);
 
     for (; i < num_block_groups;)
     {
-        if (fseeko(disk, partition_offset + offset + i*sizeof(struct ext4_block_group_descriptor), 0))
+        if (fseeko(disk, partition_offset + offset +
+                         (i) *
+                         sizeof(struct ext4_block_group_descriptor), 0))
         {
             fprintf_light_red(stderr, "error seeking to position 0x%lx.\n",
                               offset);
@@ -1906,7 +1909,6 @@ int ext4_list_block_groups(FILE* disk, int64_t partition_offset,
            return -1;
        }
        fprintf(stdout, "\n");
-       return 0;
     }
     return 0;
 }
