@@ -950,6 +950,12 @@ int ext4_list_tree(FILE* disk, int64_t partition_offset,
     if (root_inode.i_mode & 0x8000) /* file, no dir entries more */
         return 0;
 
+    if (root_inode.i_flags & 0x80000)
+    {
+        fprintf_light_red(stderr, "Extents in use, breaking list.\n");
+        return 0;
+    }
+
     if (ext4_file_size(root_inode) == 0)
     {
         num_blocks = 0;
