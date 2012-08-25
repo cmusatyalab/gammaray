@@ -2,3 +2,4 @@ disk_analyzer
 ext*_inode_explorer
 ext*_data_block_explorer
 ntfs_file_record_differ
+*_test
