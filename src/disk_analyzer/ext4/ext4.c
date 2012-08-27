@@ -1397,10 +1397,10 @@ int ext4_reconstruct_tree(FILE* disk, int64_t partition_offset,
     /* go through each valid block of the inode */
     for (i = 0; i < num_blocks; i++)
     {
-        if (root_inode.i_mode & 0x80000)
+        if (root_inode.i_flags & 0x80000)
             ret_check = ext4_read_extent_block(disk, partition_offset, superblock, i, root_inode, buf);
         else
-            ret_check = ext4_read_file_block(disk, partition_offset, superblock, i, root_inode, buf);
+            ret_check = ext4_read_file_block(disk, partition_offset, superblock, i, root_inode, (uint32_t *) buf);
         
         if (ret_check < 0) /* error reading */
         {
