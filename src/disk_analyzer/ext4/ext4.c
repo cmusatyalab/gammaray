@@ -1108,8 +1108,15 @@ int ext4_list_tree(FILE* disk, int64_t partition_offset,
     /* go through each valid block of the inode */
     for (i = 0; i < num_blocks; i++)
     {
-        ret_check = ext4_read_file_block(disk, partition_offset, superblock, i, root_inode, (uint32_t*) buf);
-        
+        if (root_inode.i_flags & 0x80000)
+        {
+            ret_check = ext4_read_extent_block(disk, partition_offset, superblock, i, root_inode, buf);
+        }
+        else
+        {
+            ret_check = ext4_read_file_block(disk, partition_offset, superblock, i, root_inode, (uint32_t*) buf);
+        }
+
         if (ret_check < 0) /* error reading */
         {
             fprintf_light_red(stderr, "Error reading inode dir block.\n");
@@ -1285,9 +1292,13 @@ int ext4_reconstruct_file(FILE* disk, int64_t partition_offset,
     /* go through each valid block of the inode */
     for (i = 0; i < num_blocks; i++)
     {
-        ret_check = ext4_read_file_block(disk, partition_offset, superblock, i,
-                                         inode, (uint32_t*) buf);
-        
+        if (inode.i_flags & 0x80000) /* check if extents in use */
+            ret_check = ext4_read_extent_block(disk, partition_offset, superblock, i,
+                                               inode, buf);
+        else
+            ret_check = ext4_read_file_block(disk, partition_offset, superblock, i,
+                                             inode, (uint32_t*) buf);
+
         if (ret_check < 0) /* error reading */
         {
             fprintf_light_red(stderr, "Error reading file block.\n");
@@ -1381,7 +1392,10 @@ int ext4_reconstruct_tree(FILE* disk, int64_t partition_offset,
     /* go through each valid block of the inode */
     for (i = 0; i < num_blocks; i++)
     {
-        ret_check = ext4_read_file_block(disk, partition_offset, superblock, i, root_inode, (uint32_t*) buf);
+        if (root_inode.i_mode & 0x80000)
+            ret_check = ext4_read_extent_block(disk, partition_offset, superblock, i, root_inode, buf);
+        else
+            ret_check = ext4_read_file_block(disk, partition_offset, superblock, i, root_inode, buf);
         
         if (ret_check < 0) /* error reading */
         {
