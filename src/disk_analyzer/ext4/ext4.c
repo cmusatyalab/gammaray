@@ -796,17 +796,19 @@ int ext4_read_file_block(FILE* disk, int64_t partition_offset,
 {
     uint32_t block_size = ext4_block_size(superblock);
     uint32_t addresses_in_block = block_size / 4;
+    uint64_t block_size = ext4_block_size(superblock);
+    uint64_t addresses_in_block = block_size / 4;
     
     /* ranges for lookup */
-    uint32_t direct_low = 0;
-    uint32_t direct_high = 11;
-    uint32_t indirect_low = direct_high + 1;
-    uint32_t indirect_high = direct_high + (addresses_in_block);
-    uint32_t double_low = indirect_high + 1;
-    uint32_t double_high = indirect_high + (addresses_in_block)*
+    uint64_t direct_low = 0;
+    uint64_t direct_high = 11;
+    uint64_t indirect_low = direct_high + 1;
+    uint64_t indirect_high = direct_high + (addresses_in_block);
+    uint64_t double_low = indirect_high + 1;
+    uint64_t double_high = indirect_high + (addresses_in_block)*
                                            (addresses_in_block);
-    uint32_t triple_low = double_high + 1;
-    uint32_t triple_high = double_high + (addresses_in_block)*
+    uint64_t triple_low = double_high + 1;
+    uint64_t triple_high = double_high + (addresses_in_block)*
                                          (addresses_in_block)*
                                          (addresses_in_block);
 
@@ -915,22 +917,22 @@ int ext4_read_file_block(FILE* disk, int64_t partition_offset,
 }
 
 int ext4_read_file_block_sectors(FILE* disk, int64_t partition_offset,
-                                 struct ext4_superblock superblock, uint32_t block_num,
+                                 struct ext4_superblock superblock, uint64_t block_num,
                                  struct ext4_inode inode, uint32_t* buf)
 {
-    uint32_t block_size = ext4_block_size(superblock);
-    uint32_t addresses_in_block = block_size / 4;
+    uint64_t block_size = ext4_block_size(superblock);
+    uint64_t addresses_in_block = block_size / 4;
     
     /* ranges for lookup */
-    uint32_t direct_low = 0;
-    uint32_t direct_high = 11;
-    uint32_t indirect_low = direct_high + 1;
-    uint32_t indirect_high = direct_high + (addresses_in_block);
-    uint32_t double_low = indirect_high + 1;
-    uint32_t double_high = indirect_high + (addresses_in_block)*
+    uint64_t direct_low = 0;
+    uint64_t direct_high = 11;
+    uint64_t indirect_low = direct_high + 1;
+    uint64_t indirect_high = direct_high + (addresses_in_block);
+    uint64_t double_low = indirect_high + 1;
+    uint64_t double_high = indirect_high + (addresses_in_block)*
                                            (addresses_in_block);
-    uint32_t triple_low = double_high + 1;
-    uint32_t triple_high = double_high + (addresses_in_block)*
+    uint64_t triple_low = double_high + 1;
+    uint64_t triple_high = double_high + (addresses_in_block)*
                                          (addresses_in_block)*
                                          (addresses_in_block);
 
@@ -1270,10 +1272,10 @@ int ext4_reconstruct_file(FILE* disk, int64_t partition_offset,
     uint64_t i;
     int ret_check;
 
-    if (inode.i_mode & 0x4000) /* dir entry, not a file */
+    if (!((inode.i_mode & 0x8000) == 0x8000))
     {
-        fprintf_light_red(stderr, "Refusing to reconstruct dir inode, dir != "
-                                  "file.\n");
+        fprintf_light_red(stderr, "Refusing to reconstruct non-regular file "
+                                  "inode.\n");
         return -1;
     }
 
