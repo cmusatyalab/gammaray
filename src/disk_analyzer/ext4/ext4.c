@@ -1085,14 +1085,12 @@ int ext4_list_tree(FILE* disk, int64_t partition_offset,
     int ret_check;
     char path[8192];
 
-    if (root_inode.i_mode & 0x8000) /* file, no dir entries more */
+    /* deleted files ? */
+    if (root_inode.i_links_count == 0)
         return 0;
 
-    if (root_inode.i_flags & 0x80000)
-    {
-        fprintf_light_red(stderr, "Extents in use, breaking list.\n");
+    if (root_inode.i_mode & 0x8000) /* file, no dir entries more */
         return 0;
-    }
 
     if (ext4_file_size(root_inode) == 0)
     {
@@ -1165,7 +1163,14 @@ int ext4_list_tree(FILE* disk, int64_t partition_offset,
                 }
                 else
                 {
-                    fprintf_red(stdout, "Not directory or file: %s\n", path);
+                    fprintf_red(stdout, "Not directory or file: %s", path);
+                    fprintf_light_red(stdout, " -- %s\n",
+                       child_inode.i_mode & 0x1000 ? "FIFO" :
+                       child_inode.i_mode & 0x2000 ? "Character Device" : 
+                       child_inode.i_mode & 0x6000 ? "Block Device" :
+                       child_inode.i_mode & 0xa000 ? "Symbolic Link" :
+                       child_inode.i_mode & 0xc000 ? "Socket" :
+                       "UNKNOWN");
                 }
                 ext4_list_tree(disk, partition_offset, superblock, child_inode,
                                strcat(path, "/")); /* recursive call */
@@ -1887,7 +1892,6 @@ int ext4_print_inode(struct ext4_inode inode)
 
 int print_ext4_block_group_descriptor(struct ext4_block_group_descriptor bgd)
 {
-    hexdump((uint8_t*)&bgd, sizeof(bgd));
     fprintf_light_cyan(stdout, "--- Analyzing Block Group Descriptor ---\n");
     fprintf_yellow(stdout, "bg_block_bitmap: %"PRIu64"\n",
                            ext4_bgd_block_bitmap(bgd));
