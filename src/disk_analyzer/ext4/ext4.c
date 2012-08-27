@@ -1379,7 +1379,7 @@ int ext4_reconstruct_tree(FILE* disk, int64_t partition_offset,
     {
         memcpy(buf, (uint8_t*) root_inode.i_block, 60);
 
-        /* TODO symlinks */
+        /* symlinks */
         if (ext4_file_size(root_inode) >= 60)
         {
             fprintf_light_red(stdout, "SYMLINK with target name >= "
@@ -1388,7 +1388,7 @@ int ext4_reconstruct_tree(FILE* disk, int64_t partition_offset,
             {
                 fprintf_light_red(stdout, "SYMLINK with target name >= 4096 "
                                           "bytes.\n");
-                exit(1);
+                return -1;
             }
 
             ext4_read_extent_block(disk, partition_offset, superblock, 0,
