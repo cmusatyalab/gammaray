@@ -687,7 +687,6 @@ int ext4_print_extent_header(struct ext4_extent_header hdr)
     else
     {
         fprintf_light_red(stdout, "\teh_magic DOES NOT MATCH.\n");
-        exit(1);
     }
 
     fprintf_yellow(stdout, "eh_entries: %"PRIu16"\n", hdr.eh_entries);
