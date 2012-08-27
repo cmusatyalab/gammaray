@@ -505,7 +505,7 @@ int ext4_read_block(FILE* disk, int64_t partition_offset,
 
     if (fread(buf, 1, block_size, disk) != block_size)
     {
-        fprintf_light_red(stdout, "Error while trying to read block.\n");
+        fprintf_light_red(stderr, "Error while trying to read block.\n");
         return -1;
     }
 
