@@ -738,16 +738,20 @@ int ext4_read_extent_block(FILE* disk, int64_t partition_offset,
     hdr = *((struct ext4_extent_header*) buf);
     idx.ei_block = (uint32_t) 2 << 31;
     ext4_print_extent_header(hdr);
+    fprintf_light_magenta(stdout, "extent grabbing block_num: %"PRIu32"\n", block_num);
 
     for (i = 0; i < hdr.eh_entries; i++)
     {
         if (hdr.eh_depth)
         {
             /* TODO */
-            idx2 = * ((struct ext4_extent_idx*) &(inode.i_block[(i+1)*3])); 
+            idx2 =  * ((struct ext4_extent_idx*)
+                            &(buf[sizeof(struct ext4_extent_header) +
+                                  sizeof(struct ext4_extent_idx)*i])); 
             ext4_print_extent_index(idx2);
             if (hdr.eh_entries == 1)
             {
+                fprintf_light_cyan(stdout, "extent, only single entry, following.\n");
                 ext4_read_block(disk, partition_offset, superblock,
                                 ext4_extent_index_leaf(idx2), buf);
                 i = -1; /* allow loop-expr to run (++) */
@@ -760,6 +764,7 @@ int ext4_read_extent_block(FILE* disk, int64_t partition_offset,
             if ((block_num < idx2.ei_block &&
                 block_num >= idx.ei_block))
             {
+                fprintf_light_cyan(stdout, "extent, following index.\n");
                 ext4_read_block(disk, partition_offset, superblock,
                                 ext4_extent_index_leaf(idx), buf);
                 i = -1; /* allow loop-expr to run (++) */
@@ -772,6 +777,7 @@ int ext4_read_extent_block(FILE* disk, int64_t partition_offset,
         }
         else
         {
+            fprintf_light_cyan(stdout, "found exact extent, investigating %d\n", i);
             extent = * ((struct ext4_extent*)
                             &(buf[sizeof(struct ext4_extent_header) +
                                   sizeof(struct ext4_extent)*i])); 
@@ -779,15 +785,18 @@ int ext4_read_extent_block(FILE* disk, int64_t partition_offset,
             if (extent.ee_block <= block_num &&
                 block_num < extent.ee_block + extent.ee_len)
             {
+                fprintf(stdout, "LOADING BLOCK FROM DISK...\n");
+                block_num -= extent.ee_block; /* rebase */
                 ext4_read_block(disk, partition_offset, superblock,
                                 ext4_extent_start(extent) + block_num,
                                 (uint8_t*) buf);
-                break;
+                return 0;
             }
         }
     }
 
-    return EXIT_SUCCESS; 
+    memset(buf, 0, (size_t) ext4_block_size(superblock)); /* assuming hole */
+    return 0; 
 }
 
 int ext4_read_file_block(FILE* disk, int64_t partition_offset,
