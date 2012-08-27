@@ -211,8 +211,13 @@ int main(int argc, char* args[])
                 ext4_print_features(&ext4_superblock);
                 ext4_list_block_groups(disk, partition_offset,
                                        ext4_superblock);
-                ext4_list_root_fs(disk, partition_offset, ext4_superblock,
-                                  ext4_last_mount_point(&ext4_superblock));
+                //ext4_list_root_fs(disk, partition_offset, ext4_superblock,
+                //                  ext4_last_mount_point(&ext4_superblock));
+                ext4_reconstruct_root_fs(disk, partition_offset,
+                                         ext4_superblock,
+                                         ext4_last_mount_point(
+                                             &ext4_superblock),
+                                         "/tmp/ext4_copy/");
             }
 
             if (ntfs_probe(disk, partition_offset, &ntfs_bootf))
