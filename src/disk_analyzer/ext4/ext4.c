@@ -800,10 +800,9 @@ int ext4_read_extent_block(FILE* disk, int64_t partition_offset,
 }
 
 int ext4_read_file_block(FILE* disk, int64_t partition_offset,
-                         struct ext4_superblock superblock, uint32_t block_num,
+                         struct ext4_superblock superblock, uint64_t block_num,
                          struct ext4_inode inode, uint32_t* buf)
 {
-    uint32_t block_size = ext4_block_size(superblock);
     uint32_t addresses_in_block = block_size / 4;
     uint64_t block_size = ext4_block_size(superblock);
     uint64_t addresses_in_block = block_size / 4;
