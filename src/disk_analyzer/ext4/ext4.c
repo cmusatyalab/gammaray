@@ -8,6 +8,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include <sys/stat.h> 
 #include <sys/types.h>
@@ -1375,7 +1376,37 @@ int ext4_reconstruct_tree(FILE* disk, int64_t partition_offset,
     int ret_check;
     char path[8192], copy[8192];
 
-    if (root_inode.i_mode & 0x8000) /* file, no dir entries more */
+    if ((root_inode.i_mode & 0xa000) == 0xa000) /* symlink */
+    {
+        memcpy(buf, (uint8_t*) root_inode.i_block, 60);
+
+        /* TODO symlinks */
+        if (ext4_file_size(root_inode) >= 60)
+        {
+            fprintf_light_red(stdout, "SYMLINK with target name >= "
+                                      "60 bytes.\n");
+            if (ext4_file_size(root_inode) >= 4096)
+            {
+                fprintf_light_red(stdout, "SYMLINK with target name >= 4096 "
+                                          "bytes.\n");
+                exit(1);
+            }
+
+            ext4_read_extent_block(disk, partition_offset, superblock, 0,
+                                   root_inode, buf);
+        }
+        strcpy(copy, copy_prefix);
+        prefix[strlen(prefix)-1] = '\0'; /* remove trailing slash */
+        strcat(copy, prefix);
+
+        buf[ext4_file_size(root_inode)] = 0;
+        memcpy(path, (char*) buf, strlen((char*) buf) + 1);
+
+        fprintf_light_red(stdout, "Creating symlink %s -> %s\n", copy, path);
+        symlink(path, copy);
+        return 0;
+    }
+    else if ((root_inode.i_mode & 0x8000) == 0x8000) /* file, no dir entries more */
     {
         strcpy(copy, copy_prefix);
         prefix[strlen(prefix)-1] = '\0'; /* remove trailing slash */
@@ -1385,12 +1416,18 @@ int ext4_reconstruct_tree(FILE* disk, int64_t partition_offset,
                               copy);
         return 0;
     }
-    else if (root_inode.i_mode & 0x4000)
+    else if ((root_inode.i_mode & 0x4000) == 0x4000)
     {
         strcpy(copy, copy_prefix);
         strcat(copy, prefix);
         fprintf_light_red(stdout, "Creating dir: %s\n", copy);
         mkdir(copy, ext4_inode_mode(root_inode.i_mode));
+    }
+    else
+    {
+        fprintf_light_red(stderr, "UNHANDLED Reconstruction File Type[%0.8"
+                                  PRIx32"]: %s\n", root_inode.i_mode & 0x0f000,
+                                  copy);
     }
 
     if (ext4_file_size(root_inode) == 0)
