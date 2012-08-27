@@ -207,10 +207,10 @@ int main(int argc, char* args[])
                 fprintf_light_green(stdout, "--- Analyzing ext4 Partition at "
                                             "Offset 0x%.16"PRIx64" ---\n",
                                             partition_offset);
-                ext4_print_superblock(ext4_superblock);
-                ext4_print_features(&ext4_superblock);
-                ext4_list_block_groups(disk, partition_offset,
-                                       ext4_superblock);
+                //ext4_print_superblock(ext4_superblock);
+                //ext4_print_features(&ext4_superblock);
+                //ext4_list_block_groups(disk, partition_offset,
+                //                       ext4_superblock);
                 //ext4_list_root_fs(disk, partition_offset, ext4_superblock,
                 //                  ext4_last_mount_point(&ext4_superblock));
                 ext4_reconstruct_root_fs(disk, partition_offset,
