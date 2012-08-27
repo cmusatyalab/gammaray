@@ -832,7 +832,6 @@ int ext4_read_file_block(FILE* disk, int64_t partition_offset,
     {
         if (inode.i_block[block_num] == 0)
             return 1; /* finished */
-
         ext4_read_block(disk, partition_offset, superblock,
                         inode.i_block[block_num], (uint8_t*) buf);
         return 0;
@@ -1326,7 +1325,6 @@ int ext4_reconstruct_file(FILE* disk, int64_t partition_offset,
             fclose(copy);
             return -1;
         }
-
 
         if (file_size >= block_size)
         {
