@@ -63,6 +63,31 @@ struct ext4_dir_entry
     uint8_t name[255];  /* 263 bytes */
 } __attribute__((packed));
 
+struct ext4_extent_header
+{
+    uint16_t eh_magic;
+    uint16_t eh_entries;
+    uint16_t eh_max;
+    uint16_t eh_depth;
+    uint32_t eh_generation;
+} __attribute__((packed));
+
+struct ext4_extent_idx
+{
+    uint32_t ei_block;
+    uint32_t ei_leaf_lo;
+    uint16_t ei_leaf_hi;
+    uint16_t ei_unused;
+};
+
+struct ext4_extent
+{
+    uint32_t ee_block;
+    uint16_t ee_len;
+    uint16_t ee_start_hi;
+    uint32_t ee_start_lo;
+};
+
 char* ext4_s_creator_os_LUT[] = {
                                 "EXT4_OS_LINUX","EXT4_OS_HURD","EXT4_OS_MASIX",
                                 "EXT4_OS_FREEBSD","EXT4_OS_LITES"
@@ -650,6 +675,119 @@ int ext4_read_inode(FILE* disk, int64_t partition_offset,
 int64_t ext4_sector_from_block(uint32_t block)
 {
     return (block * 1024 + 0x07e00) / SECTOR_SIZE;
+}
+
+int ext4_print_extent_header(struct ext4_extent_header hdr)
+{
+    fprintf_yellow(stdout, "eh_magic: 0x%0.4"PRIx16"\n", hdr.eh_magic);
+    
+    if (hdr.eh_magic == 0xf30a)
+        fprintf_light_blue(stdout, "\teh_magic MATCHES.\n");
+    else
+    {
+        fprintf_light_red(stdout, "\teh_magic DOES NOT MATCH.\n");
+        exit(1);
+    }
+
+    fprintf_yellow(stdout, "eh_entries: %"PRIu16"\n", hdr.eh_entries);
+    fprintf_yellow(stdout, "eh_max: %"PRIu16"\n", hdr.eh_max);
+    fprintf_yellow(stdout, "eh_depth: %"PRIu16"\n", hdr.eh_depth);
+    fprintf_yellow(stdout, "eh_generation: %"PRIu32"\n", hdr.eh_generation);
+    return EXIT_SUCCESS;
+}
+
+uint64_t ext4_extent_start(struct ext4_extent extent)
+{
+    uint64_t start = (uint64_t) extent.ee_start_hi << 48;
+    return start | extent.ee_start_lo;
+}
+
+int ext4_print_extent(struct ext4_extent extent)
+{
+    fprintf_light_yellow(stdout, "ee_block: %"PRIu32"\n", extent.ee_block);
+    fprintf_yellow(stdout, "ee_len: %"PRIu16"\n", extent.ee_len);
+    fprintf_yellow(stdout, "ee_start: %"PRIu64"\n", ext4_extent_start(extent));
+    return EXIT_SUCCESS;
+}
+
+uint64_t ext4_extent_index_leaf(struct ext4_extent_idx idx)
+{
+    uint64_t leaf = (uint64_t) idx.ei_leaf_hi << 48;
+    return leaf | idx.ei_leaf_lo;
+}
+
+int ext4_print_extent_index(struct ext4_extent_idx idx)
+{
+    fprintf_light_yellow(stdout, "ei_block: %"PRIu32"\n", idx.ei_block);
+    fprintf_yellow(stdout, "ei_leaf: %"PRIu64"\n",
+                           ext4_extent_index_leaf(idx));
+    return EXIT_SUCCESS;
+}
+
+int ext4_read_extent_block(FILE* disk, int64_t partition_offset,
+                           struct ext4_superblock superblock, uint32_t block_num,
+                           struct ext4_inode inode, uint8_t* buf)
+{
+    int i;
+    struct ext4_extent_header hdr; 
+    struct ext4_extent_idx idx;
+    struct ext4_extent_idx idx2; /* lookahead when searching for block_num */
+    struct ext4_extent extent;
+
+    memcpy(buf, inode.i_block, (size_t) 60);
+    hdr = *((struct ext4_extent_header*) buf);
+    idx.ei_block = (uint32_t) 2 << 31;
+    ext4_print_extent_header(hdr);
+
+    for (i = 0; i < hdr.eh_entries; i++)
+    {
+        if (hdr.eh_depth)
+        {
+            /* TODO */
+            idx2 = * ((struct ext4_extent_idx*) &(inode.i_block[(i+1)*3])); 
+            ext4_print_extent_index(idx2);
+            if (hdr.eh_entries == 1)
+            {
+                ext4_read_block(disk, partition_offset, superblock,
+                                ext4_extent_index_leaf(idx2), buf);
+                i = -1; /* allow loop-expr to run (++) */
+                hdr = *((struct ext4_extent_header*) buf);
+                idx.ei_block = (uint32_t) 2 << 31;
+                ext4_print_extent_header(hdr);
+                continue;
+            }
+
+            if ((block_num < idx2.ei_block &&
+                block_num >= idx.ei_block))
+            {
+                ext4_read_block(disk, partition_offset, superblock,
+                                ext4_extent_index_leaf(idx), buf);
+                i = -1; /* allow loop-expr to run (++) */
+                hdr = *((struct ext4_extent_header*) buf);
+                idx.ei_block = (uint32_t) 2 << 31;
+                ext4_print_extent_header(hdr);
+                continue;
+            }
+            idx = idx2;
+        }
+        else
+        {
+            extent = * ((struct ext4_extent*)
+                            &(buf[sizeof(struct ext4_extent_header) +
+                                  sizeof(struct ext4_extent)*i])); 
+            ext4_print_extent(extent);
+            if (extent.ee_block <= block_num &&
+                block_num < extent.ee_block + extent.ee_len)
+            {
+                ext4_read_block(disk, partition_offset, superblock,
+                                ext4_extent_start(extent) + block_num,
+                                (uint8_t*) buf);
+                break;
+            }
+        }
+    }
+
+    return EXIT_SUCCESS; 
 }
 
 int ext4_read_file_block(FILE* disk, int64_t partition_offset,
