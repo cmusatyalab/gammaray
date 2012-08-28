@@ -1453,6 +1453,8 @@ int ext4_reconstruct_tree(FILE* disk, int64_t partition_offset,
         }
         else if (ret_check > 0) /* no more blocks? */
         {
+            fprintf_light_red(stderr, "Premature ending of inode dir "
+                                      "blocks.\n");
             return 0;
         }
 
@@ -1479,6 +1481,13 @@ int ext4_reconstruct_tree(FILE* disk, int64_t partition_offset,
 
             dir.name[dir.name_len] = 0;
             strcat(path, (char*) dir.name);
+
+            if ((child_inode.i_mode & 0x4000) == 0x4000)
+                fprintf_light_yellow(stderr, "Recursing on %s\n", dir.name);
+            else if ((child_inode.i_mode & 0x8000) == 0x8000)
+                fprintf_yellow(stderr, "Recursing on %s\n", dir.name);
+            else
+                fprintf_light_white(stderr, "Recursing on %s\n", dir.name);
             
             if (strcmp((const char *) dir.name, ".") != 0 &&
                 strcmp((const char *) dir.name, "..") != 0)
