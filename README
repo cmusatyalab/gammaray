@@ -3,9 +3,9 @@ Notes:
             qemu-img create -f raw tinycore.raw 12M
     (2) OS Installation -- Used virt-manager GUI
             sudo virt-manager
+    (3) Run disk_analyzer
+    (4) Run inference_engine with VM
 
 Requirements:
 
-    (1) bson serialization and deserialization
-    (2) snappy for compression on network traffic
-    (3) ZeroMQ for communication
+    (1) libhiredis for Redis communication 
