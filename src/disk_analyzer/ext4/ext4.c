@@ -1471,7 +1471,23 @@ int ext4_reconstruct_tree(FILE* disk, int64_t partition_offset,
             }
 
             if (dir.inode == 0)
-                return 0;
+            {
+                fprintf_light_red(stderr, "Encountered 0 inode, assuming "
+                                          "unused dentry [%s].\n",
+                                          prefix);
+                if (dir.rec_len)
+                {
+                    position += dir.rec_len; /* deletions TODO wolf... */
+                    continue;
+                }
+                else
+                {
+                    fprintf_light_red(stderr, "Unprocessed bytes ["PRIu64"] "
+                                              "in dentry.\n",
+                                              block_size - position);
+                    return 0; /* error ? */
+                }
+            }
 
             if (ext4_read_inode(disk, partition_offset, superblock, dir.inode, &child_inode))
             {
