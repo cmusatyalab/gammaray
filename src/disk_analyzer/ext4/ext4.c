@@ -1424,7 +1424,7 @@ int ext4_reconstruct_tree(FILE* disk, int64_t partition_offset,
     {
         fprintf_light_red(stderr, "UNHANDLED Reconstruction File Type[%0.8"
                                   PRIx32"]: %s\n", root_inode.i_mode & 0x0f000,
-                                  copy);
+                                  prefix);
     }
 
     if (ext4_file_size(root_inode) == 0)
@@ -1496,7 +1496,8 @@ int ext4_reconstruct_tree(FILE* disk, int64_t partition_offset,
                     fprintf_red(stdout, "%s\n", path);
                 }
                 ext4_reconstruct_tree(disk, partition_offset, superblock,
-                                      child_inode, strcat(path, "/"), copy_prefix); /* recursive call */
+                                      child_inode, strcat(path, "/"),
+                                      copy_prefix); /* recursive call */
             }
 
             position += dir.rec_len;
