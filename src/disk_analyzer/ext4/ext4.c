@@ -738,7 +738,6 @@ int ext4_read_extent_block(FILE* disk, int64_t partition_offset,
     hdr = *((struct ext4_extent_header*) buf);
     idx.ei_block = (uint32_t) 2 << 31;
     ext4_print_extent_header(hdr);
-    fprintf_light_magenta(stdout, "extent grabbing block_num: %"PRIu32"\n", block_num);
 
     for (i = 0; i < hdr.eh_entries; i++)
     {
@@ -777,7 +776,6 @@ int ext4_read_extent_block(FILE* disk, int64_t partition_offset,
         }
         else
         {
-            fprintf_light_cyan(stdout, "found exact extent, investigating %d\n", i);
             extent = * ((struct ext4_extent*)
                             &(buf[sizeof(struct ext4_extent_header) +
                                   sizeof(struct ext4_extent)*i])); 
@@ -785,7 +783,6 @@ int ext4_read_extent_block(FILE* disk, int64_t partition_offset,
             if (extent.ee_block <= block_num &&
                 block_num < extent.ee_block + extent.ee_len)
             {
-                fprintf(stdout, "LOADING BLOCK FROM DISK...\n");
                 block_num -= extent.ee_block; /* rebase */
                 ext4_read_block(disk, partition_offset, superblock,
                                 ext4_extent_start(extent) + block_num,
@@ -1307,11 +1304,12 @@ int ext4_reconstruct_file(FILE* disk, int64_t partition_offset,
     for (i = 0; i < num_blocks; i++)
     {
         if (inode.i_flags & 0x80000) /* check if extents in use */
-            ret_check = ext4_read_extent_block(disk, partition_offset, superblock, i,
-                                               inode, buf);
+            ret_check = ext4_read_extent_block(disk, partition_offset,
+                                               superblock, i, inode, buf);
         else
-            ret_check = ext4_read_file_block(disk, partition_offset, superblock, i,
-                                             inode, (uint32_t*) buf);
+            ret_check = ext4_read_file_block(disk, partition_offset,
+                                             superblock, i, inode,
+                                             (uint32_t*) buf);
 
         if (ret_check < 0) /* error reading */
         {
@@ -1499,11 +1497,11 @@ int ext4_reconstruct_tree(FILE* disk, int64_t partition_offset,
             strcat(path, (char*) dir.name);
 
             if ((child_inode.i_mode & 0x4000) == 0x4000)
-                fprintf_light_yellow(stderr, "Recursing on %s\n", dir.name);
+                fprintf_light_yellow(stdout, "Recursing on %s\n", dir.name);
             else if ((child_inode.i_mode & 0x8000) == 0x8000)
-                fprintf_yellow(stderr, "Recursing on %s\n", dir.name);
+                fprintf_yellow(stdout, "Recursing on %s\n", dir.name);
             else
-                fprintf_light_white(stderr, "Recursing on %s\n", dir.name);
+                fprintf_light_white(stdout, "Recursing on %s\n", dir.name);
             
             if (strcmp((const char *) dir.name, ".") != 0 &&
                 strcmp((const char *) dir.name, "..") != 0)
