@@ -2654,6 +2654,9 @@ int ext4_serialize_file_sectors(FILE* disk, int64_t partition_offset,
     
     sectors = bson_init();
 
+    if ((inode.i_mode & 0xa000) == 0xa000)
+        goto skip;
+
     /* go through each valid block of the inode */
     count = 0;
     while (num_blocks) 
@@ -2685,6 +2688,8 @@ int ext4_serialize_file_sectors(FILE* disk, int64_t partition_offset,
         count++;
         num_blocks--;
     }
+
+skip:
 
     bson_finalize(sectors);
     value.data = sectors;
@@ -2736,6 +2741,9 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
         value.data = &root_inode;
 
         bson_serialize(bson, &value);
+
+        ext4_serialize_file_sectors(disk, partition_offset, superblock,
+                                    root_inode, bson);
 
         bson_finalize(bson);
         bson_writef(bson, serializef);
