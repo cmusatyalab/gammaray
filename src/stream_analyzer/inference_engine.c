@@ -89,7 +89,8 @@ int read_loop(int fd, struct mbr* mbr, struct kv_store* store, char* vmname)
         qemu_print_write(&write);
         sector_type = qemu_infer_sector_type(&write, mbr);
         qemu_print_sector_type(sector_type);
-        if (sector_type == SECTOR_EXT2_INODE || sector_type == SECTOR_EXT2_DATA)
+        if (sector_type == SECTOR_EXT2_INODE ||
+            sector_type == SECTOR_EXT2_DATA)
             qemu_deep_inspect(&write, mbr, store, vmname);
         free((void*) write.data);
         fflush(stdout);
