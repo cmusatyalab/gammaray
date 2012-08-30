@@ -45,6 +45,13 @@ default:
 		 -I/usr/include/hiredis \
 		 #-DNOCOLOR
 
+test_ext4:
+	./inference_engine /tmp/ext4_test \
+		/tmp/ext4_vm.fifo \
+		/home/wolf/Dropbox/Projects/xray/sample/vm_ext4_test.raw \
+	    0 \
+		ext4_test_vm
+
 gdb: default
 	@gdb --args ./inference_engine \
 		/tmp/tinycore.bson \
