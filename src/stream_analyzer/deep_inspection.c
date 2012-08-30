@@ -1246,7 +1246,7 @@ int __deserialize_ext2_fs(FILE* index, struct bson_info* bson,
 
     fs.fs_type = *((uint32_t*) value1.data);
 
-    if (fs.fs_type != 0)
+    if (fs.fs_type != 0 && fs.fs_type != 1) /* ext4 hack TODO wolf */
         return EXIT_FAILURE;
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
@@ -1502,7 +1502,9 @@ int qemu_load_index(FILE* index, struct mbr* mbr)
             {
                 fprintf_light_red(stderr, "Error loading ext2_file document."
                                           "\n");
-                return EXIT_FAILURE;
+                fprintf_light_red(stderr, "Assuming early termination of "
+                                          "file records.\n");
+                break;
             }
         }
     } 
