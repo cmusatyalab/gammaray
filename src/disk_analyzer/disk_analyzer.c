@@ -213,11 +213,44 @@ int main(int argc, char* args[])
                 //                       ext4_superblock);
                 //ext4_list_root_fs(disk, partition_offset, ext4_superblock,
                 //                  ext4_last_mount_point(&ext4_superblock));
-                ext4_reconstruct_root_fs(disk, partition_offset,
-                                         ext4_superblock,
-                                         ext4_last_mount_point(
-                                             &ext4_superblock),
-                                         "/tmp/ext4_copy/");
+                //ext4_reconstruct_root_fs(disk, partition_offset,
+                //                         ext4_superblock,
+                //                         ext4_last_mount_point(
+                //                             &ext4_superblock),
+                //                         "/tmp/ext4_copy/");
+                mbr_get_partition_table_entry(mbr, i, &pte);
+
+                fprintf_light_blue(stdout, "Serializing Partition Data to: "
+                                          "%s\n\n", args[2]);
+
+                if (mbr_serialize_partition(i, pte, serializef))
+                {
+                    fprintf_light_red(stderr, "Error writing serialized "
+                                              "partition table entry.\n");
+                    return EXIT_FAILURE;
+                }
+
+                if (ext4_serialize_fs(&ext4_superblock, 
+                                      ext4_last_mount_point(&ext4_superblock),
+                                      serializef))
+                {
+                    fprintf_light_red(stderr, "Error writing serialized fs "
+                                              "entry.\n");
+                    return EXIT_FAILURE;
+                }
+
+                if (ext4_serialize_bgds(disk, partition_offset,
+                                        &ext4_superblock, serializef))
+                {
+                    fprintf_light_red(stderr, "Error writing serialized "
+                                              "BGDs\n");
+                    return EXIT_FAILURE;
+                }
+
+                ext4_serialize_fs_tree(disk, partition_offset, 
+                                       &ext4_superblock,
+                                       ext4_last_mount_point(&ext4_superblock),
+                                       serializef);
             }
 
             if (ntfs_probe(disk, partition_offset, &ntfs_bootf))
