@@ -77,7 +77,6 @@ struct kv_store* redis_init(char* db)
        }
     }
 
-
     return handle;
 }
 
