@@ -94,7 +94,6 @@ int read_loop(int fd, struct mbr* mbr, struct kv_store* store, char* vmname)
             qemu_deep_inspect(&write, mbr, store, vmname);
         free((void*) write.data);
         fflush(stdout);
-        sleep(1);
     }
 
     return EXIT_SUCCESS;
@@ -175,9 +174,9 @@ int main(int argc, char* args[])
         return EXIT_FAILURE;
     }
 
+    fclose(indexf);
     ret = read_loop(fd, &mbr, handle, vmname);
     close(fd);
-    fclose(indexf);
     redis_shutdown(handle);
 
     return EXIT_SUCCESS;
