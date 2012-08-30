@@ -994,7 +994,8 @@ int qemu_infer_sector_type(struct qemu_bdrv_write* write, struct mbr* mbr)
             sectors_per_block_group = blocks_per_block_group *
                                       (block_size / SECTOR_SIZE);
             start_sector = fs->superblock.s_first_data_block *
-                           (block_size / SECTOR_SIZE) + partition->first_sector_lba;
+                           (block_size / SECTOR_SIZE) +
+                           partition->first_sector_lba;
 
             for (j = 0; j < linkedlist_size(fs->ext2_bgds); j++)
             {
@@ -1044,10 +1045,13 @@ int qemu_print_write(struct qemu_bdrv_write* write)
 void print_ext2_file(struct ext2_file* file)
 {
     fprintf_light_cyan(stdout, "-- ext2 File --\n");
-    fprintf_yellow(stdout, "file->inode_sector == %"PRIu64"\n", file->inode_sector);
-    fprintf_yellow(stdout, "file->inode_offset == %"PRIu64"\n", file->inode_offset);
+    fprintf_yellow(stdout, "file->inode_sector == %"PRIu64"\n",
+                            file->inode_sector);
+    fprintf_yellow(stdout, "file->inode_offset == %"PRIu64"\n",
+                            file->inode_offset);
     fprintf_light_yellow(stdout, "file->path == %s\n", file->path);
-    fprintf_yellow(stdout, "file->is_dir == %s\n", file->is_dir ? "true" : "false");
+    fprintf_yellow(stdout, "file->is_dir == %s\n",
+                            file->is_dir ? "true" : "false");
     fprintf_yellow(stdout, "file->inode == %p\n", &(file->inode));
     if (file->sectors)
         bst_print_tree(file->sectors, 0);
@@ -1060,12 +1064,18 @@ void print_ext2_bgd(struct ext2_bgd* bgd)
     fprintf_light_cyan(stdout, "-- ext2 BGD --\n");
     fprintf_yellow(stdout, "bgd->bgd == %p\n", &(bgd->bgd));
     fprintf_yellow(stdout, "bgd->sector == %"PRIu64"\n", bgd->sector);
-    fprintf_yellow(stdout, "bgd->block_bitmap_sector_start == %"PRIu64"\n", bgd->block_bitmap_sector_start);
-    fprintf_yellow(stdout, "bgd->block_bitmap_sector_end == %"PRIu64"\n", bgd->block_bitmap_sector_end);
-    fprintf_yellow(stdout, "bgd->inode_bitmap_sector_start == %"PRIu64"\n", bgd->inode_bitmap_sector_start);
-    fprintf_yellow(stdout, "bgd->inode_bitmap_sector_end == %"PRIu64"\n", bgd->inode_bitmap_sector_end);
-    fprintf_yellow(stdout, "bgd->inode_table_sector_start == %"PRIu64"\n", bgd->inode_table_sector_start);
-    fprintf_yellow(stdout, "bgd->inode_table_sector_end == %"PRIu64"\n", bgd->inode_table_sector_end);
+    fprintf_yellow(stdout, "bgd->block_bitmap_sector_start == %"PRIu64"\n",
+                            bgd->block_bitmap_sector_start);
+    fprintf_yellow(stdout, "bgd->block_bitmap_sector_end == %"PRIu64"\n",
+                            bgd->block_bitmap_sector_end);
+    fprintf_yellow(stdout, "bgd->inode_bitmap_sector_start == %"PRIu64"\n",
+                            bgd->inode_bitmap_sector_start);
+    fprintf_yellow(stdout, "bgd->inode_bitmap_sector_end == %"PRIu64"\n",
+                            bgd->inode_bitmap_sector_end);
+    fprintf_yellow(stdout, "bgd->inode_table_sector_start == %"PRIu64"\n",
+                            bgd->inode_table_sector_start);
+    fprintf_yellow(stdout, "bgd->inode_table_sector_end == %"PRIu64"\n",
+                            bgd->inode_table_sector_end);
 }
 
 void print_ext2_fs(struct ext2_fs* fs)
@@ -1077,7 +1087,8 @@ void print_ext2_fs(struct ext2_fs* fs)
     fprintf_light_cyan(stdout, "-- ext2 FS --\n");
     fprintf_yellow(stdout, "fs->fs_type %"PRIu64"\n", fs->fs_type);
     fprintf_yellow(stdout, "fs->mount_point %s\n", fs->mount_point);
-    fprintf_yellow(stdout, "fs->num_block_groups %"PRIu64"\n", fs->num_block_groups);
+    fprintf_yellow(stdout, "fs->num_block_groups %"PRIu64"\n",
+                            fs->num_block_groups);
     fprintf_yellow(stdout, "fs->num_files %"PRIu64"\n", fs->num_files);
     
     for (i = 0; i < linkedlist_size(fs->ext2_bgds); i++)
@@ -1103,9 +1114,12 @@ void print_partition(struct linkedlist* pt)
         pte = linkedlist_get(pt, i);
         fprintf_light_cyan(stdout, "-- Partition --\n");
         fprintf_yellow(stdout, "pte->pte_num == %"PRIu64"\n", pte->pte_num);
-        fprintf_yellow(stdout, "pte->partition_type == %"PRIu64"\n", pte->partition_type);
-        fprintf_yellow(stdout, "pte->first_sector_lba == %"PRIu64"\n", pte->first_sector_lba);
-        fprintf_yellow(stdout, "pte->final_sector_lba == %"PRIu64"\n", pte->final_sector_lba);
+        fprintf_yellow(stdout, "pte->partition_type == %"PRIu64"\n",
+                                pte->partition_type);
+        fprintf_yellow(stdout, "pte->first_sector_lba == %"PRIu64"\n",
+                                pte->first_sector_lba);
+        fprintf_yellow(stdout, "pte->final_sector_lba == %"PRIu64"\n",
+                                pte->final_sector_lba);
         fprintf_yellow(stdout, "pte->sector == %"PRIu64"\n", pte->sector);
         fprintf_yellow(stdout, "pte->fs == %p\n", &(pte->fs));
         print_ext2_fs(&(pte->fs));
@@ -1117,7 +1131,8 @@ void print_mbr(struct mbr* mbr)
     fprintf_light_cyan(stdout, "-- MBR --\n");
     fprintf_yellow(stdout, "mbr->gpt == %d\n", mbr->gpt);
     fprintf_yellow(stdout, "mbr->sector == %"PRIu64"\n", mbr->sector);
-    fprintf_yellow(stdout, "mbr->active_partitions == %"PRIu64"\n", mbr->active_partitions);
+    fprintf_yellow(stdout, "mbr->active_partitions == %"PRIu64"\n",
+                            mbr->active_partitions);
     fprintf_yellow(stdout, "mbr->pt == %p\n", mbr->pt);
     print_partition(mbr->pt);
 }
@@ -1492,7 +1507,6 @@ int qemu_load_index(FILE* index, struct mbr* mbr)
         }
     } 
 
-    //print_mbr(mbr);
     bson_cleanup(bson);
 
     return EXIT_SUCCESS;
