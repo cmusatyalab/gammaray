@@ -673,9 +673,10 @@ int ext4_read_inode(FILE* disk, int64_t partition_offset,
     return 0;
 }
 
-int64_t ext4_sector_from_block(uint32_t block)
+int64_t ext4_sector_from_block(uint64_t block, struct ext4_superblock super,
+                               int64_t partition_offset)
 {
-    return (block * 1024 + 0x07e00) / SECTOR_SIZE;
+    return (block * ext4_block_size(super) + partition_offset) / SECTOR_SIZE;
 }
 
 int ext4_print_extent_header(struct ext4_extent_header hdr)
