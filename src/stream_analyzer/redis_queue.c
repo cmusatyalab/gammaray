@@ -123,10 +123,89 @@ int redis_dequeue(struct kv_store* handle, uint64_t sector_num, uint8_t* data,
 {
     redisReply* reply;
     reply = redisCommand(handle->connection, "GET %"PRIu64, &sector_num);
-    if (reply->len > 0)
+    if (reply->type == REDIS_REPLY_STRING &&
+        reply->len > 0 &&
+        reply->len <= *len)
     {
         memcpy(data, reply->str, reply->len);
+        *len = reply->len;
     }
+    else
+    {
+        *len = 0;
+    }
+
+    return check_redis_return(handle->connection, reply);
+}
+
+int redis_hash_set(struct kv_store* handle, char* keyspace, uint64_t id, char* field,
+                   uint8_t* data, size_t len)
+{
+    redisReply* reply;
+    reply = redisCommand(handle->connection, "HSET %s:%"PRIu64" %s %b", keyspace,
+                                                                       id,
+                                                                       field,
+                                                                       data,
+                                                                       len);
+    return check_redis_return(handle->connection, reply);
+}
+
+int redis_hash_get(struct kv_store* handle, char* keyspace, uint64_t id, char* field,
+                   uint8_t* data, size_t* len)
+{
+    redisReply* reply;
+    reply = redisCommand(handle->connection, "HGET %s:%"PRIu64" %s", keyspace,
+                                                                    id, field);
+    if (reply->type == REDIS_REPLY_STRING &&
+        reply->len > 0 &&
+        reply->len <= *len)
+    {
+        memcpy(data, reply->str, reply->len);
+        *len = reply->len;
+    }
+    else
+    {
+        *len = 0;
+    }
+
+    return check_redis_return(handle->connection, reply);
+}
+
+int redis_sector_lookup(struct kv_store* handle, uint64_t id, char* path,
+                        size_t* len)
+{
+    redisReply* reply;
+    unsigned long long inode = 0;
+    reply = redisCommand(handle->connection, "HGET sector:%"PRIu64" inode", id);
+    if (reply->type == REDIS_REPLY_INTEGER)
+        inode = reply->integer;
+
+    if (check_redis_return(handle->connection, reply))
+        return 1;
+
+    reply = redisCommand(handle->connection, "HGET inode:%llu path", reply->integer);
+
+    if (reply->type == REDIS_REPLY_STRING &&
+        reply->len > 0 &&
+        reply->len <= *len)
+    {
+        memcpy(path, reply->str, reply->len);
+        *len = reply->len;
+    }
+    else
+    {
+        *len = 0;
+    }
+
+    return check_redis_return(handle->connection, reply);
+}
+
+int redis_add_sector_map(struct kv_store*handle, uint64_t id,
+                         uint64_t inode)
+{
+    redisReply* reply;
+    reply = redisCommand(handle->connection,
+                         "HSET sector:%"PRIu64" inode %"PRIu64, id, inode);
     return check_redis_return(handle->connection, reply);
 }
 

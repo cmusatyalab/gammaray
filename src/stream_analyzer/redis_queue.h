@@ -21,6 +21,14 @@ int redis_dequeue(struct kv_store* handle, uint64_t sector_num,
                   uint8_t* data, size_t* len);
 int redis_publish(struct kv_store* handle, char* channel, uint8_t* data,
                   size_t len);
+int redis_hash_set(struct kv_store* handle, char* keyspace, uint64_t id,
+                   char* field, uint8_t* data, size_t len);
+int redis_hash_get(struct kv_store* handle, char* keyspace, uint64_t id,
+                        char* field, uint8_t* data, size_t* len);
+int redis_sector_lookup(struct kv_store* handle, uint64_t id, char* path,
+                        size_t* len);
+int redis_add_sector_map(struct kv_store*handle, uint64_t sector_num,
+                         uint64_t inode);
 void redis_shutdown(struct kv_store* store);
 
 #endif
