@@ -141,12 +141,6 @@ int main(int argc, char* args[])
         return EXIT_FAILURE;
     }
 
-    if (qemu_load_index(indexf, &mbr))
-    {
-        fprintf_light_red(stderr, "Error deserializing index.\n");
-        return EXIT_FAILURE;
-    }
-
     /* ----------------- hiredis ----------------- */
     struct kv_store* handle = redis_init(db);
     if (handle == NULL)
@@ -156,6 +150,13 @@ int main(int argc, char* args[])
         return EXIT_FAILURE;
     }
 
+    if (qemu_load_index(indexf, &mbr, handle))
+    {
+        fprintf_light_red(stderr, "Error deserializing index.\n");
+        return EXIT_FAILURE;
+    }
+
+ 
     fprintf_cyan(stdout, "%s: attaching to stream: %s\n\n", vmname, stream);
 
     if (strcmp(stream, "-") != 0)

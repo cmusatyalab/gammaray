@@ -1454,7 +1454,7 @@ int __deserialize_ext2_file(FILE* index, struct bson_info* bson,
     return EXIT_SUCCESS;
 }
 
-int qemu_load_index(FILE* index, struct mbr* mbr)
+int qemu_load_index(FILE* index, struct mbr* mbr, struct kv_store* store)
 {
     uint64_t i, j;
     struct bson_info* bson;
