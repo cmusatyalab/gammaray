@@ -1,7 +1,7 @@
 #define _GNU_SOURCE
 #include "color.h"
 #include "deep_inspection.h"
-#include "__bson.h" /* TODO: fix BSON library to be more friendly */
+#include "__bson.h"
 #include "bson.h"
 #include "redis_queue.h"
 
@@ -1138,7 +1138,8 @@ void print_mbr(struct mbr* mbr)
 }
 
 
-int __deserialize_mbr(FILE* index, struct bson_info* bson, struct mbr* mbr)
+int __deserialize_mbr(FILE* index, struct bson_info* bson, struct mbr* mbr,
+                      struct kv_store* store)
 {
     struct bson_kv value1, value2;
 
@@ -1151,7 +1152,7 @@ int __deserialize_mbr(FILE* index, struct bson_info* bson, struct mbr* mbr)
     if (strcmp(value1.key, "gpt") != 0)
         return EXIT_FAILURE;
 
-    mbr->gpt = *((bool*) value1.data);
+    redis_hash_set(store, "mbr", 0, "gpt", ((uint8_t*)value1.data), sizeof(bool));
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1159,7 +1160,8 @@ int __deserialize_mbr(FILE* index, struct bson_info* bson, struct mbr* mbr)
     if (strcmp(value1.key, "sector") != 0)
         return EXIT_FAILURE;
 
-    mbr->sector = *((uint32_t*) value1.data);
+    redis_hash_set(store, "mbr", 0, "sector", ((uint8_t*)value1.data),
+                                              sizeof(uint32_t));
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1167,15 +1169,15 @@ int __deserialize_mbr(FILE* index, struct bson_info* bson, struct mbr* mbr)
     if (strcmp(value1.key, "active_partitions") != 0)
         return EXIT_FAILURE;
 
-    mbr->active_partitions = *((uint32_t*) value1.data);
-    mbr->pt = linkedlist_init();
+    redis_hash_set(store, "mbr", 0, "partitions", ((uint8_t*)value1.data),
+                                                  sizeof(uint32_t));
     return EXIT_SUCCESS;
 }
 
 int __deserialize_partition(FILE* index, struct bson_info* bson,
-                            struct mbr* mbr)
+                            struct kv_store* store)
 {
-    struct partition pt;
+    uint64_t pte_num;
     struct bson_kv value1, value2;
 
     if (bson_readf(bson, index) != 1)
@@ -1187,7 +1189,7 @@ int __deserialize_partition(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "pte_num") != 0)
         return EXIT_FAILURE;
 
-    pt.pte_num = *((uint32_t*) value1.data);
+    pte_num = (uint64_t) *((uint32_t*) value1.data);
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1195,7 +1197,8 @@ int __deserialize_partition(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "partition_type") != 0)
         return EXIT_FAILURE;
 
-    pt.partition_type = *((uint32_t*) value1.data);    
+    redis_hash_set(store, "pte", pte_num, "partition_type", ((uint8_t*)value1.data),
+                                                  sizeof(uint32_t));
     
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1203,7 +1206,8 @@ int __deserialize_partition(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "first_sector_lba") != 0)
         return EXIT_FAILURE;
 
-    pt.first_sector_lba = *((uint32_t*) value1.data);    
+    redis_hash_set(store, "pte", pte_num, "first_sector_lba", ((uint8_t*)value1.data),
+                                                  sizeof(uint32_t));
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1211,7 +1215,8 @@ int __deserialize_partition(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "final_sector_lba") != 0)
         return EXIT_FAILURE;
 
-    pt.final_sector_lba = *((uint32_t*) value1.data);    
+    redis_hash_set(store, "pte", pte_num, "final_sector_lba", ((uint8_t*)value1.data),
+                                                  sizeof(uint32_t));
     
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1219,21 +1224,15 @@ int __deserialize_partition(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "sector") != 0)
         return EXIT_FAILURE;
 
-    pt.sector = *((uint32_t*) value1.data);
-
-    linkedlist_append(mbr->pt, &pt, sizeof(pt));
-
+    redis_hash_set(store, "pte", pte_num, "sector", ((uint8_t*)value1.data),
+                                                  sizeof(uint32_t));
     return EXIT_SUCCESS;
 }
 
 int __deserialize_ext2_fs(FILE* index, struct bson_info* bson,
-                          struct partition* pt)
+                          struct kv_store* store)
 {
-    struct ext2_fs fs;
     struct bson_kv value1, value2;
-
-    fs.ext2_bgds = linkedlist_init();
-    fs.ext2_files = linkedlist_init();
 
     if (bson_readf(bson, index) != 1)
         return EXIT_FAILURE;
@@ -1244,10 +1243,12 @@ int __deserialize_ext2_fs(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "fs_type") != 0)
         return EXIT_FAILURE;
 
-    fs.fs_type = *((uint32_t*) value1.data);
-
-    if (fs.fs_type != 0 && fs.fs_type != 1) /* ext4 hack TODO wolf */
+    if (*((uint32_t*)value1.data) != 0 &&
+        *((uint32_t*)value1.data) != 1)
         return EXIT_FAILURE;
+
+    redis_hash_set(store, "fs", 0, "fs_type", ((uint8_t*)value1.data),
+                                                  sizeof(uint32_t));
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1255,10 +1256,8 @@ int __deserialize_ext2_fs(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "mount_point") != 0)
         return EXIT_FAILURE;
 
-    fs.mount_point = clone_cstring((char*) value1.data);
-
-    if (fs.mount_point == NULL)
-        return EXIT_FAILURE;
+    redis_hash_set(store, "fs", 0, "mount_point", ((uint8_t*)value1.data),
+                                                  strlen(value1.data) + 1);
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1266,7 +1265,8 @@ int __deserialize_ext2_fs(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "num_block_groups") != 0)
         return EXIT_FAILURE;
 
-    fs.num_block_groups = *((uint32_t*) value1.data);
+    redis_hash_set(store, "fs", 0, "num_block_groups", ((uint8_t*)value1.data),
+                                                  sizeof(uint32_t));
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1274,7 +1274,8 @@ int __deserialize_ext2_fs(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "num_files") != 0)
         return EXIT_FAILURE;
 
-    fs.num_files = *((uint32_t*) value1.data);
+    redis_hash_set(store, "fs", 0, "num_files", ((uint8_t*)value1.data),
+                                                  sizeof(uint32_t));
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1282,17 +1283,15 @@ int __deserialize_ext2_fs(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "superblock") != 0)
         return EXIT_FAILURE;
 
-    fs.superblock = *((struct ext2_superblock*) value1.data);
-
-    pt->fs = fs;
+    redis_hash_set(store, "fs", 0, "superblock", ((uint8_t*)value1.data),
+                                                  sizeof(struct ext2_superblock));
 
     return EXIT_SUCCESS;
 }
 
-int __deserialize_ext2_bgd(FILE* index, struct bson_info* bson,
-                           struct ext2_fs* fs)
+int __deserialize_ext2_bgd(FILE* index, struct bson_info* bson, uint64_t id,
+                           struct kv_store* store)
 {
-    struct ext2_bgd bgd;
     struct bson_kv value1, value2;
 
     if (bson_readf(bson, index) != 1)
@@ -1304,7 +1303,8 @@ int __deserialize_ext2_bgd(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "bgd") != 0)
         return EXIT_FAILURE;
 
-    bgd.bgd = *((struct ext2_block_group_descriptor*) value1.data);
+    redis_hash_set(store, "bgd", id, "bgd", ((uint8_t*)value1.data),
+                                    sizeof(struct ext2_block_group_descriptor));
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1312,7 +1312,8 @@ int __deserialize_ext2_bgd(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "sector") != 0)
         return EXIT_FAILURE;
 
-    bgd.sector = *((uint32_t*) value1.data);
+    redis_hash_set(store, "bgd", id, "sector", ((uint8_t*)value1.data),
+                                               sizeof(uint32_t));
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1320,7 +1321,8 @@ int __deserialize_ext2_bgd(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "block_bitmap_sector_start") != 0)
         return EXIT_FAILURE;
 
-    bgd.block_bitmap_sector_start = *((uint32_t*) value1.data);
+    redis_hash_set(store, "bgd", id, "block_bitmap_sector_start", ((uint8_t*)value1.data),
+                                               sizeof(uint32_t));
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1328,7 +1330,8 @@ int __deserialize_ext2_bgd(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "block_bitmap_sector_end") != 0)
         return EXIT_FAILURE;
 
-    bgd.block_bitmap_sector_end = *((uint32_t*) value1.data);
+    redis_hash_set(store, "bgd", id, "block_bitmap_sector_end", ((uint8_t*)value1.data),
+                                               sizeof(uint32_t));
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1336,7 +1339,8 @@ int __deserialize_ext2_bgd(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "inode_bitmap_sector_start") != 0)
         return EXIT_FAILURE;
 
-    bgd.inode_bitmap_sector_start = *((uint32_t*) value1.data);
+    redis_hash_set(store, "bgd", id, "inode_bitmap_sector_start", ((uint8_t*)value1.data),
+                                               sizeof(uint32_t));
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1344,7 +1348,8 @@ int __deserialize_ext2_bgd(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "inode_bitmap_sector_end") != 0)
         return EXIT_FAILURE;
 
-    bgd.inode_bitmap_sector_end = *((uint32_t*) value1.data);
+    redis_hash_set(store, "bgd", id, "inode_bitmap_sector_end", ((uint8_t*)value1.data),
+                                               sizeof(uint32_t));
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1352,7 +1357,8 @@ int __deserialize_ext2_bgd(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "inode_table_sector_start") != 0)
         return EXIT_FAILURE;
 
-    bgd.inode_table_sector_start = *((uint32_t*) value1.data);
+    redis_hash_set(store, "bgd", id, "inode_table_sector_start", ((uint8_t*)value1.data),
+                                               sizeof(uint32_t));
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1360,17 +1366,15 @@ int __deserialize_ext2_bgd(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "inode_table_sector_end") != 0)
         return EXIT_FAILURE;
 
-    bgd.inode_table_sector_end = *((uint32_t*) value1.data);
-
-    linkedlist_append(fs->ext2_bgds, &bgd, sizeof(bgd));
+    redis_hash_set(store, "bgd", id, "inode_table_sector_end", ((uint8_t*)value1.data),
+                                               sizeof(uint32_t));
 
     return EXIT_SUCCESS;
 }
 
 int __deserialize_ext2_file(FILE* index, struct bson_info* bson,
-                            struct ext2_fs* fs)
+                            uint64_t id, struct kv_store* store)
 {
-    struct ext2_file file;
     struct bson_kv value1, value2;
 
     if (bson_readf(bson, index) != 1)
@@ -1382,7 +1386,8 @@ int __deserialize_ext2_file(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "inode_sector") != 0)
         return EXIT_FAILURE;
 
-    file.inode_sector = *((uint64_t*) value1.data);
+    redis_hash_set(store, "file", id, "inode_sector", ((uint8_t*)value1.data),
+                                               sizeof(uint32_t));
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1390,7 +1395,8 @@ int __deserialize_ext2_file(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "inode_offset") != 0)
         return EXIT_FAILURE;
 
-    file.inode_offset = *((uint64_t*) value1.data);
+    redis_hash_set(store, "file", id, "inode_offset", ((uint8_t*)value1.data),
+                                               sizeof(uint32_t));
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1398,10 +1404,8 @@ int __deserialize_ext2_file(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "path") != 0)
         return EXIT_FAILURE;
 
-    file.path = clone_cstring((char*) value1.data);
-
-    if (file.path == NULL)
-        return EXIT_FAILURE;
+    redis_hash_set(store, "file", id, "path", ((uint8_t*)value1.data),
+                                               strlen(value1.data) + 1);
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1409,7 +1413,8 @@ int __deserialize_ext2_file(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "is_dir") != 0)
         return EXIT_FAILURE;
 
-    file.is_dir = *((bool*) value1.data);
+    redis_hash_set(store, "file", id, "is_dir", ((uint8_t*)value1.data),
+                                               sizeof(bool));
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1417,7 +1422,8 @@ int __deserialize_ext2_file(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "inode") != 0)
         return EXIT_FAILURE;
 
-    file.inode = *((struct ext2_inode*) value1.data);
+    redis_hash_set(store, "file", id, "inode", ((uint8_t*)value1.data),
+                                               sizeof(struct ext2_inode));
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1433,22 +1439,18 @@ int __deserialize_ext2_file(FILE* index, struct bson_info* bson,
     
     memcpy(bson->buffer, value2.data, value2.size);
     bson_make_readable(bson);
-    file.sectors = NULL;
 
     /* at least 1 sector */
     if (bson_deserialize(bson, &value1, &value2) == 1)
     { 
-        file.sectors = bst_init(*((uint32_t*)value1.data), (void*)1);
-        if (file.sectors == NULL)
-            return EXIT_FAILURE;
+        redis_add_sector_map(store, (uint64_t) *((uint32_t*)value1.data), id);
     }
 
     while (bson_deserialize(bson, &value1, &value2) == 1)
     {
-        bst_insert(file.sectors, *((uint32_t*)value1.data), (void*) 1);
+        redis_add_sector_map(store, (uint64_t) *((uint32_t*)value1.data), id);
     }
 
-    linkedlist_append(fs->ext2_files, &file, sizeof(file));
     bson_cleanup(bson);
 
     return EXIT_SUCCESS;
@@ -1457,13 +1459,14 @@ int __deserialize_ext2_file(FILE* index, struct bson_info* bson,
 int qemu_load_index(FILE* index, struct mbr* mbr, struct kv_store* store)
 {
     uint64_t i, j;
+    uint32_t num_block_groups, num_files;
+    size_t len;
     struct bson_info* bson;
-    struct partition* pt;
 
     bson = bson_init();
 
     /* mbr */
-    if (__deserialize_mbr(index, bson, mbr))
+    if (__deserialize_mbr(index, bson, mbr, store))
     {
         fprintf_light_red(stderr, "Error loading MBR document.\n");
         return EXIT_FAILURE;
@@ -1472,33 +1475,52 @@ int qemu_load_index(FILE* index, struct mbr* mbr, struct kv_store* store)
     /* partition entries */
     for (i = 0; i < mbr->active_partitions; i++)
     {
-        if (__deserialize_partition(index, bson, mbr))
+        if (__deserialize_partition(index, bson, store))
         {
             fprintf_light_red(stderr, "Error loading partition document.\n");
             return EXIT_FAILURE;
         }
 
-        pt = (struct partition*) linkedlist_tail(mbr->pt);
 
-        if (__deserialize_ext2_fs(index, bson, pt))
+        if (__deserialize_ext2_fs(index, bson, store))
         {
             fprintf_light_red(stderr, "Error loading ext2_fs document.\n");
             return EXIT_FAILURE;
         }
 
-        for (j = 0; j < pt->fs.num_block_groups; j++)
+        len = sizeof(num_block_groups);
+
+        if (redis_hash_get(store, "fs", i, "num_block_groups",
+                           (uint8_t*) &num_block_groups, &len))
         {
-            if (__deserialize_ext2_bgd(index, bson, &(pt->fs)))
+            fprintf_light_red(stderr, "Error retrieving num_block_groups "
+                                      "from Redis.\n");
+            return EXIT_FAILURE;
+        }
+
+        for (j = 0; j < num_block_groups; j++)
+        {
+            if (__deserialize_ext2_bgd(index, bson, i, store))
             {
                 fprintf_light_red(stderr, "Error loading ext2_bgd document."
                                           "\n");
                 return EXIT_FAILURE;
             }
-        }        
+        }   
 
-        for (j = 0; j < pt->fs.num_files; j++)
+        len = sizeof(num_files);
+        
+        if (redis_hash_get(store, "fs", i, "num_files",
+                           (uint8_t*) &num_files, &len))
         {
-            if (__deserialize_ext2_file(index, bson, &(pt->fs)))
+            fprintf_light_red(stderr, "Error retrieving num_files "
+                                      "from Redis.\n");
+            return EXIT_FAILURE;
+        }
+
+        for (j = 0; j < num_files; j++)
+        {
+            if (__deserialize_ext2_file(index, bson, j, store))
             {
                 fprintf_light_red(stderr, "Error loading ext2_file document."
                                           "\n");
@@ -1507,6 +1529,9 @@ int qemu_load_index(FILE* index, struct mbr* mbr, struct kv_store* store)
                 break;
             }
         }
+
+        redis_shutdown(store);
+        exit(0);     
     } 
 
     bson_cleanup(bson);
