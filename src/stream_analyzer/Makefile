@@ -45,11 +45,11 @@ default:
 		 -I/usr/include/hiredis \
 		 #-DNOCOLOR
 
-test_ext4:
-	./inference_engine /tmp/ext4_test \
+test_ext4: clean default
+	@./inference_engine /tmp/ext4_test \
 		/tmp/ext4_vm.fifo \
+	    4 \
 		/home/wolf/Dropbox/Projects/xray/sample/vm_ext4_test.raw \
-	    0 \
 		ext4_test_vm
 
 gdb: default
@@ -64,4 +64,4 @@ memtest: default
 		| less -R
 
 clean:
-	@rm inference_engine
+	@rm -f inference_engine
