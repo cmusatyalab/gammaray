@@ -183,7 +183,7 @@ int redis_sector_lookup(struct kv_store* handle, uint64_t id, char* path,
     if (check_redis_return(handle->connection, reply))
         return 1;
 
-    reply = redisCommand(handle->connection, "HGET inode:%llu path", reply->integer);
+    reply = redisCommand(handle->connection, "HGET file:%llu path", reply->integer);
 
     if (reply->type == REDIS_REPLY_STRING &&
         reply->len > 0 &&
