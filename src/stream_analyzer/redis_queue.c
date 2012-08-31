@@ -213,6 +213,7 @@ void redis_shutdown(struct kv_store* handle)
 {
     if (handle)
     {
+        redisCommand(handle->connection, "FLUSHALL");
         if (handle->connection)
         {
             redisFree(handle->connection);
