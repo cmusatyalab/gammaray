@@ -46,10 +46,10 @@ default:
 		 #-DNOCOLOR
 
 test_ext4: clean default
-	@./inference_engine /tmp/ext4_test \
+	@time ./inference_engine /tmp/ext4_test \
 		/tmp/ext4_vm.fifo \
 	    4 \
-		/home/wolf/Dropbox/Projects/xray/sample/vm_ext4_test.raw \
+		/home/wolf/VM/vm_ext4_test/vm_ext4_test.raw \
 		ext4_test_vm
 
 gdb: default
