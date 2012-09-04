@@ -1152,6 +1152,7 @@ int __deserialize_mbr(FILE* index, struct bson_info* bson, struct mbr* mbr,
     if (strcmp(value1.key, "gpt") != 0)
         return EXIT_FAILURE;
 
+    mbr->gpt = (uint8_t*)value1.data;
     redis_hash_set(store, "mbr", 0, "gpt", ((uint8_t*)value1.data), sizeof(bool));
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
@@ -1160,6 +1161,7 @@ int __deserialize_mbr(FILE* index, struct bson_info* bson, struct mbr* mbr,
     if (strcmp(value1.key, "sector") != 0)
         return EXIT_FAILURE;
 
+    mbr->sector = *((uint32_t*)value1.data);
     redis_hash_set(store, "mbr", 0, "sector", ((uint8_t*)value1.data),
                                               sizeof(uint32_t));
 
@@ -1169,6 +1171,7 @@ int __deserialize_mbr(FILE* index, struct bson_info* bson, struct mbr* mbr,
     if (strcmp(value1.key, "active_partitions") != 0)
         return EXIT_FAILURE;
 
+    mbr->active_partitions = *((uint32_t*)value1.data);
     redis_hash_set(store, "mbr", 0, "partitions", ((uint8_t*)value1.data),
                                                   sizeof(uint32_t));
     return EXIT_SUCCESS;
@@ -1472,9 +1475,13 @@ int qemu_load_index(FILE* index, struct mbr* mbr, struct kv_store* store)
         return EXIT_FAILURE;
     }
 
+    fprintf_yellow(stdout, "Deserializing %"PRIu64" partitions.\n",
+                            mbr->active_partitions);
+
     /* partition entries */
     for (i = 0; i < mbr->active_partitions; i++)
     {
+        fprintf_light_cyan(stdout, "Partition loop.\n");
         if (__deserialize_partition(index, bson, store))
         {
             fprintf_light_red(stderr, "Error loading partition document.\n");
@@ -1530,8 +1537,7 @@ int qemu_load_index(FILE* index, struct mbr* mbr, struct kv_store* store)
             }
         }
 
-        redis_shutdown(store);
-        exit(0);     
+        redis_flush_pipeline(store);
     } 
 
     bson_cleanup(bson);
