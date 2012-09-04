@@ -965,56 +965,108 @@ int qemu_deep_inspect(struct qemu_bdrv_write* write, struct mbr* mbr,
    return 0;
 }
 
-int qemu_infer_sector_type(struct qemu_bdrv_write* write, struct mbr* mbr)
+int qemu_infer_sector_type(struct qemu_bdrv_write* write, 
+                           uint64_t mbr_id, struct kv_store* store)
 {
     uint64_t i, j;
-    struct partition* partition;
-    struct ext2_fs* fs;
-    struct ext2_bgd* bgd;
+    struct ext2_superblock super;
+    struct ext2_bgd bgd;
+    uint32_t mbr_sector, active_partitions;
+    uint32_t first_sector, last_sector;
+    uint32_t num_block_groups;
+    size_t len = sizeof(uint32_t);
 
     uint64_t block_size, blocks_per_block_group, sectors_per_block_group,
              start_sector, bgd_start, bgd_end;
 
-    if (write->header.sector_num == mbr->sector)
+    if (redis_hash_get(store, "mbr", mbr_id, "sector", (uint8_t*) &mbr_sector,
+                       &len))
+    {
+        fprintf_light_red(stderr, "Error retrieving mbr sector.\n");
+        return SECTOR_UNKNOWN;
+    }
+
+    if (redis_hash_get(store, "mbr", mbr_id, "partitions", (uint8_t*) &active_partitions,
+                       &len))
+    {
+        fprintf_light_red(stderr, "Error retrieving active partitions.\n");
+        return SECTOR_UNKNOWN;
+    }
+
+    if (write->header.sector_num == mbr_sector)
         return SECTOR_MBR;
 
-    for (i = 0; i < linkedlist_size(mbr->pt); i++)
+    for (i = 0; i < active_partitions; i++)
     {
-        partition = linkedlist_get(mbr->pt, i);
-        
-        if (write->header.sector_num <= partition->final_sector_lba &&
-            write->header.sector_num >= partition->first_sector_lba)
+         if (redis_hash_get(store, "pte", i, "first_sector_lba", (uint8_t*) &first_sector,
+                            &len))
+         {
+            fprintf_light_red(stderr, "Error retrieving first sector lba.\n");
+            return SECTOR_UNKNOWN;
+         }
+
+         if (redis_hash_get(store, "pte", i, "last_sector_lba", (uint8_t*) &last_sector,
+                            &len))
+         {
+            fprintf_light_red(stderr, "Error retrieving last sector lba \n");
+            return SECTOR_UNKNOWN;
+         }
+
+        if (write->header.sector_num <= last_sector &&
+            write->header.sector_num >= first_sector)
         {
-            if (write->header.sector_num == partition->first_sector_lba + 2)
+            if (write->header.sector_num == first_sector + 2)
                 return SECTOR_EXT2_SUPERBLOCK;
 
-            fs = &(partition->fs);
-            block_size = ext2_block_size(fs->superblock);
-            blocks_per_block_group = fs->superblock.s_blocks_per_group;
+            len = sizeof(super);
+            if (redis_hash_get(store, "fs", 0, "superblock", (uint8_t*) &super,
+                               &len))
+            {
+                fprintf_light_red(stderr, "Error retrieving superblock\n");
+                return SECTOR_UNKNOWN;
+            }
+
+            block_size = ext2_block_size(super);
+            blocks_per_block_group = super.s_blocks_per_group;
             sectors_per_block_group = blocks_per_block_group *
                                       (block_size / SECTOR_SIZE);
-            start_sector = fs->superblock.s_first_data_block *
+            start_sector = super.s_first_data_block *
                            (block_size / SECTOR_SIZE) +
-                           partition->first_sector_lba;
+                           first_sector;
 
-            for (j = 0; j < linkedlist_size(fs->ext2_bgds); j++)
+            len = sizeof(num_block_groups);
+            if (redis_hash_get(store, "fs", 0, "num_block_groups",
+                               (uint8_t*) &num_block_groups, &len))
+            {
+                fprintf_light_red(stderr, "Error retrieving num block "
+                                          "groups\n");
+                return SECTOR_UNKNOWN;
+            }
+
+            for (j = 0; j < num_block_groups; j++)
             {
                 bgd_start = start_sector + sectors_per_block_group * j;
                 bgd_end = bgd_start + sectors_per_block_group - 1;
-                bgd = linkedlist_get(fs->ext2_bgds, j);
-                if (write->header.sector_num == bgd->sector)
+                len = sizeof(bgd);
+                if (redis_hash_get(store, "bgd", j, "bgd", (uint8_t*) &bgd, &len))
+                {
+                    fprintf_light_red(stderr, "Error retrieving bgd\n");
+                    return SECTOR_UNKNOWN;
+                }
+
+                if (write->header.sector_num == bgd.sector)
                     return SECTOR_EXT2_BLOCK_GROUP_DESCRIPTOR;
 
-                if (write->header.sector_num <= bgd->block_bitmap_sector_end &&
-                    write->header.sector_num >= bgd->block_bitmap_sector_start)
+                if (write->header.sector_num <= bgd.block_bitmap_sector_end &&
+                    write->header.sector_num >= bgd.block_bitmap_sector_start)
                     return SECTOR_EXT2_BLOCK_GROUP_BLOCKMAP;
 
-                if (write->header.sector_num <= bgd->inode_bitmap_sector_end &&
-                    write->header.sector_num >= bgd->inode_bitmap_sector_start)
+                if (write->header.sector_num <= bgd.inode_bitmap_sector_end &&
+                    write->header.sector_num >= bgd.inode_bitmap_sector_start)
                     return SECTOR_EXT2_BLOCK_GROUP_INODEMAP;
 
-                if (write->header.sector_num <= bgd->inode_table_sector_end &&
-                    write->header.sector_num >= bgd->inode_table_sector_start)
+                if (write->header.sector_num <= bgd.inode_table_sector_end &&
+                    write->header.sector_num >= bgd.inode_table_sector_start)
                     return SECTOR_EXT2_INODE;
 
                 if (write->header.sector_num <= bgd_end &&

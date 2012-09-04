@@ -93,7 +93,8 @@ struct ext2_bgd
 void qemu_parse_header(uint8_t* data, struct qemu_bdrv_write* write);
 int qemu_load_index(FILE* index, struct mbr* mbr, struct kv_store* store);
 int qemu_print_write(struct qemu_bdrv_write* write);
-int qemu_infer_sector_type(struct qemu_bdrv_write* write, struct mbr* mbr);
+int qemu_infer_sector_type(struct qemu_bdrv_write* write, uint64_t mbr_id,
+                           struct kv_store* store);
 int qemu_print_sector_type(enum SECTOR_TYPE type);
 int qemu_deep_inspect(struct qemu_bdrv_write* write, struct mbr* mbr,
                       struct kv_store* store, char* vmname);
