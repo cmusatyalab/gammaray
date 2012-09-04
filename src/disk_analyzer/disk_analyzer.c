@@ -55,7 +55,7 @@ int main(int argc, char* args[])
     if (disk == NULL)
     {
         fprintf_light_red(stderr, "Error opening raw disk file '%s'. "
-                                  "Does it exist?\n", args[2]);
+                                  "Does it exist?\n", args[1]);
         return EXIT_FAILURE;
     }
 
