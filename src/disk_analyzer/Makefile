@@ -79,6 +79,11 @@ test: default
 		#/home/wolf/VM/win7enterprise.raw \
 		#/tmp/win7enterprise.bson
 
+test_ext4: default
+	@./disk_analyzer \
+		/home/wolf/VM/vm_ext4_test/vm_ext4_test.raw \
+		/tmp/ext4_test
+
 test_tinycore: default
 	@valgrind --track-origins=yes ./disk_analyzer \
 		/home/wolf/Dropbox/Projects/xray/sample/tinycore.raw \
