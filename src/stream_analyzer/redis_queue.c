@@ -141,19 +141,20 @@ int redis_dequeue(struct kv_store* handle, uint64_t sector_num, uint8_t* data,
 int redis_hash_set(struct kv_store* handle, char* keyspace, uint64_t id, char* field,
                    uint8_t* data, size_t len)
 {
-    redisReply* reply;
-    reply = redisCommand(handle->connection, "HSET %s:%"PRIu64" %s %b", keyspace,
+    redisAppendCommand(handle->connection, "HSET %s:%"PRIu64" %s %b", keyspace,
                                                                        id,
                                                                        field,
                                                                        data,
                                                                        len);
-    return check_redis_return(handle->connection, reply);
+    handle->outstanding_pipelined_cmds++;
+    return 0;
 }
 
 int redis_hash_get(struct kv_store* handle, char* keyspace, uint64_t id, char* field,
                    uint8_t* data, size_t* len)
 {
     redisReply* reply;
+    redis_flush_pipeline(handle);
     reply = redisCommand(handle->connection, "HGET %s:%"PRIu64" %s", keyspace,
                                                                     id, field);
     if (reply->type == REDIS_REPLY_STRING &&
@@ -203,10 +204,10 @@ int redis_sector_lookup(struct kv_store* handle, uint64_t id, char* path,
 int redis_add_sector_map(struct kv_store*handle, uint64_t id,
                          uint64_t inode)
 {
-    redisReply* reply;
-    reply = redisCommand(handle->connection,
+    redisAppendCommand(handle->connection,
                          "HSET sector:%"PRIu64" inode %"PRIu64, id, inode);
-    return check_redis_return(handle->connection, reply);
+    handle->outstanding_pipelined_cmds++;
+    return 0;
 }
 
 void redis_shutdown(struct kv_store* handle)
