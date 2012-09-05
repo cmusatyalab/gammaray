@@ -150,8 +150,8 @@ int redis_hash_set(struct kv_store* handle, char* keyspace, uint64_t id, char* f
     return 0;
 }
 
-int redis_hash_get(struct kv_store* handle, char* keyspace, uint64_t id, char* field,
-                   uint8_t* data, size_t* len)
+int redis_hash_get(struct kv_store* handle, char* keyspace, uint64_t id,
+                   char* field, uint8_t* data, size_t* len)
 {
     redisReply* reply;
     redis_flush_pipeline(handle);
@@ -176,15 +176,18 @@ int redis_sector_lookup(struct kv_store* handle, uint64_t id, char* path,
                         size_t* len)
 {
     redisReply* reply;
-    unsigned long long inode = 0;
+    uint64_t inode = 0;
     reply = redisCommand(handle->connection, "HGET sector:%"PRIu64" inode", id);
-    if (reply->type == REDIS_REPLY_INTEGER)
-        inode = reply->integer;
+
+    if (reply->type == REDIS_REPLY_STRING)
+       sscanf(reply->str, "%"SCNu64, &inode); 
+    else
+        return 1;
 
     if (check_redis_return(handle->connection, reply))
         return 1;
 
-    reply = redisCommand(handle->connection, "HGET file:%llu path", reply->integer);
+    reply = redisCommand(handle->connection, "HGET file:%"PRIu64" path", inode);
 
     if (reply->type == REDIS_REPLY_STRING &&
         reply->len > 0 &&
@@ -195,6 +198,7 @@ int redis_sector_lookup(struct kv_store* handle, uint64_t id, char* path,
     }
     else
     {
+        fprintf(stderr, "Failed retrieving path [len=%zu].\n", reply->len);
         *len = 0;
     }
 
