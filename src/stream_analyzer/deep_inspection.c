@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include "color.h"
 #include "deep_inspection.h"
+#include "ext4.h"
 #include "__bson.h"
 #include "bson.h"
 #include "redis_queue.h"
@@ -53,6 +54,112 @@ char* clone_cstring(char* cstring)
     strcpy(ret, cstring);
     return ret;
 }
+
+int qemu_print_write(struct qemu_bdrv_write* write)
+{
+    fprintf_light_blue(stdout, "brdv_write event\n");
+    fprintf_yellow(stdout, "\tsector_num: %0."PRId64"\n",
+                           write->header.sector_num);
+    fprintf_yellow(stdout, "\tnb_sectors: %d\n",
+                           write->header.nb_sectors);
+    fprintf_yellow(stdout, "\tdata buffer pointer (malloc()'d): %p\n",
+                           write->data);
+    return 0;
+}
+
+void print_ext2_file(struct ext2_file* file)
+{
+    fprintf_light_cyan(stdout, "-- ext2 File --\n");
+    fprintf_yellow(stdout, "file->inode_sector == %"PRIu64"\n",
+                            file->inode_sector);
+    fprintf_yellow(stdout, "file->inode_offset == %"PRIu64"\n",
+                            file->inode_offset);
+    fprintf_light_yellow(stdout, "file->path == %s\n", file->path);
+    fprintf_yellow(stdout, "file->is_dir == %s\n",
+                            file->is_dir ? "true" : "false");
+    fprintf_yellow(stdout, "file->inode == %p\n", &(file->inode));
+}
+
+void print_ext2_bgd(struct ext2_bgd* bgd)
+{
+    fprintf_light_cyan(stdout, "-- ext2 BGD --\n");
+    fprintf_yellow(stdout, "bgd->bgd == %p\n", &(bgd->bgd));
+    fprintf_yellow(stdout, "bgd->sector == %"PRIu64"\n", bgd->sector);
+    fprintf_yellow(stdout, "bgd->block_bitmap_sector_start == %"PRIu64"\n",
+                            bgd->block_bitmap_sector_start);
+    fprintf_yellow(stdout, "bgd->block_bitmap_sector_end == %"PRIu64"\n",
+                            bgd->block_bitmap_sector_end);
+    fprintf_yellow(stdout, "bgd->inode_bitmap_sector_start == %"PRIu64"\n",
+                            bgd->inode_bitmap_sector_start);
+    fprintf_yellow(stdout, "bgd->inode_bitmap_sector_end == %"PRIu64"\n",
+                            bgd->inode_bitmap_sector_end);
+    fprintf_yellow(stdout, "bgd->inode_table_sector_start == %"PRIu64"\n",
+                            bgd->inode_table_sector_start);
+    fprintf_yellow(stdout, "bgd->inode_table_sector_end == %"PRIu64"\n",
+                            bgd->inode_table_sector_end);
+}
+
+void print_ext2_fs(struct ext2_fs* fs)
+{
+    struct ext2_bgd* bgd;
+    struct ext2_file* file;
+    uint64_t i;
+
+    fprintf_light_cyan(stdout, "-- ext2 FS --\n");
+    fprintf_yellow(stdout, "fs->fs_type %"PRIu64"\n", fs->fs_type);
+    fprintf_yellow(stdout, "fs->mount_point %s\n", fs->mount_point);
+    fprintf_yellow(stdout, "fs->num_block_groups %"PRIu64"\n",
+                            fs->num_block_groups);
+    fprintf_yellow(stdout, "fs->num_files %"PRIu64"\n", fs->num_files);
+    
+    for (i = 0; i < linkedlist_size(fs->ext2_bgds); i++)
+    {
+        bgd = linkedlist_get(fs->ext2_bgds, i);
+        print_ext2_bgd(bgd);
+    }
+
+    for (i = 0; i < linkedlist_size(fs->ext2_files); i++)
+    {
+        file = linkedlist_get(fs->ext2_files, i);
+        print_ext2_file(file);
+    }
+}
+
+void print_partition(struct linkedlist* pt)
+{
+    struct partition* pte;
+    uint64_t i;
+
+    for (i = 0; i < linkedlist_size(pt); i++)
+    {
+        pte = linkedlist_get(pt, i);
+        fprintf_light_cyan(stdout, "-- Partition --\n");
+        fprintf_yellow(stdout, "pte->pte_num == %"PRIu64"\n", pte->pte_num);
+        fprintf_yellow(stdout, "pte->partition_type == %"PRIu64"\n",
+                                pte->partition_type);
+        fprintf_yellow(stdout, "pte->first_sector_lba == %"PRIu64"\n",
+                                pte->first_sector_lba);
+        fprintf_yellow(stdout, "pte->final_sector_lba == %"PRIu64"\n",
+                                pte->final_sector_lba);
+        fprintf_yellow(stdout, "pte->sector == %"PRIu64"\n", pte->sector);
+        fprintf_yellow(stdout, "pte->fs == %p\n", &(pte->fs));
+        print_ext2_fs(&(pte->fs));
+    }
+}
+
+void print_mbr(struct mbr* mbr)
+{
+    fprintf_light_cyan(stdout, "-- MBR --\n");
+    fprintf_yellow(stdout, "mbr->gpt == %d\n", mbr->gpt);
+    fprintf_yellow(stdout, "mbr->sector == %"PRIu64"\n", mbr->sector);
+    fprintf_yellow(stdout, "mbr->active_partitions == %"PRIu64"\n",
+                            mbr->active_partitions);
+    fprintf_yellow(stdout, "mbr->pt == %p\n", mbr->pt);
+    print_partition(mbr->pt);
+}
+
+
+
 
 void qemu_parse_header(uint8_t* event_stream, struct qemu_bdrv_write* write)
 {
@@ -842,8 +949,47 @@ int ext2_compare_inodes(struct ext2_inode* old_inode,
     return EXIT_SUCCESS;
 }
 
-int qemu_deep_inspect(struct qemu_bdrv_write* write, struct mbr* mbr,
-                      struct kv_store* store, char* vmname)
+int qemu_deep_inspect(struct qemu_bdrv_write* write, struct kv_store* store,
+                      char* vmname, uint64_t block_size)
+{
+    uint32_t i;
+    char path[4096];
+    size_t len;
+
+    for (i = 0; i < write->header.nb_sectors; i += block_size / SECTOR_SIZE)
+    {
+        len = 4096;
+        if (redis_sector_lookup(store, write->header.sector_num + i, path, &len))
+        {
+            fprintf_light_red(stdout, "Unknown file path.\n");
+            continue;
+        }
+
+        path[len] = '\0';
+
+        if (len)
+        {
+            fprintf_light_green(stdout, "Write to path detected: '%s'\n",
+                                        path);
+        }
+        else /* handling unknown write, send to queue */
+        {
+            for (i = 0; i < write->header.nb_sectors; i++)
+            {
+                continue;
+                redis_enqueue_pipelined(store, write->header.sector_num + i,
+                                               &(write->data[i*SECTOR_SIZE]),
+                                               SECTOR_SIZE);
+            }
+            redis_flush_pipeline(store);
+
+        }
+    }
+    return EXIT_SUCCESS;
+}
+
+int __qemu_deep_inspect(struct qemu_bdrv_write* write, struct mbr* mbr,
+                        struct kv_store* store, char* vmname)
 {
     uint64_t i, j, start = 0, end = 0;
     uint64_t inode_offset;
@@ -889,7 +1035,7 @@ int qemu_deep_inspect(struct qemu_bdrv_write* write, struct mbr* mbr,
                     return SECTOR_EXT2_PARTITION;
                 }
 
-                if (bst_find(file->sectors, write->header.sector_num))
+                if (bst_find(NULL, write->header.sector_num))
                 {
                     fprintf_light_red(stdout, "Write to sector %"PRId64
                                               " modifying %s\n",
@@ -965,8 +1111,24 @@ int qemu_deep_inspect(struct qemu_bdrv_write* write, struct mbr* mbr,
    return 0;
 }
 
+uint64_t qemu_get_block_size(struct kv_store* store, uint64_t fs_id)
+{
+    struct ext2_superblock super;
+    size_t len = sizeof(super);
+
+    if (redis_hash_get(store, "fs", fs_id, "superblock", (uint8_t*) &super,
+                       &len))
+    {
+        fprintf_light_red(stderr, "Error retrieving superblock\n");
+        return 0;
+    }
+
+    return ext2_block_size(super);
+}
+
 int qemu_infer_sector_type(struct qemu_bdrv_write* write, 
-                           uint64_t mbr_id, struct kv_store* store)
+                           uint64_t mbr_id, struct kv_store* store,
+                           uint64_t block_size)
 {
     uint64_t i, j;
     struct ext2_superblock super;
@@ -976,7 +1138,7 @@ int qemu_infer_sector_type(struct qemu_bdrv_write* write,
     uint32_t num_block_groups;
     size_t len = sizeof(uint32_t);
 
-    uint64_t block_size, blocks_per_block_group, sectors_per_block_group,
+    uint64_t blocks_per_block_group, sectors_per_block_group,
              start_sector, bgd_start, bgd_end;
 
     if (redis_hash_get(store, "mbr", mbr_id, "sector", (uint8_t*) &mbr_sector,
@@ -986,8 +1148,8 @@ int qemu_infer_sector_type(struct qemu_bdrv_write* write,
         return SECTOR_UNKNOWN;
     }
 
-    if (redis_hash_get(store, "mbr", mbr_id, "partitions", (uint8_t*) &active_partitions,
-                       &len))
+    if (redis_hash_get(store, "mbr", mbr_id, "partitions",
+                       (uint8_t*) &active_partitions, &len))
     {
         fprintf_light_red(stderr, "Error retrieving active partitions.\n");
         return SECTOR_UNKNOWN;
@@ -998,19 +1160,23 @@ int qemu_infer_sector_type(struct qemu_bdrv_write* write,
 
     for (i = 0; i < active_partitions; i++)
     {
-         if (redis_hash_get(store, "pte", i, "first_sector_lba", (uint8_t*) &first_sector,
-                            &len))
+         if (redis_hash_get(store, "pte", i, "first_sector_lba", (uint8_t*)
+                            &first_sector, &len))
          {
             fprintf_light_red(stderr, "Error retrieving first sector lba.\n");
             return SECTOR_UNKNOWN;
          }
 
-         if (redis_hash_get(store, "pte", i, "last_sector_lba", (uint8_t*) &last_sector,
-                            &len))
+         if (redis_hash_get(store, "pte", i, "final_sector_lba", (uint8_t*)
+                            &last_sector, &len))
          {
             fprintf_light_red(stderr, "Error retrieving last sector lba \n");
             return SECTOR_UNKNOWN;
          }
+
+         fprintf_light_cyan(stderr, "first_sector_lba: %"PRIu32
+                                    " last_sector_lba: %"PRIu32"\n",
+                                    first_sector, last_sector);
 
         if (write->header.sector_num <= last_sector &&
             write->header.sector_num >= first_sector)
@@ -1026,7 +1192,6 @@ int qemu_infer_sector_type(struct qemu_bdrv_write* write,
                 return SECTOR_UNKNOWN;
             }
 
-            block_size = ext2_block_size(super);
             blocks_per_block_group = super.s_blocks_per_group;
             sectors_per_block_group = blocks_per_block_group *
                                       (block_size / SECTOR_SIZE);
@@ -1048,7 +1213,8 @@ int qemu_infer_sector_type(struct qemu_bdrv_write* write,
                 bgd_start = start_sector + sectors_per_block_group * j;
                 bgd_end = bgd_start + sectors_per_block_group - 1;
                 len = sizeof(bgd);
-                if (redis_hash_get(store, "bgd", j, "bgd", (uint8_t*) &bgd, &len))
+                if (redis_hash_get(store, "bgd", j, "bgd", (uint8_t*) &(bgd),
+                                   &len))
                 {
                     fprintf_light_red(stderr, "Error retrieving bgd\n");
                     return SECTOR_UNKNOWN;
@@ -1082,114 +1248,6 @@ int qemu_infer_sector_type(struct qemu_bdrv_write* write,
    return SECTOR_UNKNOWN;
 }
 
-int qemu_print_write(struct qemu_bdrv_write* write)
-{
-    fprintf_light_blue(stdout, "brdv_write event\n");
-    fprintf_yellow(stdout, "\tsector_num: %0."PRId64"\n",
-                           write->header.sector_num);
-    fprintf_yellow(stdout, "\tnb_sectors: %d\n",
-                           write->header.nb_sectors);
-    fprintf_yellow(stdout, "\tdata buffer pointer (malloc()'d): %p\n",
-                           write->data);
-    return 0;
-}
-
-void print_ext2_file(struct ext2_file* file)
-{
-    fprintf_light_cyan(stdout, "-- ext2 File --\n");
-    fprintf_yellow(stdout, "file->inode_sector == %"PRIu64"\n",
-                            file->inode_sector);
-    fprintf_yellow(stdout, "file->inode_offset == %"PRIu64"\n",
-                            file->inode_offset);
-    fprintf_light_yellow(stdout, "file->path == %s\n", file->path);
-    fprintf_yellow(stdout, "file->is_dir == %s\n",
-                            file->is_dir ? "true" : "false");
-    fprintf_yellow(stdout, "file->inode == %p\n", &(file->inode));
-    if (file->sectors)
-        bst_print_tree(file->sectors, 0);
-    else
-        fprintf_light_blue(stdout, "No sectors -- empty file\n");
-}
-
-void print_ext2_bgd(struct ext2_bgd* bgd)
-{
-    fprintf_light_cyan(stdout, "-- ext2 BGD --\n");
-    fprintf_yellow(stdout, "bgd->bgd == %p\n", &(bgd->bgd));
-    fprintf_yellow(stdout, "bgd->sector == %"PRIu64"\n", bgd->sector);
-    fprintf_yellow(stdout, "bgd->block_bitmap_sector_start == %"PRIu64"\n",
-                            bgd->block_bitmap_sector_start);
-    fprintf_yellow(stdout, "bgd->block_bitmap_sector_end == %"PRIu64"\n",
-                            bgd->block_bitmap_sector_end);
-    fprintf_yellow(stdout, "bgd->inode_bitmap_sector_start == %"PRIu64"\n",
-                            bgd->inode_bitmap_sector_start);
-    fprintf_yellow(stdout, "bgd->inode_bitmap_sector_end == %"PRIu64"\n",
-                            bgd->inode_bitmap_sector_end);
-    fprintf_yellow(stdout, "bgd->inode_table_sector_start == %"PRIu64"\n",
-                            bgd->inode_table_sector_start);
-    fprintf_yellow(stdout, "bgd->inode_table_sector_end == %"PRIu64"\n",
-                            bgd->inode_table_sector_end);
-}
-
-void print_ext2_fs(struct ext2_fs* fs)
-{
-    struct ext2_bgd* bgd;
-    struct ext2_file* file;
-    uint64_t i;
-
-    fprintf_light_cyan(stdout, "-- ext2 FS --\n");
-    fprintf_yellow(stdout, "fs->fs_type %"PRIu64"\n", fs->fs_type);
-    fprintf_yellow(stdout, "fs->mount_point %s\n", fs->mount_point);
-    fprintf_yellow(stdout, "fs->num_block_groups %"PRIu64"\n",
-                            fs->num_block_groups);
-    fprintf_yellow(stdout, "fs->num_files %"PRIu64"\n", fs->num_files);
-    
-    for (i = 0; i < linkedlist_size(fs->ext2_bgds); i++)
-    {
-        bgd = linkedlist_get(fs->ext2_bgds, i);
-        print_ext2_bgd(bgd);
-    }
-
-    for (i = 0; i < linkedlist_size(fs->ext2_files); i++)
-    {
-        file = linkedlist_get(fs->ext2_files, i);
-        print_ext2_file(file);
-    }
-}
-
-void print_partition(struct linkedlist* pt)
-{
-    struct partition* pte;
-    uint64_t i;
-
-    for (i = 0; i < linkedlist_size(pt); i++)
-    {
-        pte = linkedlist_get(pt, i);
-        fprintf_light_cyan(stdout, "-- Partition --\n");
-        fprintf_yellow(stdout, "pte->pte_num == %"PRIu64"\n", pte->pte_num);
-        fprintf_yellow(stdout, "pte->partition_type == %"PRIu64"\n",
-                                pte->partition_type);
-        fprintf_yellow(stdout, "pte->first_sector_lba == %"PRIu64"\n",
-                                pte->first_sector_lba);
-        fprintf_yellow(stdout, "pte->final_sector_lba == %"PRIu64"\n",
-                                pte->final_sector_lba);
-        fprintf_yellow(stdout, "pte->sector == %"PRIu64"\n", pte->sector);
-        fprintf_yellow(stdout, "pte->fs == %p\n", &(pte->fs));
-        print_ext2_fs(&(pte->fs));
-    }
-}
-
-void print_mbr(struct mbr* mbr)
-{
-    fprintf_light_cyan(stdout, "-- MBR --\n");
-    fprintf_yellow(stdout, "mbr->gpt == %d\n", mbr->gpt);
-    fprintf_yellow(stdout, "mbr->sector == %"PRIu64"\n", mbr->sector);
-    fprintf_yellow(stdout, "mbr->active_partitions == %"PRIu64"\n",
-                            mbr->active_partitions);
-    fprintf_yellow(stdout, "mbr->pt == %p\n", mbr->pt);
-    print_partition(mbr->pt);
-}
-
-
 int __deserialize_mbr(FILE* index, struct bson_info* bson, struct mbr* mbr,
                       struct kv_store* store)
 {
@@ -1205,7 +1263,8 @@ int __deserialize_mbr(FILE* index, struct bson_info* bson, struct mbr* mbr,
         return EXIT_FAILURE;
 
     mbr->gpt = (uint8_t*)value1.data;
-    redis_hash_set(store, "mbr", 0, "gpt", ((uint8_t*)value1.data), sizeof(bool));
+    redis_hash_set(store, "mbr", 0, "gpt", ((uint8_t*)value1.data),
+                   sizeof(bool));
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1348,6 +1407,7 @@ int __deserialize_ext2_bgd(FILE* index, struct bson_info* bson, uint64_t id,
                            struct kv_store* store)
 {
     struct bson_kv value1, value2;
+    struct ext2_bgd bgd;
 
     if (bson_readf(bson, index) != 1)
         return EXIT_FAILURE;
@@ -1358,8 +1418,7 @@ int __deserialize_ext2_bgd(FILE* index, struct bson_info* bson, uint64_t id,
     if (strcmp(value1.key, "bgd") != 0)
         return EXIT_FAILURE;
 
-    redis_hash_set(store, "bgd", id, "bgd", ((uint8_t*)value1.data),
-                                    sizeof(struct ext2_block_group_descriptor));
+    memcpy(&(bgd.bgd), value1.data, sizeof(bgd.bgd));
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1367,8 +1426,7 @@ int __deserialize_ext2_bgd(FILE* index, struct bson_info* bson, uint64_t id,
     if (strcmp(value1.key, "sector") != 0)
         return EXIT_FAILURE;
 
-    redis_hash_set(store, "bgd", id, "sector", ((uint8_t*)value1.data),
-                                               sizeof(uint32_t));
+    bgd.sector = *((uint32_t*)value1.data);
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1376,8 +1434,7 @@ int __deserialize_ext2_bgd(FILE* index, struct bson_info* bson, uint64_t id,
     if (strcmp(value1.key, "block_bitmap_sector_start") != 0)
         return EXIT_FAILURE;
 
-    redis_hash_set(store, "bgd", id, "block_bitmap_sector_start", ((uint8_t*)value1.data),
-                                               sizeof(uint32_t));
+    bgd.block_bitmap_sector_start = *((uint32_t*)value1.data);
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1385,8 +1442,7 @@ int __deserialize_ext2_bgd(FILE* index, struct bson_info* bson, uint64_t id,
     if (strcmp(value1.key, "block_bitmap_sector_end") != 0)
         return EXIT_FAILURE;
 
-    redis_hash_set(store, "bgd", id, "block_bitmap_sector_end", ((uint8_t*)value1.data),
-                                               sizeof(uint32_t));
+    bgd.block_bitmap_sector_end = *((uint32_t*)value1.data);
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1394,8 +1450,7 @@ int __deserialize_ext2_bgd(FILE* index, struct bson_info* bson, uint64_t id,
     if (strcmp(value1.key, "inode_bitmap_sector_start") != 0)
         return EXIT_FAILURE;
 
-    redis_hash_set(store, "bgd", id, "inode_bitmap_sector_start", ((uint8_t*)value1.data),
-                                               sizeof(uint32_t));
+    bgd.inode_bitmap_sector_start = *((uint32_t*)value1.data);
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1403,8 +1458,7 @@ int __deserialize_ext2_bgd(FILE* index, struct bson_info* bson, uint64_t id,
     if (strcmp(value1.key, "inode_bitmap_sector_end") != 0)
         return EXIT_FAILURE;
 
-    redis_hash_set(store, "bgd", id, "inode_bitmap_sector_end", ((uint8_t*)value1.data),
-                                               sizeof(uint32_t));
+    bgd.inode_bitmap_sector_end = *((uint32_t*)value1.data);
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1412,8 +1466,7 @@ int __deserialize_ext2_bgd(FILE* index, struct bson_info* bson, uint64_t id,
     if (strcmp(value1.key, "inode_table_sector_start") != 0)
         return EXIT_FAILURE;
 
-    redis_hash_set(store, "bgd", id, "inode_table_sector_start", ((uint8_t*)value1.data),
-                                               sizeof(uint32_t));
+    bgd.inode_table_sector_start = *((uint32_t*)value1.data);
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1421,8 +1474,9 @@ int __deserialize_ext2_bgd(FILE* index, struct bson_info* bson, uint64_t id,
     if (strcmp(value1.key, "inode_table_sector_end") != 0)
         return EXIT_FAILURE;
 
-    redis_hash_set(store, "bgd", id, "inode_table_sector_end", ((uint8_t*)value1.data),
-                                               sizeof(uint32_t));
+    bgd.inode_table_sector_end = *((uint32_t*)value1.data);
+    fprintf_cyan(stdout, "Storing BGD[%"PRIu64"] in Redis.\n", id);
+    redis_hash_set(store, "bgd", id, "bgd", ((uint8_t*)&bgd), sizeof(bgd));
 
     return EXIT_SUCCESS;
 }
@@ -1559,7 +1613,7 @@ int qemu_load_index(FILE* index, struct mbr* mbr, struct kv_store* store)
 
         for (j = 0; j < num_block_groups; j++)
         {
-            if (__deserialize_ext2_bgd(index, bson, i, store))
+            if (__deserialize_ext2_bgd(index, bson, j, store))
             {
                 fprintf_light_red(stderr, "Error loading ext2_bgd document."
                                           "\n");

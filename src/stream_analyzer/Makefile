@@ -31,6 +31,7 @@ default:
 		 ../disk_analyzer/ext2/ext2.c \
 		 ../datastructures/bst.c \
 		 ../datastructures/linkedlist.c \
+		 ../disk_analyzer/ext4/ext4.c \
 		 deep_inspection.c \
 		 redis_queue.c \
 		 -lhiredis \
@@ -38,6 +39,7 @@ default:
 		 -Wall \
 		 -Werror \
 		 -I../disk_analyzer/ext2 \
+		 -I../disk_analyzer/ext4 \
 		 -I../disk_analyzer/mbr \
 		 -I../util \
 		 -I../bson \
@@ -46,8 +48,9 @@ default:
 		 #-DNOCOLOR
 
 test_ext4: clean default
-	@time ./inference_engine /tmp/ext4_test \
-		/tmp/ext4_vm.fifo \
+	@time ./inference_engine \
+		/home/wolf/Dropbox/Projects/xray/sample/ext4_index.bson \
+		/home/wolf/Dropbox/Projects/xray/sample/ext4_trace.bin \
 	    4 \
 		/home/wolf/VM/vm_ext4_test/vm_ext4_test.raw \
 		ext4_test_vm
