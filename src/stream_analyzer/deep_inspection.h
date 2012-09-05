@@ -21,14 +21,15 @@ enum SECTOR_TYPE
     SECTOR_EXT2_BLOCK_GROUP_BLOCKMAP = 4,
     SECTOR_EXT2_BLOCK_GROUP_INODEMAP = 5,
     SECTOR_EXT2_INODE = 6,
-    SECTOR_EXT2_DATA = 7
+    SECTOR_EXT2_DATA = 7,
+    SECTOR_EXT4_EXTENT = 8
 };
 
 struct qemu_bdrv_write_header
 {
     int64_t sector_num;
     int nb_sectors;
-}__attribute__((packed));
+} __attribute__((packed));
 
 struct qemu_bdrv_write
 {
@@ -43,8 +44,7 @@ struct mbr
     bool gpt;
     uint64_t sector;
     uint64_t active_partitions;
-    struct linkedlist* pt;
-};
+} __attribute__((packed));
 
 struct ext2_fs
 {
@@ -53,9 +53,7 @@ struct ext2_fs
     uint64_t num_block_groups;
     uint64_t num_files;
     struct ext2_superblock superblock;
-    struct linkedlist* ext2_bgds;
-    struct linkedlist* ext2_files;
-};
+} __attribute__((packed));
 
 struct partition
 {
@@ -65,16 +63,15 @@ struct partition
     uint64_t final_sector_lba;
     uint64_t sector;
     struct ext2_fs fs;
-};
+} __attribute__packed;
 
 struct ext2_file
 {
     uint64_t inode_sector;
     uint64_t inode_offset;
-    char* path;
     bool is_dir;
     struct ext2_inode inode;
-};
+} __attribute__((packed));
 
 struct ext2_bgd
 {
@@ -92,8 +89,9 @@ struct ext2_bgd
 void qemu_parse_header(uint8_t* data, struct qemu_bdrv_write* write);
 int qemu_load_index(FILE* index, struct mbr* mbr, struct kv_store* store);
 int qemu_print_write(struct qemu_bdrv_write* write);
-int qemu_infer_sector_type(struct qemu_bdrv_write* write, uint64_t mbr_id,
-                           struct kv_store* store, uint64_t block_size);
+enum SECTOR_TYPE qemu_infer_sector_type(struct qemu_bdrv_write* write, 
+                                        struct kv_store* store,
+                                        uint64_t block_size);
 int qemu_print_sector_type(enum SECTOR_TYPE type);
 uint64_t qemu_get_block_size(struct kv_store* store, uint64_t fs_id);
 int qemu_deep_inspect(struct qemu_bdrv_write* write, struct kv_store* store,

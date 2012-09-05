@@ -88,7 +88,7 @@ int read_loop(int fd, struct mbr* mbr, struct kv_store* store, char* vmname,
         }
 
         qemu_print_write(&write);
-        sector_type = qemu_infer_sector_type(&write, 0, store, block_size);
+        sector_type = qemu_infer_sector_type(&write, store, block_size);
         qemu_print_sector_type(sector_type);
         if (sector_type == SECTOR_EXT2_INODE ||
             sector_type == SECTOR_EXT2_DATA)
@@ -157,7 +157,6 @@ int main(int argc, char* args[])
         fprintf_light_red(stderr, "Error deserializing index.\n");
         return EXIT_FAILURE;
     }
-
  
     fprintf_cyan(stdout, "%s: attaching to stream: %s\n\n", vmname, stream);
 
@@ -181,6 +180,7 @@ int main(int argc, char* args[])
     block_size = qemu_get_block_size(handle, 0);
     ret = read_loop(fd, &mbr, handle, vmname, block_size);
     close(fd);
+    redis_flush_pipeline(handle);
     redis_shutdown(handle);
 
     return EXIT_SUCCESS;

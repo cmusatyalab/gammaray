@@ -5,7 +5,28 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define REDIS_DEFAULT_TIMEOUT 300 /* seconds; 5 minute default */
+
+#define REDIS_DATA_INSERT "SET sector:%"PRIu64" "\
+                          "start:%"PRIu64\
+                          "end:%"PRIu64\
+                          "inode:%"PRIu64
+
+#define REDIS_ENQUEUE_WRITE "SETEX sector:%"PRIu64" %d %b"
+#define REDIS_DEQUEUE_WRITE "GET sector:%"PRIu64
+#define REDIS_DEL_WRITE "DEL sector:%"PRIu64
+
+#define REDIS_PUBLISH "PUBLISH %s %b"
+
+#define REDIS_FCOUNTER "HINCR fcounter"
+
 /***** Helper Functions, not exposed *****/
+struct kv_store
+{
+    redisContext* connection;
+    uint64_t outstanding_pipelined_cmds;
+};
+
 int check_redis_return(redisContext* c, redisReply* reply)
 {
     if (reply == NULL || ((int) reply) == REDIS_ERR)
@@ -80,26 +101,15 @@ struct kv_store* redis_init(char* db)
     return handle;
 }
 
-int redis_enqueue(struct kv_store* handle, uint64_t sector_num,
-                  const uint8_t* data, size_t len)
-{
-    redisReply* reply;
-    reply = redisCommand(handle->connection, "SETEX %"PRIu64" %d %b",
-                                                                &sector_num,
-                                                                300,
-                                                                data, len);
-    return check_redis_return(handle->connection, reply);
-}
-
-/* defaults to 5 minutes timeout */
-void redis_enqueue_pipelined(struct kv_store* handle, uint64_t sector_num,
+int redis_enqueue_pipelined(struct kv_store* handle, uint64_t sector_num,
                             const uint8_t* data, size_t len)
 {
-    redisAppendCommand(handle->connection, "SETEX %"PRIu64" %d %b",
-                                                                   sector_num,
-                                                                   300,
-                                                                   data, len);
+    redisAppendCommand(handle->connection, REDIS_ENQUEUE_WRITE,
+                                           sector_num,
+                                           REDIS_DEFAULT_TIMEOUT,
+                                           data, len);
     handle->outstanding_pipelined_cmds++;
+
     if (handle->outstanding_pipelined_cmds >= 1000)
     {
         if (redis_flush_pipeline(handle))
@@ -107,14 +117,15 @@ void redis_enqueue_pipelined(struct kv_store* handle, uint64_t sector_num,
             assert(true);
         }
     }
+    return EXIT_SUCCESS;
 }
 
 int redis_publish(struct kv_store* handle, char* channel, uint8_t* data,
                   size_t len)
 {
     redisReply* reply;
-    reply = redisCommand(handle->connection, "PUBLISH %s %b", channel,
-                                                              data, len);
+    reply = redisCommand(handle->connection, REDIS_PUBLISH, channel, data,
+                                                                     len);
     return check_redis_return(handle->connection, reply);
 }
 
@@ -122,7 +133,7 @@ int redis_dequeue(struct kv_store* handle, uint64_t sector_num, uint8_t* data,
                   size_t* len)
 {
     redisReply* reply;
-    reply = redisCommand(handle->connection, "GET %"PRIu64, &sector_num);
+    reply = redisCommand(handle->connection, REDIS_DEQUEUE_WRITE, sector_num);
     if (reply->type == REDIS_REPLY_STRING &&
         reply->len > 0 &&
         reply->len <= *len)
@@ -135,28 +146,55 @@ int redis_dequeue(struct kv_store* handle, uint64_t sector_num, uint8_t* data,
         *len = 0;
     }
 
+    reply = redisCommand(handle->connection, REDIS_DEL_WRITE, sector_num);
+
     return check_redis_return(handle->connection, reply);
 }
 
-int redis_hash_set(struct kv_store* handle, char* keyspace, uint64_t id, char* field,
-                   uint8_t* data, size_t len)
+int redis_reverse_pointer_set(struct kv_store* handle, const char* fmt,
+                              uint64_t src, uint64_t dst)
 {
-    redisAppendCommand(handle->connection, "HSET %s:%"PRIu64" %s %b", keyspace,
-                                                                       id,
-                                                                       field,
-                                                                       data,
-                                                                       len);
+    redisAppendCommand(handle->connection, fmt,
+                                           src,
+                                           dst);
     handle->outstanding_pipelined_cmds++;
-    return 0;
+
+    if (handle->outstanding_pipelined_cmds >= 1000)
+    {
+        if (redis_flush_pipeline(handle))
+        {
+            assert(true);
+        }
+    }
+    return EXIT_SUCCESS;
 }
 
-int redis_hash_get(struct kv_store* handle, char* keyspace, uint64_t id,
-                   char* field, uint8_t* data, size_t* len)
+int redis_hash_field_set(struct kv_store* handle, const char* fmt,
+                         uint64_t src, char* field, uint8_t* data, size_t len)
+{
+    redisAppendCommand(handle->connection, fmt,
+                                           src,
+                                           field,
+                                           data,
+                                           len);
+    handle->outstanding_pipelined_cmds++;
+
+    if (handle->outstanding_pipelined_cmds >= 1000)
+    {
+        if (redis_flush_pipeline(handle))
+        {
+            assert(true);
+        }
+    }
+    return EXIT_SUCCESS;
+}
+
+int redis_hash_field_get(struct kv_store* handle, const char* fmt,
+                         uint64_t src, char* field, uint8_t* data, size_t* len)
 {
     redisReply* reply;
     redis_flush_pipeline(handle);
-    reply = redisCommand(handle->connection, "HGET %s:%"PRIu64" %s", keyspace,
-                                                                    id, field);
+    reply = redisCommand(handle->connection, fmt, src, field);
     if (reply->type == REDIS_REPLY_STRING &&
         reply->len > 0 &&
         reply->len <= *len)
@@ -172,46 +210,60 @@ int redis_hash_get(struct kv_store* handle, char* keyspace, uint64_t id,
     return check_redis_return(handle->connection, reply);
 }
 
-int redis_sector_lookup(struct kv_store* handle, uint64_t id, char* path,
-                        size_t* len)
+int redis_sector_lookup(struct kv_store* handle, uint64_t src,
+                        uint8_t* data, size_t* len)
 {
     redisReply* reply;
-    uint64_t inode = 0;
-    reply = redisCommand(handle->connection, "HGET sector:%"PRIu64" inode", id);
-
-    if (reply->type == REDIS_REPLY_STRING)
-       sscanf(reply->str, "%"SCNu64, &inode); 
-    else
-        return 1;
-
-    if (check_redis_return(handle->connection, reply))
-        return 1;
-
-    reply = redisCommand(handle->connection, "HGET file:%"PRIu64" path", inode);
-
+    redis_flush_pipeline(handle);
+    reply = redisCommand(handle->connection, REDIS_DEQUEUE_WRITE, src);
     if (reply->type == REDIS_REPLY_STRING &&
         reply->len > 0 &&
         reply->len <= *len)
     {
-        memcpy(path, reply->str, reply->len);
+        memcpy(data, reply->str, reply->len);
         *len = reply->len;
     }
     else
     {
-        fprintf(stderr, "Failed retrieving path [len=%zu].\n", reply->len);
         *len = 0;
     }
 
     return check_redis_return(handle->connection, reply);
 }
 
-int redis_add_sector_map(struct kv_store*handle, uint64_t id,
-                         uint64_t inode)
+int redis_reverse_file_data_pointer_set(struct kv_store* handle,
+                                        uint64_t src, uint64_t start,
+                                        uint64_t end, uint64_t dst)
 {
-    redisAppendCommand(handle->connection,
-                         "HSET sector:%"PRIu64" inode %"PRIu64, id, inode);
+    redisAppendCommand(handle->connection, REDIS_DATA_INSERT,
+                                           src,
+                                           start,
+                                           end,
+                                           dst);
     handle->outstanding_pipelined_cmds++;
-    return 0;
+
+    if (handle->outstanding_pipelined_cmds >= 1000)
+    {
+        if (redis_flush_pipeline(handle))
+        {
+            assert(true);
+        }
+    }
+    return EXIT_SUCCESS;
+}
+
+int redis_get_fcounter(struct kv_store* handle, uint64_t* counter)
+{
+    redisReply* reply;
+    redis_flush_pipeline(handle);
+    reply = redisCommand(handle->connection, REDIS_FCOUNTER);
+
+    if (reply->type == REDIS_REPLY_INTEGER)
+    {
+        *counter = reply->integer;
+    }
+
+    return check_redis_return(handle->connection, reply);
 }
 
 void redis_shutdown(struct kv_store* handle)

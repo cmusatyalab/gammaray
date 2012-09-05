@@ -74,7 +74,6 @@ void print_ext2_file(struct ext2_file* file)
                             file->inode_sector);
     fprintf_yellow(stdout, "file->inode_offset == %"PRIu64"\n",
                             file->inode_offset);
-    fprintf_light_yellow(stdout, "file->path == %s\n", file->path);
     fprintf_yellow(stdout, "file->is_dir == %s\n",
                             file->is_dir ? "true" : "false");
     fprintf_yellow(stdout, "file->inode == %p\n", &(file->inode));
@@ -101,28 +100,12 @@ void print_ext2_bgd(struct ext2_bgd* bgd)
 
 void print_ext2_fs(struct ext2_fs* fs)
 {
-    struct ext2_bgd* bgd;
-    struct ext2_file* file;
-    uint64_t i;
-
     fprintf_light_cyan(stdout, "-- ext2 FS --\n");
     fprintf_yellow(stdout, "fs->fs_type %"PRIu64"\n", fs->fs_type);
     fprintf_yellow(stdout, "fs->mount_point %s\n", fs->mount_point);
     fprintf_yellow(stdout, "fs->num_block_groups %"PRIu64"\n",
                             fs->num_block_groups);
     fprintf_yellow(stdout, "fs->num_files %"PRIu64"\n", fs->num_files);
-    
-    for (i = 0; i < linkedlist_size(fs->ext2_bgds); i++)
-    {
-        bgd = linkedlist_get(fs->ext2_bgds, i);
-        print_ext2_bgd(bgd);
-    }
-
-    for (i = 0; i < linkedlist_size(fs->ext2_files); i++)
-    {
-        file = linkedlist_get(fs->ext2_files, i);
-        print_ext2_file(file);
-    }
 }
 
 void print_partition(struct linkedlist* pt)
@@ -154,12 +137,7 @@ void print_mbr(struct mbr* mbr)
     fprintf_yellow(stdout, "mbr->sector == %"PRIu64"\n", mbr->sector);
     fprintf_yellow(stdout, "mbr->active_partitions == %"PRIu64"\n",
                             mbr->active_partitions);
-    fprintf_yellow(stdout, "mbr->pt == %p\n", mbr->pt);
-    print_partition(mbr->pt);
 }
-
-
-
 
 void qemu_parse_header(uint8_t* event_stream, struct qemu_bdrv_write* write)
 {
@@ -194,6 +172,8 @@ int qemu_print_sector_type(enum SECTOR_TYPE type)
         case SECTOR_EXT2_PARTITION:
             fprintf_light_green(stdout, "Write to ext2 partition detected.\n");
             return 0;
+        case SECTOR_EXT4_EXTENT:
+            fprintf_light_green(stdout, "Write to ext4 extents detected.\n");
         case SECTOR_UNKNOWN:
             fprintf_light_red(stdout, "Unknown sector type.\n");
     }
@@ -953,162 +933,33 @@ int qemu_deep_inspect(struct qemu_bdrv_write* write, struct kv_store* store,
                       char* vmname, uint64_t block_size)
 {
     uint32_t i;
-    char path[4096];
+    uint8_t lookup[1024];
     size_t len;
 
     for (i = 0; i < write->header.nb_sectors; i += block_size / SECTOR_SIZE)
     {
-        len = 4096;
-        if (redis_sector_lookup(store, write->header.sector_num + i, path, &len))
+        len = 1024;
+        if (redis_sector_lookup(store, write->header.sector_num + i, lookup, &len))
         {
             fprintf_light_red(stdout, "Unknown file path.\n");
             continue;
         }
 
-        path[len] = '\0';
-
         if (len)
         {
-            fprintf_light_green(stdout, "Write to path detected: '%s'\n",
-                                        path);
+            fprintf_light_green(stdout, "Write detected: '%s'\n", lookup);
         }
         else /* handling unknown write, send to queue */
         {
             for (i = 0; i < write->header.nb_sectors; i++)
             {
-                continue;
                 redis_enqueue_pipelined(store, write->header.sector_num + i,
                                                &(write->data[i*SECTOR_SIZE]),
                                                SECTOR_SIZE);
             }
-            redis_flush_pipeline(store);
-
         }
     }
     return EXIT_SUCCESS;
-}
-
-int __qemu_deep_inspect(struct qemu_bdrv_write* write, struct mbr* mbr,
-                        struct kv_store* store, char* vmname)
-{
-    uint64_t i, j, start = 0, end = 0;
-    uint64_t inode_offset;
-    char* channel_name;
-    struct partition* partition;
-    struct ext2_fs* fs;
-    struct ext2_file* file;
-    struct ext2_inode new_inode;
-    struct bson_info* bson;
-    struct bson_kv val;
-
-    for (i = 0; i < linkedlist_size(mbr->pt); i++)
-    {
-        partition = linkedlist_get(mbr->pt, i);
-        
-        if (write->header.sector_num <= partition->final_sector_lba &&
-            write->header.sector_num >= partition->first_sector_lba)
-        {
-            fs = &(partition->fs);
-            for (j = 0; j < linkedlist_size(fs->ext2_files); j++)
-            {
-                file = linkedlist_get(fs->ext2_files, j);
-
-                if (file->inode_sector >= write->header.sector_num &&
-                    file->inode_sector <= write->header.sector_num +
-                                          write->header.nb_sectors - 1)
-                {
-                    fprintf_light_red(stdout, "Write to sector %"PRIu64
-                                              " containing inode for file "
-                                              "%s\n", file->inode_sector,
-                                              file->path);
-
-                    inode_offset = (file->inode_sector -
-                                    write->header.sector_num) * 512;
-                    inode_offset += file->inode_offset;
-
-                    new_inode = *((struct ext2_inode*)
-                                  &(write->data[inode_offset]));
-
-                    /* compare inode, emit diff */
-                    ext2_compare_inodes(&(file->inode), &new_inode, store,
-                                        vmname, file->path);
-                    return SECTOR_EXT2_PARTITION;
-                }
-
-                if (bst_find(NULL, write->header.sector_num))
-                {
-                    fprintf_light_red(stdout, "Write to sector %"PRId64
-                                              " modifying %s\n",
-                                              write->header.sector_num,
-                                              file->path);
-                    if (file->is_dir)
-                    {
-                        fprintf_light_green(stdout, "Directory modification."
-                                                    "\n");
-                        return SECTOR_EXT2_PARTITION;
-                    }
-
-                    if (!file->is_dir)
-                    {
-                        bson = bson_init();
-
-                        val.type = BSON_STRING;
-                        val.size = strlen(FILE_DATA_WRITE); 
-                        val.key = "type";
-                        val.data = FILE_DATA_WRITE;
-
-                        bson_serialize(bson, &val);
-
-                        val.type = BSON_INT64;
-                        val.key = "start_byte";
-                        val.data = &start;
-
-                        bson_serialize(bson, &val);
-
-                        val.type = BSON_INT64;
-                        val.key = "end_byte";
-                        val.data = &end;
-
-                        bson_serialize(bson, &val);
-
-                        val.type = BSON_BINARY;
-                        val.subtype = BSON_BINARY_GENERIC;
-                        val.key = "data";
-                        val.data = write->data;
-                        val.size = write->header.nb_sectors * SECTOR_SIZE;
-
-                        bson_serialize(bson, &val);
-                        bson_finalize(bson);
-
-                        channel_name = construct_channel_name(vmname,
-                                                              file->path);
-
-                        if (redis_publish(store, channel_name, bson->buffer,
-                                          bson->position))
-                        {
-                            fprintf_light_red(stderr, "Failure publishing "
-                                                      "Redis message.\n");
-                            return -1;
-                        }
-
-                        free(channel_name);
-                        bson_reset(bson);
-                        return SECTOR_EXT2_PARTITION;
-                    } /* is not dir */
-                } /* if is in file */
-            } /* loop on files */
-        } /* if in partition */
-    } /* loop on partitions */
-
-    /* handling unknown write, send to queue */
-    for (i = 0; i < write->header.nb_sectors; i++)
-    {
-        redis_enqueue_pipelined(store, write->header.sector_num + i,
-                                       &(write->data[i*SECTOR_SIZE]),
-                                       SECTOR_SIZE);
-    }
-    redis_flush_pipeline(store);
-   return 0;
 }
 
 uint64_t qemu_get_block_size(struct kv_store* store, uint64_t fs_id)
@@ -1116,8 +967,8 @@ uint64_t qemu_get_block_size(struct kv_store* store, uint64_t fs_id)
     struct ext2_superblock super;
     size_t len = sizeof(super);
 
-    if (redis_hash_get(store, "fs", fs_id, "superblock", (uint8_t*) &super,
-                       &len))
+    if (redis_hash_field_get(store, REDIS_SUPERBLOCK_SECTOR_GET,
+                             fs_id, "superblock", (uint8_t*) &super, &len))
     {
         fprintf_light_red(stderr, "Error retrieving superblock\n");
         return 0;
@@ -1126,6 +977,62 @@ uint64_t qemu_get_block_size(struct kv_store* store, uint64_t fs_id)
     return ext2_block_size(super);
 }
 
+enum SECTOR_TYPE __sector_type(const char* str)
+{
+    if (strncmp(str, "start", strlen("start")) == 0)
+        return SECTOR_EXT2_DATA;
+    else if(strncmp(str, "superblock", strlen("superblock")))
+        return SECTOR_EXT2_SUPERBLOCK;
+    else if(strncmp(str, "mbr", strlen("mbr")))
+        return SECTOR_MBR;
+    else if(strncmp(str, "lbgds", strlen("lbgds")))
+        return SECTOR_EXT2_BLOCK_GROUP_DESCRIPTOR;
+    else if(strncmp(str, "linodes", strlen("linodes")))
+        return SECTOR_EXT2_INODE;
+    else if(strncmp(str, "bgd", strlen("bgd")))
+        return SECTOR_EXT2_BLOCK_GROUP_BLOCKMAP |
+               SECTOR_EXT2_BLOCK_GROUP_INODEMAP;
+    else if(strncmp(str, "lextents", strlen("lextents")))
+        return SECTOR_EXT4_EXTENT;
+    fprintf_light_red(stderr, "Redis returned unknown sector type [%s]\n",
+                                                                    str);
+    return SECTOR_UNKNOWN;
+}
+
+enum SECTOR_TYPE qemu_infer_sector_type(struct qemu_bdrv_write* write,
+                                        struct kv_store* store,
+                                        uint64_t block_size)
+{
+    uint64_t i, id;
+    uint8_t result[1024];
+    size_t len = 1024;
+
+    for (i = 0; i < write->header.nb_sectors; i += block_size / SECTOR_SIZE)
+    {
+        if (redis_sector_lookup(store, write->header.sector_num + i,
+            result, &len))
+        {
+            fprintf_light_red(stderr, "Error doing sector lookup.\n");
+            return SECTOR_UNKNOWN;
+        } 
+
+        if (len)
+        {
+            sscanf((const char*) result, "%s:%"SCNu64, result, &id);
+            fprintf_light_green(stdout, "Inference got: %s:%"PRIu64"\n",
+                                                        result, id);
+            return __sector_type((const char*) result);
+        }
+        else
+        {
+            return SECTOR_UNKNOWN;
+        }
+    }
+
+    return SECTOR_UNKNOWN;
+}
+
+/*
 int qemu_infer_sector_type(struct qemu_bdrv_write* write, 
                            uint64_t mbr_id, struct kv_store* store,
                            uint64_t block_size)
@@ -1218,7 +1125,8 @@ int qemu_infer_sector_type(struct qemu_bdrv_write* write,
                 {
                     fprintf_light_red(stderr, "Error retrieving bgd\n");
                     return SECTOR_UNKNOWN;
-                }
+    
+            }
 
                 if (write->header.sector_num == bgd.sector)
                     return SECTOR_EXT2_BLOCK_GROUP_DESCRIPTOR;
@@ -1246,7 +1154,7 @@ int qemu_infer_sector_type(struct qemu_bdrv_write* write,
     }
 
    return SECTOR_UNKNOWN;
-}
+}*/
 
 int __deserialize_mbr(FILE* index, struct bson_info* bson, struct mbr* mbr,
                       struct kv_store* store)
@@ -1263,8 +1171,6 @@ int __deserialize_mbr(FILE* index, struct bson_info* bson, struct mbr* mbr,
         return EXIT_FAILURE;
 
     mbr->gpt = (uint8_t*)value1.data;
-    redis_hash_set(store, "mbr", 0, "gpt", ((uint8_t*)value1.data),
-                   sizeof(bool));
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1273,8 +1179,9 @@ int __deserialize_mbr(FILE* index, struct bson_info* bson, struct mbr* mbr,
         return EXIT_FAILURE;
 
     mbr->sector = *((uint32_t*)value1.data);
-    redis_hash_set(store, "mbr", 0, "sector", ((uint8_t*)value1.data),
-                                              sizeof(uint32_t));
+    redis_hash_field_set(store, REDIS_MBR_SECTOR_INSERT,
+                         mbr->sector, "gpt", ((uint8_t*) &(mbr->gpt)),
+                         sizeof(bool));
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1283,15 +1190,15 @@ int __deserialize_mbr(FILE* index, struct bson_info* bson, struct mbr* mbr,
         return EXIT_FAILURE;
 
     mbr->active_partitions = *((uint32_t*)value1.data);
-    redis_hash_set(store, "mbr", 0, "partitions", ((uint8_t*)value1.data),
-                                                  sizeof(uint32_t));
+    redis_hash_field_set(store, REDIS_MBR_SECTOR_INSERT,
+                         mbr->sector, "partitions", ((uint8_t*)value1.data),
+                         sizeof(uint32_t));
     return EXIT_SUCCESS;
 }
 
 int __deserialize_partition(FILE* index, struct bson_info* bson,
                             struct kv_store* store)
 {
-    uint64_t pte_num;
     struct bson_kv value1, value2;
 
     if (bson_readf(bson, index) != 1)
@@ -1303,25 +1210,17 @@ int __deserialize_partition(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "pte_num") != 0)
         return EXIT_FAILURE;
 
-    pte_num = (uint64_t) *((uint32_t*) value1.data);
-
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
     
     if (strcmp(value1.key, "partition_type") != 0)
         return EXIT_FAILURE;
 
-    redis_hash_set(store, "pte", pte_num, "partition_type", ((uint8_t*)value1.data),
-                                                  sizeof(uint32_t));
-    
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
     
     if (strcmp(value1.key, "first_sector_lba") != 0)
         return EXIT_FAILURE;
-
-    redis_hash_set(store, "pte", pte_num, "first_sector_lba", ((uint8_t*)value1.data),
-                                                  sizeof(uint32_t));
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1329,17 +1228,12 @@ int __deserialize_partition(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "final_sector_lba") != 0)
         return EXIT_FAILURE;
 
-    redis_hash_set(store, "pte", pte_num, "final_sector_lba", ((uint8_t*)value1.data),
-                                                  sizeof(uint32_t));
-    
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
     
     if (strcmp(value1.key, "sector") != 0)
         return EXIT_FAILURE;
 
-    redis_hash_set(store, "pte", pte_num, "sector", ((uint8_t*)value1.data),
-                                                  sizeof(uint32_t));
     return EXIT_SUCCESS;
 }
 
@@ -1361,16 +1255,13 @@ int __deserialize_ext2_fs(FILE* index, struct bson_info* bson,
         *((uint32_t*)value1.data) != 1)
         return EXIT_FAILURE;
 
-    redis_hash_set(store, "fs", 0, "fs_type", ((uint8_t*)value1.data),
-                                                  sizeof(uint32_t));
-
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
     
     if (strcmp(value1.key, "mount_point") != 0)
         return EXIT_FAILURE;
 
-    redis_hash_set(store, "fs", 0, "mount_point", ((uint8_t*)value1.data),
+    redis_hash_field_set(store, REDIS_SUPERBLOCK_SECTOR_INSERT, 0, "mount_point", ((uint8_t*)value1.data),
                                                   strlen(value1.data) + 1);
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
@@ -1379,7 +1270,7 @@ int __deserialize_ext2_fs(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "num_block_groups") != 0)
         return EXIT_FAILURE;
 
-    redis_hash_set(store, "fs", 0, "num_block_groups", ((uint8_t*)value1.data),
+    redis_hash_field_set(store, REDIS_SUPERBLOCK_SECTOR_INSERT, 0, "num_block_groups", ((uint8_t*)value1.data),
                                                   sizeof(uint32_t));
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
@@ -1388,7 +1279,7 @@ int __deserialize_ext2_fs(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "num_files") != 0)
         return EXIT_FAILURE;
 
-    redis_hash_set(store, "fs", 0, "num_files", ((uint8_t*)value1.data),
+    redis_hash_field_set(store, REDIS_SUPERBLOCK_SECTOR_INSERT, 0, "num_files", ((uint8_t*)value1.data),
                                                   sizeof(uint32_t));
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
@@ -1396,9 +1287,6 @@ int __deserialize_ext2_fs(FILE* index, struct bson_info* bson,
     
     if (strcmp(value1.key, "superblock") != 0)
         return EXIT_FAILURE;
-
-    redis_hash_set(store, "fs", 0, "superblock", ((uint8_t*)value1.data),
-                                                  sizeof(struct ext2_superblock));
 
     return EXIT_SUCCESS;
 }
@@ -1476,15 +1364,21 @@ int __deserialize_ext2_bgd(FILE* index, struct bson_info* bson, uint64_t id,
 
     bgd.inode_table_sector_end = *((uint32_t*)value1.data);
     fprintf_cyan(stdout, "Storing BGD[%"PRIu64"] in Redis.\n", id);
-    redis_hash_set(store, "bgd", id, "bgd", ((uint8_t*)&bgd), sizeof(bgd));
 
+    redis_hash_field_set(store, REDIS_BGD_SECTOR_INSERT, id,
+                         "bgd", ((uint8_t*) &bgd), sizeof(bgd));
+    redis_reverse_pointer_set(store, REDIS_BGDS_INSERT, bgd.sector, id);
+    redis_reverse_pointer_set(store, REDIS_BGDS_SECTOR_INSERT, bgd.sector,
+                                                               bgd.sector);
     return EXIT_SUCCESS;
 }
 
 int __deserialize_ext2_file(FILE* index, struct bson_info* bson,
                             uint64_t id, struct kv_store* store)
 {
+    struct ext2_file file;
     struct bson_kv value1, value2;
+    uint64_t counter = 0;
 
     if (bson_readf(bson, index) != 1)
         return EXIT_FAILURE;
@@ -1495,8 +1389,7 @@ int __deserialize_ext2_file(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "inode_sector") != 0)
         return EXIT_FAILURE;
 
-    redis_hash_set(store, "file", id, "inode_sector", ((uint8_t*)value1.data),
-                                               sizeof(uint32_t));
+    file.inode_sector = *((uint32_t*) value1.data);
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1504,8 +1397,7 @@ int __deserialize_ext2_file(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "inode_offset") != 0)
         return EXIT_FAILURE;
 
-    redis_hash_set(store, "file", id, "inode_offset", ((uint8_t*)value1.data),
-                                               sizeof(uint32_t));
+    file.inode_offset = *((uint32_t*) value1.data);
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1513,7 +1405,8 @@ int __deserialize_ext2_file(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "path") != 0)
         return EXIT_FAILURE;
 
-    redis_hash_set(store, "file", id, "path", ((uint8_t*)value1.data),
+    redis_hash_field_set(store, REDIS_INODE_SECTOR_INSERT, id, "path",
+                                               ((uint8_t*)value1.data),
                                                strlen(value1.data) + 1);
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
@@ -1522,8 +1415,7 @@ int __deserialize_ext2_file(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "is_dir") != 0)
         return EXIT_FAILURE;
 
-    redis_hash_set(store, "file", id, "is_dir", ((uint8_t*)value1.data),
-                                               sizeof(bool));
+    file.is_dir = *((bool*) value1.data);
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1531,8 +1423,7 @@ int __deserialize_ext2_file(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "inode") != 0)
         return EXIT_FAILURE;
 
-    redis_hash_set(store, "file", id, "inode", ((uint8_t*)value1.data),
-                                               sizeof(struct ext2_inode));
+    file.inode = *((struct ext2_inode*) value1.data);
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1551,23 +1442,32 @@ int __deserialize_ext2_file(FILE* index, struct bson_info* bson,
 
     /* at least 1 sector */
     if (bson_deserialize(bson, &value1, &value2) == 1)
-    { 
-        redis_add_sector_map(store, (uint64_t) *((uint32_t*)value1.data), id);
+    {
+        redis_reverse_file_data_pointer_set(store, (uint64_t) *((uint32_t*)value1.data),
+                                            counter, (uint64_t) counter + SECTOR_SIZE, id);
+        counter += SECTOR_SIZE;
     }
 
     while (bson_deserialize(bson, &value1, &value2) == 1)
     {
-        redis_add_sector_map(store, (uint64_t) *((uint32_t*)value1.data), id);
+        redis_reverse_file_data_pointer_set(store, (uint64_t) *((uint32_t*)value1.data),
+                                            counter, counter + SECTOR_SIZE, id);
+        counter += SECTOR_SIZE;
     }
 
     bson_cleanup(bson);
 
+    redis_hash_field_set(store, REDIS_INODE_SECTOR_INSERT, id,
+                         "inode", ((uint8_t*) &file), sizeof(file));
+    redis_reverse_pointer_set(store, REDIS_INODES_INSERT, file.inode_sector, id);
+    redis_reverse_pointer_set(store, REDIS_INODES_SECTOR_INSERT, file.inode_sector,
+                                                                 file.inode_sector);
     return EXIT_SUCCESS;
 }
 
 int qemu_load_index(FILE* index, struct mbr* mbr, struct kv_store* store)
 {
-    uint64_t i, j;
+    uint64_t i, j, counter = 0;
     uint32_t num_block_groups, num_files;
     size_t len;
     struct bson_info* bson;
@@ -1603,7 +1503,7 @@ int qemu_load_index(FILE* index, struct mbr* mbr, struct kv_store* store)
 
         len = sizeof(num_block_groups);
 
-        if (redis_hash_get(store, "fs", i, "num_block_groups",
+        if (redis_hash_field_get(store, REDIS_SUPERBLOCK_SECTOR_GET, 0, "num_block_groups",
                            (uint8_t*) &num_block_groups, &len))
         {
             fprintf_light_red(stderr, "Error retrieving num_block_groups "
@@ -1623,7 +1523,7 @@ int qemu_load_index(FILE* index, struct mbr* mbr, struct kv_store* store)
 
         len = sizeof(num_files);
         
-        if (redis_hash_get(store, "fs", i, "num_files",
+        if (redis_hash_field_get(store, REDIS_SUPERBLOCK_SECTOR_GET, 0, "num_files",
                            (uint8_t*) &num_files, &len))
         {
             fprintf_light_red(stderr, "Error retrieving num_files "
@@ -1633,7 +1533,13 @@ int qemu_load_index(FILE* index, struct mbr* mbr, struct kv_store* store)
 
         for (j = 0; j < num_files; j++)
         {
-            if (__deserialize_ext2_file(index, bson, j, store))
+            if (redis_get_fcounter(store, &counter))
+            {
+                fprintf_light_red(stderr, "Error getting file counter.\n");
+                break;
+            }
+
+            if (__deserialize_ext2_file(index, bson, counter, store))
             {
                 fprintf_light_red(stderr, "Error loading ext2_file document."
                                           "\n");
@@ -1641,6 +1547,8 @@ int qemu_load_index(FILE* index, struct mbr* mbr, struct kv_store* store)
                                           "file records.\n");
                 break;
             }
+            redis_shutdown(store);
+            exit(0);
         }
 
         redis_flush_pipeline(store);
