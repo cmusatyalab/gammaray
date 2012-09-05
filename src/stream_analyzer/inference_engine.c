@@ -22,7 +22,8 @@
 
 #define SECTOR_SIZE 512 
 
-int read_loop(int fd, struct mbr* mbr, struct kv_store* store, char* vmname)
+int read_loop(int fd, struct mbr* mbr, struct kv_store* store, char* vmname,
+              uint64_t block_size)
 {
     uint8_t buf[QEMU_HEADER_SIZE];
     int64_t total = 0, read_ret = 0;
@@ -87,11 +88,11 @@ int read_loop(int fd, struct mbr* mbr, struct kv_store* store, char* vmname)
         }
 
         qemu_print_write(&write);
-        sector_type = qemu_infer_sector_type(&write, 0, store);
+        sector_type = qemu_infer_sector_type(&write, 0, store, block_size);
         qemu_print_sector_type(sector_type);
         if (sector_type == SECTOR_EXT2_INODE ||
             sector_type == SECTOR_EXT2_DATA)
-            qemu_deep_inspect(&write, mbr, store, vmname);
+            qemu_deep_inspect(&write, store, vmname, block_size);
         free((void*) write.data);
         fflush(stdout);
     }
@@ -110,6 +111,7 @@ void print_hiredis_version()
 int main(int argc, char* args[])
 {
     int fd, ret;
+    uint64_t block_size;
     char* index, *db, *stream, *vmname;
     struct mbr mbr;
     FILE* indexf;
@@ -176,7 +178,8 @@ int main(int argc, char* args[])
     }
 
     fclose(indexf);
-    ret = read_loop(fd, &mbr, handle, vmname);
+    block_size = qemu_get_block_size(handle, 0);
+    ret = read_loop(fd, &mbr, handle, vmname, block_size);
     close(fd);
     redis_shutdown(handle);
 
