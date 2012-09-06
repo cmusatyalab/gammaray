@@ -4,6 +4,7 @@
 #include "bst.h"
 #include "linkedlist.h"
 #include "ext2.h"
+#include "ext4.h"
 #include "mbr.h"
 #include "redis_queue.h"
 
@@ -48,13 +49,13 @@ struct mbr
     struct disk_mbr mbr;
 } __attribute__((packed));
 
-struct ext2_fs
+struct ext4_fs
 {
     uint64_t fs_type;
     char* mount_point;
     uint64_t num_block_groups;
     uint64_t num_files;
-    struct ext2_superblock superblock;
+    struct ext4_superblock superblock;
 } __attribute__((packed));
 
 struct partition
@@ -64,20 +65,20 @@ struct partition
     uint64_t first_sector_lba;
     uint64_t final_sector_lba;
     uint64_t sector;
-    struct ext2_fs fs;
+    struct ext4_fs fs;
 } __attribute__packed;
 
-struct ext2_file
+struct ext4_file
 {
     uint64_t inode_sector;
     uint64_t inode_offset;
     bool is_dir;
-    struct ext2_inode inode;
+    struct ext4_inode inode;
 } __attribute__((packed));
 
-struct ext2_bgd
+struct ext4_bgd
 {
-    struct ext2_block_group_descriptor bgd;
+    struct ext4_block_group_descriptor bgd;
     uint64_t sector;
     uint64_t block_bitmap_sector_start;
     uint64_t block_bitmap_sector_end;

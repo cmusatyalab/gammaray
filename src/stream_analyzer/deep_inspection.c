@@ -67,9 +67,9 @@ int qemu_print_write(struct qemu_bdrv_write* write)
     return 0;
 }
 
-void print_ext2_file(struct ext2_file* file)
+void print_ext4_file(struct ext4_file* file)
 {
-    fprintf_light_cyan(stdout, "-- ext2 File --\n");
+    fprintf_light_cyan(stdout, "-- ext4 File --\n");
     fprintf_yellow(stdout, "file->inode_sector == %"PRIu64"\n",
                             file->inode_sector);
     fprintf_yellow(stdout, "file->inode_offset == %"PRIu64"\n",
@@ -79,9 +79,9 @@ void print_ext2_file(struct ext2_file* file)
     fprintf_yellow(stdout, "file->inode == %p\n", &(file->inode));
 }
 
-void print_ext2_bgd(struct ext2_bgd* bgd)
+void print_ext4_bgd(struct ext4_bgd* bgd)
 {
-    fprintf_light_cyan(stdout, "-- ext2 BGD --\n");
+    fprintf_light_cyan(stdout, "-- ext4 BGD --\n");
     fprintf_yellow(stdout, "bgd->bgd == %p\n", &(bgd->bgd));
     fprintf_yellow(stdout, "bgd->sector == %"PRIu64"\n", bgd->sector);
     fprintf_yellow(stdout, "bgd->block_bitmap_sector_start == %"PRIu64"\n",
@@ -98,9 +98,9 @@ void print_ext2_bgd(struct ext2_bgd* bgd)
                             bgd->inode_table_sector_end);
 }
 
-void print_ext2_fs(struct ext2_fs* fs)
+void print_ext4_fs(struct ext4_fs* fs)
 {
-    fprintf_light_cyan(stdout, "-- ext2 FS --\n");
+    fprintf_light_cyan(stdout, "-- ext4 FS --\n");
     fprintf_yellow(stdout, "fs->fs_type %"PRIu64"\n", fs->fs_type);
     fprintf_yellow(stdout, "fs->mount_point %s\n", fs->mount_point);
     fprintf_yellow(stdout, "fs->num_block_groups %"PRIu64"\n",
@@ -126,7 +126,7 @@ void print_partition(struct linkedlist* pt)
                                 pte->final_sector_lba);
         fprintf_yellow(stdout, "pte->sector == %"PRIu64"\n", pte->sector);
         fprintf_yellow(stdout, "pte->fs == %p\n", &(pte->fs));
-        print_ext2_fs(&(pte->fs));
+        print_ext4_fs(&(pte->fs));
     }
 }
 
@@ -152,25 +152,25 @@ int qemu_print_sector_type(enum SECTOR_TYPE type)
             fprintf_light_green(stdout, "Write to MBR detected.\n");
             return 0;
         case SECTOR_EXT2_SUPERBLOCK:
-            fprintf_light_green(stdout, "Write to ext2 superblock detected.\n");
+            fprintf_light_green(stdout, "Write to ext4 superblock detected.\n");
             return 0;
         case SECTOR_EXT2_BLOCK_GROUP_DESCRIPTOR:
-            fprintf_light_green(stdout, "Write to ext2 block group descriptor detected.\n");
+            fprintf_light_green(stdout, "Write to ext4 block group descriptor detected.\n");
             return 0;
         case SECTOR_EXT2_BLOCK_GROUP_BLOCKMAP:
-            fprintf_light_green(stdout, "Write to ext2 block group block map detected.\n");
+            fprintf_light_green(stdout, "Write to ext4 block group block map detected.\n");
             return 0;
         case SECTOR_EXT2_BLOCK_GROUP_INODEMAP:
-            fprintf_light_green(stdout, "Write to ext2 block group inode map detected.\n");
+            fprintf_light_green(stdout, "Write to ext4 block group inode map detected.\n");
             return 0;
         case SECTOR_EXT2_INODE:
-            fprintf_light_green(stdout, "Write to ext2 inode detected.\n");
+            fprintf_light_green(stdout, "Write to ext4 inode detected.\n");
             return 0;
         case SECTOR_EXT2_DATA:
-            fprintf_light_green(stdout, "Write to ext2 data block detected.\n");
+            fprintf_light_green(stdout, "Write to ext4 data block detected.\n");
             return 0;
         case SECTOR_EXT2_PARTITION:
-            fprintf_light_green(stdout, "Write to ext2 partition detected.\n");
+            fprintf_light_green(stdout, "Write to ext4 partition detected.\n");
             return 0;
         case SECTOR_EXT4_EXTENT:
             fprintf_light_green(stdout, "Write to ext4 extents detected.\n");
@@ -180,6 +180,7 @@ int qemu_print_sector_type(enum SECTOR_TYPE type)
 
     return -1;
 }
+
 
 int ext2_compare_inodes(struct ext2_inode* old_inode,
                         struct ext2_inode* new_inode, struct kv_store* store,
@@ -964,7 +965,7 @@ int qemu_deep_inspect(struct qemu_bdrv_write* write, struct kv_store* store,
 
 uint64_t qemu_get_block_size(struct kv_store* store, uint64_t fs_id)
 {
-    struct ext2_superblock super;
+    struct ext4_superblock super;
     size_t len = sizeof(super);
 
     if (redis_hash_field_get(store, REDIS_SUPERBLOCK_SECTOR_GET,
@@ -974,7 +975,7 @@ uint64_t qemu_get_block_size(struct kv_store* store, uint64_t fs_id)
         return 0;
     }
 
-    return ext2_block_size(super);
+    return ext4_block_size(super);
 }
 
 enum SECTOR_TYPE __sector_type(const char* str)
@@ -1237,7 +1238,7 @@ int __deserialize_partition(FILE* index, struct bson_info* bson,
     return EXIT_SUCCESS;
 }
 
-int __deserialize_ext2_fs(FILE* index, struct bson_info* bson,
+int __deserialize_ext4_fs(FILE* index, struct bson_info* bson,
                           struct kv_store* store)
 {
     struct bson_kv value1, value2;
@@ -1291,11 +1292,11 @@ int __deserialize_ext2_fs(FILE* index, struct bson_info* bson,
     return EXIT_SUCCESS;
 }
 
-int __deserialize_ext2_bgd(FILE* index, struct bson_info* bson, uint64_t id,
+int __deserialize_ext4_bgd(FILE* index, struct bson_info* bson, uint64_t id,
                            struct kv_store* store)
 {
     struct bson_kv value1, value2;
-    struct ext2_bgd bgd;
+    struct ext4_bgd bgd;
 
     if (bson_readf(bson, index) != 1)
         return EXIT_FAILURE;
@@ -1373,10 +1374,10 @@ int __deserialize_ext2_bgd(FILE* index, struct bson_info* bson, uint64_t id,
     return EXIT_SUCCESS;
 }
 
-int __deserialize_ext2_file(FILE* index, struct bson_info* bson,
+int __deserialize_ext4_file(FILE* index, struct bson_info* bson,
                             uint64_t id, struct kv_store* store)
 {
-    struct ext2_file file;
+    struct ext4_file file;
     struct bson_kv value1, value2;
     uint64_t counter = 0;
 
@@ -1423,7 +1424,7 @@ int __deserialize_ext2_file(FILE* index, struct bson_info* bson,
     if (strcmp(value1.key, "inode") != 0)
         return EXIT_FAILURE;
 
-    file.inode = *((struct ext2_inode*) value1.data);
+    file.inode = *((struct ext4_inode*) value1.data);
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
@@ -1495,9 +1496,9 @@ int qemu_load_index(FILE* index, struct mbr* mbr, struct kv_store* store)
         }
 
 
-        if (__deserialize_ext2_fs(index, bson, store))
+        if (__deserialize_ext4_fs(index, bson, store))
         {
-            fprintf_light_red(stderr, "Error loading ext2_fs document.\n");
+            fprintf_light_red(stderr, "Error loading ext4_fs document.\n");
             return EXIT_FAILURE;
         }
 
@@ -1513,9 +1514,9 @@ int qemu_load_index(FILE* index, struct mbr* mbr, struct kv_store* store)
 
         for (j = 0; j < num_block_groups; j++)
         {
-            if (__deserialize_ext2_bgd(index, bson, j, store))
+            if (__deserialize_ext4_bgd(index, bson, j, store))
             {
-                fprintf_light_red(stderr, "Error loading ext2_bgd document."
+                fprintf_light_red(stderr, "Error loading ext4_bgd document."
                                           "\n");
                 return EXIT_FAILURE;
             }
@@ -1533,23 +1534,18 @@ int qemu_load_index(FILE* index, struct mbr* mbr, struct kv_store* store)
 
         for (j = 0; j < num_files; j++)
         {
-            if (redis_get_fcounter(store, &counter))
-            {
-                fprintf_light_red(stderr, "Error getting file counter.\n");
-                break;
-            }
 
-            if (__deserialize_ext2_file(index, bson, counter, store))
+            if (__deserialize_ext4_file(index, bson, j, store))
             {
-                fprintf_light_red(stderr, "Error loading ext2_file document."
+                fprintf_light_red(stderr, "Error loading ext4_file document."
                                           "\n");
                 fprintf_light_red(stderr, "Assuming early termination of "
                                           "file records.\n");
                 break;
             }
-            redis_shutdown(store);
-            exit(0);
         }
+
+        redis_set_fcounter(store, j+1);
 
         redis_flush_pipeline(store);
     } 
