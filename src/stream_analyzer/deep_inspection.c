@@ -1468,7 +1468,7 @@ int __deserialize_ext4_file(FILE* index, struct bson_info* bson,
 
 int qemu_load_index(FILE* index, struct mbr* mbr, struct kv_store* store)
 {
-    uint64_t i, j, counter = 0;
+    uint64_t i, j;
     uint32_t num_block_groups, num_files;
     size_t len;
     struct bson_info* bson;

@@ -19,6 +19,7 @@
 #define REDIS_PUBLISH "PUBLISH %s %b"
 
 #define REDIS_FCOUNTER "HINCR fcounter"
+#define REDIS_FCOUNTER_SET "SET fcounter %"PRIu64
 
 /***** Helper Functions, not exposed *****/
 struct kv_store
@@ -262,6 +263,15 @@ int redis_get_fcounter(struct kv_store* handle, uint64_t* counter)
     {
         *counter = reply->integer;
     }
+
+    return check_redis_return(handle->connection, reply);
+}
+
+int redis_set_fcounter(struct kv_store* handle, uint64_t counter)
+{
+    redisReply* reply;
+    redis_flush_pipeline(handle);
+    reply = redisCommand(handle->connection, REDIS_FCOUNTER_SET, counter);
 
     return check_redis_return(handle->connection, reply);
 }

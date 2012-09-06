@@ -43,6 +43,7 @@ struct kv_store* redis_init(char* db);
 void redis_shutdown(struct kv_store* store);
 
 int redis_get_fcounter(struct kv_store* handle, uint64_t* counter);
+int redis_set_fcounter(struct kv_store* handle, uint64_t counter);
 
 int redis_flush_pipeline(struct kv_store* handle);
 int redis_enqueue_pipelined(struct kv_store* handle, uint64_t sector_num,
