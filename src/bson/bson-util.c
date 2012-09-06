@@ -22,16 +22,18 @@ int bson_print(FILE* stream, struct bson_info* bson)
         switch (v1.type)
         {
             case BSON_DOUBLE:
-                fprintf(stream, "%f\n", *((double *) v1.data));
+                fprintf(stream, "[BSON_DOUBLE] %f\n", *((double *) v1.data));
                 break;
             case BSON_STRING:
+                fprintf(stream, "[BSON_STRING] '");
                 fwrite((uint8_t *) v1.data, v1.size, 1, stream);
-                fprintf(stream, "\n");
+                fprintf(stream, "'\n");
                 break;
             case BSON_EMBEDDED_DOCUMENT:
-                fprintf(stream, "BSON_EMBEDDED_DOCUMENT\n");
+                fprintf(stream, "[BSON_EMBEDDED_DOCUMENT] \n");
                 break;
             case BSON_ARRAY:
+                fprintf(stream, "[BSON_ARRAY] ");
                 embedded = bson_init();
                 embedded->buffer = malloc(v2.size);
                 memcpy(embedded->buffer, v2.data, v2.size);
@@ -40,56 +42,61 @@ int bson_print(FILE* stream, struct bson_info* bson)
                 bson_cleanup(embedded);
                 break;
             case BSON_BINARY:
+                fprintf(stream, "[BSON_BINARY] ");
                 hexdump((uint8_t *) v1.data, v1.size);
                 break;
             case BSON_UNDEFINED:
-                fprintf(stream, "BSON_UNDEFINED\n");
+                fprintf(stream, "[BSON_UNDEFINED] \n");
                 break;
             case BSON_OBJECTID:
-                fprintf(stream, "BSON_UNDEFINED\n");
+                fprintf(stream, "[BSON_OBJECTID] \n");
                 break;
             case BSON_BOOLEAN:
+                fprintf(stream, "[BSON_BOOLEAN] ");
                 if (*((uint8_t *) v1.data))
                     fprintf(stream, "true\n");
                 else
                     fprintf(stream, "false\n");
                 break;
             case BSON_UTC_DATETIME:
+                fprintf(stream, "[BSON_UTC_DATETIME] ");
                 utctime = *((int64_t *) v1.data) / 1000; 
                 fprintf(stream, "%s\n", asctime(gmtime(&utctime)));
                 break;
             case BSON_NULL:
-                fprintf(stream, "NULL\n");
+                fprintf(stream, "[BSON_NULL] \n");
                 break;
             case BSON_REGEX:
-                fprintf(stream, "BSON_REGEX\n");
+                fprintf(stream, "[BSON_REGEX] \n");
                 break;
             case BSON_DBPOINTER:
-                fprintf(stream, "BSON_DBPOINTER\n");
+                fprintf(stream, "[BSON_DBPOINTER] \n");
                 break;
             case BSON_JS:
-                fprintf(stream, "BSON_JS\n");
+                fprintf(stream, "[BSON_JS] \n");
                 break;
             case BSON_SYMBOL:
-                fprintf(stream, "BSON_SYMBOL\n");
+                fprintf(stream, "[BSON_SYMBOL] \n");
                 break;
             case BSON_JS_CODE:
-                fprintf(stream, "BSON_JS_CODE\n");
+                fprintf(stream, "[BSON_JS_CODE] \n");
                 break;
             case BSON_INT32:
-                fprintf(stream, "%"PRId32"\n", *((int32_t *) v1.data));
+                fprintf(stream, "[BSON_INT32] %"PRId32"\n",
+                                *((int32_t *) v1.data));
                 break;
             case BSON_TIMESTAMP:
-                fprintf(stream, "BSON_TIMESTAMP\n");
+                fprintf(stream, "[BSON_TIMESTAMP] \n");
                 break;
             case BSON_INT64:
-                fprintf(stream, "%"PRId64"\n", *((int64_t *) v1.data));
+                fprintf(stream, "[BSON_INT64] %"PRId64"\n",
+                                *((int64_t *) v1.data));
                 break;
             case BSON_MIN:
-                fprintf(stream, "BSON_MIN\n");
+                fprintf(stream, "[BSON_MIN] \n");
                 break;
             case BSON_MAX:
-                fprintf(stream, "BSON_MAX\n");
+                fprintf(stream, "[BSON_MAX] \n");
                 break;
             default:
                 fprintf(stream, "\t'%s' : print not implemented\n", v1.key);
