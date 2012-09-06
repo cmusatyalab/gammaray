@@ -1362,7 +1362,6 @@ int __deserialize_ext4_bgd(FILE* index, struct bson_info* bson, uint64_t id,
         return EXIT_FAILURE;
 
     bgd.inode_table_sector_end = *((uint32_t*)value1.data);
-    fprintf_cyan(stdout, "Storing BGD[%"PRIu64"] in Redis.\n", id);
 
     redis_hash_field_set(store, REDIS_BGD_SECTOR_INSERT, id,
                          "bgd", ((uint8_t*) &bgd), sizeof(bgd));
@@ -1510,6 +1509,8 @@ int qemu_load_index(FILE* index, struct mbr* mbr, struct kv_store* store)
             return EXIT_FAILURE;
         }
 
+        fprintf_cyan(stdout, "Storing %"PRIu32" BGDs in Redis.\n",
+                             num_block_groups);
         for (j = 0; j < num_block_groups; j++)
         {
             if (__deserialize_ext4_bgd(index, bson, j, store))
@@ -1530,6 +1531,8 @@ int qemu_load_index(FILE* index, struct mbr* mbr, struct kv_store* store)
             return EXIT_FAILURE;
         }
 
+        fprintf_cyan(stdout, "Storing %"PRIu32" files in Redis.\n",
+                             num_files);
         for (j = 0; j < num_files; j++)
         {
 
