@@ -1521,6 +1521,8 @@ int qemu_load_index(FILE* index, struct mbr* mbr, struct kv_store* store)
             }
         }   
 
+        fprintf_light_cyan(stdout, "Successfully stored %"PRIu64" BGDs\n", j);
+
         len = sizeof(num_files);
         
         if (redis_hash_field_get(store, REDIS_SUPERBLOCK_SECTOR_GET, 0, "num_files",
@@ -1545,6 +1547,8 @@ int qemu_load_index(FILE* index, struct mbr* mbr, struct kv_store* store)
                 break;
             }
         }
+
+        fprintf_light_cyan(stdout, "Successfully stored %"PRIu64" files\n", j);
 
         redis_set_fcounter(store, j+1);
 
