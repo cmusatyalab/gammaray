@@ -11,6 +11,7 @@
 #include "redis_queue.h"
 
 #include <inttypes.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -107,6 +108,14 @@ void print_hiredis_version()
                                                                 HIREDIS_PATCH);
 }
 
+uint64_t diff_time(struct timeval t1, struct timeval t2)
+{
+    time_t delta_seconds = t2.tv_sec - t1.tv_sec;
+    suseconds_t delta_micro = t2.tv_usec - t1.tv_usec;
+    uint64_t micros = delta_seconds * 1000000 + delta_micro;
+    return micros;
+}
+
 /* main thread of execution */
 int main(int argc, char* args[])
 {
@@ -115,6 +124,8 @@ int main(int argc, char* args[])
     char* index, *db, *stream, *vmname;
     struct mbr mbr;
     FILE* indexf;
+    struct timeval start, end;
+
     fprintf_blue(stdout, "VM Disk Analysis Engine -- "
                          "By: Wolfgang Richter "
                          "<wolf@cs.cmu.edu>\n");
@@ -178,9 +189,14 @@ int main(int argc, char* args[])
 
     fclose(indexf);
     block_size = qemu_get_block_size(handle, 0);
+    gettimeofday(&start, NULL);
     ret = read_loop(fd, &mbr, handle, vmname, block_size);
+    gettimeofday(&end, NULL);
+    fprintf_light_red(stderr, "read_loop time: %"PRIu64" microseconds\n",
+                              diff_time(start, end));
     close(fd);
     redis_flush_pipeline(handle);
+    exit(0);
     redis_shutdown(handle);
 
     return EXIT_SUCCESS;
