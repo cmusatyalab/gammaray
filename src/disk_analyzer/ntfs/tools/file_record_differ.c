@@ -30,7 +30,7 @@ void save_file_record(char* fname, uint8_t* record, uint64_t size)
 int main(int argc, char* argv[])
 {
     FILE* disk;
-    struct mbr mbr;
+    struct disk_mbr mbr;
     struct ntfs_boot_file bootf;
     int64_t partition_offset;
     char buf[SECTOR_SIZE], bootffname[4096], filename[4096];
@@ -58,7 +58,7 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
-    if (parse_mbr(disk, &mbr))
+    if (mbr_parse_mbr(disk, &mbr))
     {
         fprintf_light_red(stdout, "Error reading MBR from disk.  Aborting\n");
         return EXIT_FAILURE;

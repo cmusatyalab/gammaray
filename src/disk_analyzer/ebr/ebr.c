@@ -3,7 +3,7 @@
 #include "util.h"
 
 int ebr_probe(FILE* disk, int64_t partition_offset,
-              struct mbr* ebr)
+              struct disk_mbr* ebr)
 {
     if (partition_offset == 0)
     {
@@ -19,8 +19,8 @@ int ebr_probe(FILE* disk, int64_t partition_offset,
         return -1;
     }
 
-    if (fread(ebr, 1, sizeof(struct mbr), disk) !=
-        sizeof(struct mbr))
+    if (fread(ebr, 1, sizeof(struct disk_mbr), disk) !=
+        sizeof(struct disk_mbr))
     {
         fprintf_light_red(stderr, 
                           "Error while trying to read EBR.\n");

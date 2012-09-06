@@ -8,7 +8,7 @@
 int main(int argc, char* argv[])
 {
     FILE* disk;
-    struct mbr mbr;
+    struct disk_mbr mbr;
     struct ext2_superblock superblock;
     struct ext2_inode inode;
     int64_t partition_offset;
@@ -36,7 +36,7 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
-    if (parse_mbr(disk, &mbr))
+    if (mbr_parse_mbr(disk, &mbr))
     {
         fprintf_light_red(stdout, "Error reading MBR from disk.  Aborting\n");
         return EXIT_FAILURE;

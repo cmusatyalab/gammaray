@@ -24,7 +24,7 @@
 int main(int argc, char* args[])
 {
     FILE* disk, *serializef;
-    struct mbr mbr;
+    struct disk_mbr mbr;
     struct ext2_superblock ext2_superblock;
     struct ext4_superblock ext4_superblock;
     struct ntfs_boot_file ntfs_bootf;
@@ -67,7 +67,7 @@ int main(int argc, char* args[])
         return EXIT_FAILURE;
     }
 
-    if (parse_mbr(disk, &mbr))
+    if (mbr_parse_mbr(disk, &mbr))
     {
         fclose(disk);
         fclose(serializef);
@@ -75,7 +75,7 @@ int main(int argc, char* args[])
         return EXIT_FAILURE;
     }
 
-    print_mbr(mbr);
+    mbr_print_mbr(mbr);
 
     memset(buf, 0, sizeof(buf));
 

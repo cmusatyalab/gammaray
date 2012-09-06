@@ -10,6 +10,6 @@
 #define SECTOR_SIZE 512
 
 int ebr_probe(FILE* disk, int64_t partition_offset,
-              struct mbr* ebr);
+              struct disk_mbr* ebr);
 
 #endif

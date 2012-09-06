@@ -46,7 +46,7 @@ uint16_t get_cylinder(uint8_t bytes[2])
 
 /* prints partition entry according to Wikipedia:
  * http://en.wikipedia.org/wiki/Master_boot_record */
-int print_partition(struct partition_table_entry pte)
+int mbr_print_partition(struct partition_table_entry pte)
 {
     char size_buf[512];
     memset(size_buf, 0x00, 512);
@@ -92,7 +92,7 @@ int print_partition(struct partition_table_entry pte)
     return 0;
 }
 
-int print_mbr(struct mbr mbr)
+int mbr_print_mbr(struct disk_mbr mbr)
 {
     fprintf_light_cyan(stdout, "\n\nAnalyzing Boot Sector\n");
 
@@ -123,20 +123,20 @@ int print_mbr(struct mbr mbr)
 
     /* read all 4 partition table entries */
     fprintf_light_yellow(stdout, "\nChecking partition table entry 0.\n");
-    print_partition(mbr.pt[0]);
+    mbr_print_partition(mbr.pt[0]);
     fprintf_light_yellow(stdout, "\nChecking partition table entry 1.\n");
-    print_partition(mbr.pt[1]);
+    mbr_print_partition(mbr.pt[1]);
     fprintf_light_yellow(stdout, "\nChecking partition table entry 2.\n");
-    print_partition(mbr.pt[2]);
+    mbr_print_partition(mbr.pt[2]);
     fprintf_light_yellow(stdout, "\nChecking partition table entry 3.\n");
-    print_partition(mbr.pt[3]);
+    mbr_print_partition(mbr.pt[3]);
 
     return 0;
 }
 
-int parse_mbr(FILE* disk, struct mbr* mbr)
+int mbr_parse_mbr(FILE* disk, struct disk_mbr* mbr)
 {
-    if (fread(mbr, 1, sizeof(struct mbr), disk) < sizeof(struct mbr))
+    if (fread(mbr, 1, sizeof(struct disk_mbr), disk) < sizeof(struct disk_mbr))
     {
         fprintf_light_red(stderr, "Error reading MBR from raw disk file.\n");
         return -1;
@@ -155,7 +155,7 @@ int parse_mbr(FILE* disk, struct mbr* mbr)
 }
 
 /* REENTRANT */
-int64_t mbr_partition_offset(struct mbr mbr, int pte)
+int64_t mbr_partition_offset(struct disk_mbr mbr, int pte)
 {
     /* linux partition match */
     if (mbr.pt[pte].partition_type == 0x83)
@@ -194,7 +194,7 @@ int print_partition_sectors(struct partition_table_entry pte)
     return 0;
 }
 
-int mbr_serialize_mbr(struct mbr mbr, uint32_t active, FILE* serializef)
+int mbr_serialize_mbr(struct disk_mbr mbr, uint32_t active, FILE* serializef)
 {
     struct bson_info* serialized;
     struct bson_kv value;
@@ -279,14 +279,14 @@ int mbr_serialize_partition(uint32_t pte_num, struct partition_table_entry pte,
     return 0;
 }
 
-int mbr_print_numbers(struct mbr mbr)
+int mbr_print_numbers(struct disk_mbr mbr)
 {
     fprintf_yellow(stdout, "MBR Start Sector 0\n");
     fprintf_yellow(stdout, "MBR End Sector 0\n");
     return 0;
 }
 
-int mbr_get_partition_table_entry(struct mbr mbr, int pte_num,
+int mbr_get_partition_table_entry(struct disk_mbr mbr, int pte_num,
                                   struct partition_table_entry* pte)
 {
     memcpy(pte, &mbr.pt[pte_num], sizeof(struct partition_table_entry));

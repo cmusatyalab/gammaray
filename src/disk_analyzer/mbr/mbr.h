@@ -19,7 +19,7 @@ struct partition_table_entry
     uint32_t sector_count;
 }__attribute__((packed));
 
-struct mbr
+struct disk_mbr
 {
     uint8_t code[440];
     uint32_t disk_signature;
@@ -34,15 +34,15 @@ enum MBR_FS_TYPES
     MBR_FS_TYPE_EXT4
 };
 
-int print_mbr(struct mbr mbr);
-int print_partition(struct partition_table_entry pte);
-int print_partition_sectors(struct partition_table_entry pte);
-int parse_mbr(FILE* disk, struct mbr* mbr);
-int64_t mbr_partition_offset(struct mbr mbr, int pte);
-int mbr_get_partition_table_entry(struct mbr mbr, int pte_num,
+int mbr_print_mbr(struct disk_mbr mbr);
+int mbr_print_partition(struct partition_table_entry pte);
+int mbr_print_partition_sectors(struct partition_table_entry pte);
+int mbr_parse_mbr(FILE* disk, struct disk_mbr* mbr);
+int64_t mbr_partition_offset(struct disk_mbr mbr, int pte);
+int mbr_get_partition_table_entry(struct disk_mbr mbr, int pte_num,
                                   struct partition_table_entry* pte);
-int mbr_print_numbers(struct mbr mbr);
-int mbr_serialize_mbr(struct mbr mbr, uint32_t active, FILE* serializef);
+int mbr_print_numbers(struct disk_mbr mbr);
+int mbr_serialize_mbr(struct disk_mbr mbr, uint32_t active, FILE* serializef);
 int mbr_serialize_partition(uint32_t pte_num, struct partition_table_entry pte,
                             FILE* serializef);
 
