@@ -982,18 +982,18 @@ enum SECTOR_TYPE __sector_type(const char* str)
 {
     if (strncmp(str, "start", strlen("start")) == 0)
         return SECTOR_EXT2_DATA;
-    else if(strncmp(str, "superblock", strlen("superblock")))
+    else if(strncmp(str, "superblock", strlen("superblock")) == 0)
         return SECTOR_EXT2_SUPERBLOCK;
-    else if(strncmp(str, "mbr", strlen("mbr")))
+    else if(strncmp(str, "mbr", strlen("mbr")) == 0)
         return SECTOR_MBR;
-    else if(strncmp(str, "lbgds", strlen("lbgds")))
+    else if(strncmp(str, "lbgds", strlen("lbgds")) == 0)
         return SECTOR_EXT2_BLOCK_GROUP_DESCRIPTOR;
-    else if(strncmp(str, "linodes", strlen("linodes")))
+    else if(strncmp(str, "linodes", strlen("linodes")) == 0)
         return SECTOR_EXT2_INODE;
-    else if(strncmp(str, "bgd", strlen("bgd")))
+    else if(strncmp(str, "bgd", strlen("bgd")) == 0)
         return SECTOR_EXT2_BLOCK_GROUP_BLOCKMAP |
                SECTOR_EXT2_BLOCK_GROUP_INODEMAP;
-    else if(strncmp(str, "lextents", strlen("lextents")))
+    else if(strncmp(str, "lextents", strlen("lextents")) == 0)
         return SECTOR_EXT4_EXTENT;
     fprintf_light_red(stderr, "Redis returned unknown sector type [%s]\n",
                                                                     str);
@@ -1004,7 +1004,7 @@ enum SECTOR_TYPE qemu_infer_sector_type(struct qemu_bdrv_write* write,
                                         struct kv_store* store,
                                         uint64_t block_size)
 {
-    uint64_t i, id;
+    uint64_t i;
     uint8_t result[1024];
     size_t len = 1024;
 
