@@ -2424,15 +2424,11 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
                 sector += partition_offset;
                 sector /= SECTOR_SIZE;
 
-                for (i = 0; i < sectors_per_block; i++)
-                {
-                    snprintf(count, 11, "%"PRIu32,
-                                           ((block_num + extent.ee_block) * sectors_per_block) + i);
-                    sector += i;
-                    value.data = &sector;
-                    bson_serialize(sectors, &value);
-                }
-
+                snprintf(count, 11, "%"PRIu32,
+                                       ((block_num + extent.ee_block) *
+                                         sectors_per_block));
+                value.data = &sector;
+                bson_serialize(sectors, &value);
                 return 0;
             }
         }
@@ -2449,7 +2445,6 @@ int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
     uint32_t addresses_in_block = block_size / 4;
     uint32_t buf[addresses_in_block];
     uint32_t sectors_per_block = block_size / SECTOR_SIZE;
-    uint32_t i;
     
     /* ranges for lookup */
     uint32_t direct_low = 0;
@@ -2486,13 +2481,9 @@ int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
         sector = (inode.i_block[block_num] * ext4_block_size(superblock) +
                   partition_offset) / SECTOR_SIZE;
 
-        for (i = 0; i < sectors_per_block; i++)
-        {
-            snprintf(count, 11, "%"PRIu32, (block_num * sectors_per_block) + i);
-            sector += i;
-            value.data = &sector;
-            bson_serialize(sectors, &value);
-        }
+        snprintf(count, 11, "%"PRIu32, (block_num * sectors_per_block));
+        value.data = &sector;
+        bson_serialize(sectors, &value);
 
         return 0;
     }
@@ -2514,14 +2505,10 @@ int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
         sector = (buf[block_num] * ext4_block_size(superblock) +
                   partition_offset) / SECTOR_SIZE;
 
-        for (i = 0; i < sectors_per_block; i++)
-        {
-            snprintf(count, 11, "%"PRIu32, ((block_num + indirect_low) *
-                                             sectors_per_block) + i);
-            sector += i;
-            value.data = &sector;
-            bson_serialize(sectors, &value);
-        }
+        snprintf(count, 11, "%"PRIu32, ((block_num + indirect_low) *
+                                         sectors_per_block));
+        value.data = &sector;
+        bson_serialize(sectors, &value);
 
         return 0;
     }
@@ -2551,15 +2538,11 @@ int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
                   ext4_block_size(superblock) + partition_offset) /
                   SECTOR_SIZE;
 
-        for (i = 0; i < sectors_per_block; i++)
-        {
-            snprintf(count, 11, "%"PRIu32, ((block_num + double_low) *
-                                           sectors_per_block) + i);
-            sector += i;
-            value.data = &sector;
-            bson_serialize(sectors, &value);
-        }
-
+        snprintf(count, 11, "%"PRIu32, ((block_num + double_low) *
+                                       sectors_per_block));
+        value.data = &sector;
+        bson_serialize(sectors, &value);
+    
         return 0;
     }
 
@@ -2597,14 +2580,10 @@ int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
                   ext4_block_size(superblock) + partition_offset) /
                   SECTOR_SIZE;
 
-        for (i = 0; i < sectors_per_block; i++)
-        {
-            snprintf(count, 11, "%"PRIu32, ((block_num + triple_low) *
-                                             sectors_per_block) + i);
-            sector += i;
-            value.data = &sector;
-            bson_serialize(sectors, &value);
-        }
+        snprintf(count, 11, "%"PRIu32, ((block_num + triple_low) *
+                                         sectors_per_block));
+        value.data = &sector;
+        bson_serialize(sectors, &value);
 
         return 0;
     }
