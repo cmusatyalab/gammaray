@@ -4,6 +4,7 @@
 #include "bst.h"
 #include "linkedlist.h"
 #include "ext2.h"
+#include "mbr.h"
 #include "redis_queue.h"
 
 #include <stdbool.h>
@@ -44,6 +45,7 @@ struct mbr
     bool gpt;
     uint64_t sector;
     uint64_t active_partitions;
+    struct disk_mbr mbr;
 } __attribute__((packed));
 
 struct ext2_fs
