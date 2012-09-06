@@ -120,7 +120,7 @@ uint64_t diff_time(struct timeval t1, struct timeval t2)
 int main(int argc, char* args[])
 {
     int fd, ret;
-    uint64_t block_size;
+    uint64_t block_size, load_time;
     char* index, *db, *stream, *vmname;
     struct mbr mbr;
     FILE* indexf;
@@ -163,11 +163,15 @@ int main(int argc, char* args[])
         return EXIT_FAILURE;
     }
 
+    gettimeofday(&start, NULL);
     if (qemu_load_index(indexf, &mbr, handle))
     {
         fprintf_light_red(stderr, "Error deserializing index.\n");
         return EXIT_FAILURE;
     }
+    gettimeofday(&end, NULL);
+
+    load_time = diff_time(start, end);
 
     fprintf_cyan(stdout, "%s: attaching to stream: %s\n\n", vmname, stream);
 
@@ -192,6 +196,8 @@ int main(int argc, char* args[])
     gettimeofday(&start, NULL);
     ret = read_loop(fd, &mbr, handle, vmname, block_size);
     gettimeofday(&end, NULL);
+    fprintf_light_red(stderr, "load_index time: %"PRIu64" microseconds\n",
+                              load_time);
     fprintf_light_red(stderr, "read_loop time: %"PRIu64" microseconds\n",
                               diff_time(start, end));
     close(fd);
