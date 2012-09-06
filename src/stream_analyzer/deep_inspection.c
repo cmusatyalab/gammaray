@@ -1019,9 +1019,7 @@ enum SECTOR_TYPE qemu_infer_sector_type(struct qemu_bdrv_write* write,
 
         if (len)
         {
-            sscanf((const char*) result, "%s:%"SCNu64, result, &id);
-            fprintf_light_green(stdout, "Inference got: %s:%"PRIu64"\n",
-                                                        result, id);
+            result[len] = 0;
             return __sector_type((const char*) result);
         }
         else
