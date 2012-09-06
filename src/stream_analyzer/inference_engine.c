@@ -108,10 +108,10 @@ void print_hiredis_version()
                                                                 HIREDIS_PATCH);
 }
 
-uint64_t diff_time(struct timeval t1, struct timeval t2)
+uint64_t diff_time(struct timeval start, struct timeval end)
 {
-    time_t delta_seconds = t2.tv_sec - t1.tv_sec;
-    suseconds_t delta_micro = t2.tv_usec - t1.tv_usec;
+    time_t delta_seconds = end.tv_sec - start.tv_sec;
+    suseconds_t delta_micro = end.tv_usec - start.tv_usec;
     uint64_t micros = delta_seconds * 1000000 + delta_micro;
     return micros;
 }
