@@ -738,7 +738,6 @@ int ext4_read_extent_block(FILE* disk, int64_t partition_offset,
     memcpy(buf, inode.i_block, (size_t) 60);
     hdr = *((struct ext4_extent_header*) buf);
     idx.ei_block = (uint32_t) 2 << 31;
-    ext4_print_extent_header(hdr);
 
     for (i = 0; i < hdr.eh_entries; i++)
     {
@@ -748,29 +747,24 @@ int ext4_read_extent_block(FILE* disk, int64_t partition_offset,
             idx2 =  * ((struct ext4_extent_idx*)
                             &(buf[sizeof(struct ext4_extent_header) +
                                   sizeof(struct ext4_extent_idx)*i])); 
-            ext4_print_extent_index(idx2);
             if (hdr.eh_entries == 1)
             {
-                fprintf_light_cyan(stdout, "extent, only single entry, following.\n");
                 ext4_read_block(disk, partition_offset, superblock,
                                 ext4_extent_index_leaf(idx2), buf);
                 i = -1; /* allow loop-expr to run (++) */
                 hdr = *((struct ext4_extent_header*) buf);
                 idx.ei_block = (uint32_t) 2 << 31;
-                ext4_print_extent_header(hdr);
                 continue;
             }
 
             if ((block_num < idx2.ei_block &&
                 block_num >= idx.ei_block))
             {
-                fprintf_light_cyan(stdout, "extent, following index.\n");
                 ext4_read_block(disk, partition_offset, superblock,
                                 ext4_extent_index_leaf(idx), buf);
                 i = -1; /* allow loop-expr to run (++) */
                 hdr = *((struct ext4_extent_header*) buf);
                 idx.ei_block = (uint32_t) 2 << 31;
-                ext4_print_extent_header(hdr);
                 continue;
             }
             idx = idx2;
@@ -780,7 +774,6 @@ int ext4_read_extent_block(FILE* disk, int64_t partition_offset,
             extent = * ((struct ext4_extent*)
                             &(buf[sizeof(struct ext4_extent_header) +
                                   sizeof(struct ext4_extent)*i])); 
-            ext4_print_extent(extent);
             if (extent.ee_block <= block_num &&
                 block_num < extent.ee_block + extent.ee_len)
             {
@@ -2387,7 +2380,6 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
     memcpy(buf, inode.i_block, (size_t) 60);
     hdr = *((struct ext4_extent_header*) buf);
     idx.ei_block = (uint32_t) 2 << 31;
-    ext4_print_extent_header(hdr);
 
     for (i = 0; i < hdr.eh_entries; i++)
     {
@@ -2396,7 +2388,6 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
             idx2 =  * ((struct ext4_extent_idx*)
                             &(buf[sizeof(struct ext4_extent_header) +
                                   sizeof(struct ext4_extent_idx)*i])); 
-            ext4_print_extent_index(idx2);
             if (hdr.eh_entries == 1)
             {
                 ext4_read_block(disk, partition_offset, superblock,
@@ -2404,7 +2395,6 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
                 i = -1; /* allow loop-expr to run (++) */
                 hdr = *((struct ext4_extent_header*) buf);
                 idx.ei_block = (uint32_t) 2 << 31;
-                ext4_print_extent_header(hdr);
                 continue;
             }
 
@@ -2416,7 +2406,6 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
                 i = -1; /* allow loop-expr to run (++) */
                 hdr = *((struct ext4_extent_header*) buf);
                 idx.ei_block = (uint32_t) 2 << 31;
-                ext4_print_extent_header(hdr);
                 continue;
             }
             idx = idx2;
@@ -2426,7 +2415,6 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
             extent = * ((struct ext4_extent*)
                             &(buf[sizeof(struct ext4_extent_header) +
                                   sizeof(struct ext4_extent)*i])); 
-            ext4_print_extent(extent);
             if (extent.ee_block <= block_num &&
                 block_num < extent.ee_block + extent.ee_len)
             {
@@ -2672,8 +2660,6 @@ int ext4_serialize_file_sectors(FILE* disk, int64_t partition_offset,
         
         if (ret_check < 0) /* error reading */
         {
-            fprintf_light_red(stderr, "[%"PRIu32", %"PRIu32"] Error reading file block. "
-                                      "Assuming file hole.\n", count, num_blocks);
             count++;
             num_blocks--;
             continue;
@@ -2859,8 +2845,6 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
 
             if (dir.inode == 0)
             {
-                fprintf_light_red(stderr, "dentry inode marked 0. "
-                                          "Possibly skipped entry.\n");
                 position += dir.rec_len;
                 continue;
             }
