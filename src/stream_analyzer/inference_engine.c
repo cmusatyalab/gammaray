@@ -157,7 +157,7 @@ int main(int argc, char* args[])
         fprintf_light_red(stderr, "Error deserializing index.\n");
         return EXIT_FAILURE;
     }
- 
+
     fprintf_cyan(stdout, "%s: attaching to stream: %s\n\n", vmname, stream);
 
     if (strcmp(stream, "-") != 0)
