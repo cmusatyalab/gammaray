@@ -2,8 +2,10 @@
 
 #include "hiredis.h"
 #include "async.h"
+#include "adapters/libevent.h"
 
 #include <assert.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
@@ -34,6 +36,13 @@ struct kv_store
     };
     uint64_t outstanding_pipelined_cmds;
     bool async;
+    bool disconnecting;
+};
+
+struct callback_data
+{
+    struct kv_store* handle;
+    uint8_t* data;
 };
 
 int check_redis_return(struct kv_store* handle, redisReply* reply)
@@ -74,7 +83,9 @@ int check_redis_return(struct kv_store* handle, redisReply* reply)
         }
         return EXIT_FAILURE;
     }
-    freeReplyObject(reply);
+    
+    if (!handle->async)
+        freeReplyObject(reply);
     return EXIT_SUCCESS;
 }
 
@@ -101,6 +112,10 @@ int redis_flush_pipeline(struct kv_store* handle)
 }
 
 /***** Async Callbacks, also not exposed *****/
+void redis_connect_handler(const redisAsyncContext* c)
+{
+}
+
 void redis_disconnect_handler(const redisAsyncContext* c, int status)
 {
     if (status != REDIS_OK)
@@ -108,16 +123,24 @@ void redis_disconnect_handler(const redisAsyncContext* c, int status)
         fprintf(stderr, "Unrecoverable disconnect from Redis.\n");
         exit(1);
     }
+    fprintf(stdout, "-- REDIS DISCONNECT HANDLER --\n");
 }
 
 void redis_write_handler(redisAsyncContext* c, void* reply,
                          void* privdata)
 {
-    if (check_redis_return(privdata, reply))
+    struct callback_data* data = (struct callback_data*) privdata;
+    data->handle->outstanding_pipelined_cmds--;
+    free(data->data);
+
+    if (data->handle->disconnecting &&
+        data->handle->outstanding_pipelined_cmds == 0)
     {
-        fprintf(stderr, "Error sending write to Redis, reply is bad.\n");
-        exit(1);
+        redis_shutdown(data->handle);
     }
+
+    free(privdata);
+    fprintf(stdout, "-- REDIS WRITE HANDLER --\n");
 }
 
 /***** Core API *****/
@@ -128,7 +151,7 @@ void redis_print_version()
                                                                 HIREDIS_PATCH);
 }
 
-struct kv_store* redis_init(char* db, bool async)
+struct kv_store* redis_init(char* db, bool async, struct event_base* base)
 {
     struct timeval timeout = { 1, 500000 };
     struct kv_store* handle = (struct kv_store*)
@@ -144,6 +167,14 @@ struct kv_store* redis_init(char* db, bool async)
                 return NULL;
             }
 
+            if (redisAsyncSetConnectCallback(handle->async_connection,
+                                            redis_connect_handler) !=
+                REDIS_OK)
+            {
+                free(handle);
+                return NULL;
+            }
+
             if (redisAsyncSetDisconnectCallback(handle->async_connection,
                                                 redis_disconnect_handler) !=
                 REDIS_OK)
@@ -151,12 +182,12 @@ struct kv_store* redis_init(char* db, bool async)
                 free(handle);
                 return NULL;
             }
+            redisLibeventAttach(handle->async_connection, base);
         }
         else
         {
             handle->connection = redisConnectWithTimeout("127.0.0.1",
                                                          6379, timeout);
-            handle->outstanding_pipelined_cmds = 0;
             if (handle->connection->err)
             {
                 redisFree(handle->connection);
@@ -173,7 +204,9 @@ struct kv_store* redis_init(char* db, bool async)
         }
     }
 
+    handle->outstanding_pipelined_cmds = 0;
     handle->async = async;
+    handle->disconnecting = false;
 
     return handle;
 }
@@ -406,12 +439,18 @@ void redis_free_list(uint8_t* list[], size_t len)
 int redis_async_write_enqueue(struct kv_store* handle, uint8_t* data,
                                                        size_t len)
 {
+    struct callback_data* cb_data = (struct callback_data*)
+                                        malloc(sizeof(struct callback_data));
+
+    cb_data->handle = handle;
+    cb_data->data = data;
     if (redisAsyncCommand(handle->async_connection, redis_write_handler,
-                          handle, REDIS_ASYNC_QUEUE_PUSH, data, len) !=
+                          cb_data, REDIS_ASYNC_QUEUE_PUSH, data, len) !=
         REDIS_OK)
     {
         return EXIT_FAILURE;
     }
+    handle->outstanding_pipelined_cmds++;
 
     return EXIT_SUCCESS;
 }
@@ -437,10 +476,17 @@ int redis_async_write_dequeue(struct kv_store* handle, uint8_t* data,
     return check_redis_return(handle, reply);
 }
 
+void redis_initiate_shutdown(struct kv_store* handle)
+{
+    handle->disconnecting = true;
+}
+
 void redis_shutdown(struct kv_store* handle)
 {
+    fprintf(stdout, "SHUTDOWN CALLED\n");
     if (handle)
     {
+        fprintf(stdout, "-- REDIS SHUTDOWN --\n");
         redisCommand(handle->connection, "FLUSHALL");
         if (handle->connection && !(handle->async))
         {
@@ -449,9 +495,11 @@ void redis_shutdown(struct kv_store* handle)
 
         if (handle->async_connection && handle->async)
         {
+            fprintf(stdout, "-- REDIS ASYNC SHUTDOWN DISCONNECTING --\n");
             redisAsyncDisconnect(handle->async_connection);
         }
 
+        fprintf(stdout, "SHUTDOWN EXITING.\n");
         free(handle);
     }
 }

@@ -29,11 +29,13 @@ default:
 		 ../util/util.c \
 		 redis_queue.c \
 		 -lhiredis \
+		 -levent \
 		 -o async_queuer \
 		 -Wall \
 		 -Werror \
 		 -I../util \
 		 -I/usr/include/hiredis \
+		 -g \
 		 #-DNOCOLOR
 
 	@clang inference_engine.c -g \
@@ -49,6 +51,7 @@ default:
 		 deep_inspection.c \
 		 redis_queue.c \
 		 -lhiredis \
+		 -levent \
 		 -o inference_engine \
 		 -Wall \
 		 -Werror \
@@ -60,6 +63,12 @@ default:
 		 -I../datastructures \
 		 -I/usr/include/hiredis \
 		 #-DNOCOLOR
+
+
+test_async: clean default
+	@time ./async_queuer \
+		/home/wolf/Dropbox/Projects/xray/sample/ext4_trace.bin \
+	    4
 
 test_ext4: clean default
 	@time ./inference_engine \

@@ -29,7 +29,7 @@ struct qemu_bdrv_write_header
 struct qemu_bdrv_write
 {
     struct qemu_bdrv_write_header header;
-    const uint8_t* data;
+    uint8_t* data;
 };
 
 void qemu_parse_header(uint8_t* event_stream, struct qemu_bdrv_write* write);

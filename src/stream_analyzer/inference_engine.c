@@ -59,7 +59,7 @@ int read_loop(int fd, struct mbr* mbr, struct kv_store* store, char* vmname,
         }
 
         qemu_parse_header(buf, &write);
-        write.data = (const uint8_t*)
+        write.data = (uint8_t*)
                      malloc(write.header.nb_sectors*SECTOR_SIZE);
 
         if (write.data == NULL)
@@ -148,7 +148,7 @@ int main(int argc, char* args[])
     }
 
     /* ----------------- hiredis ----------------- */
-    struct kv_store* handle = redis_init(db, false);
+    struct kv_store* handle = redis_init(db, false, NULL);
     if (handle == NULL)
     {
         fprintf_light_red(stderr, "Failed getting Redis context "
