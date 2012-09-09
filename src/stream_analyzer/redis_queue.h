@@ -39,12 +39,10 @@
 
 
 struct kv_store;
-struct event_base;
 
 void redis_print_version();
 
-struct kv_store* redis_init(char* db, bool async, struct event_base* base);
-void redis_initiate_shutdown(struct kv_store* store);
+struct kv_store* redis_init(char* db);
 void redis_shutdown(struct kv_store* store);
 
 int redis_get_fcounter(struct kv_store* handle, uint64_t* counter);

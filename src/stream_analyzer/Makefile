@@ -29,7 +29,6 @@ default:
 		 ../util/util.c \
 		 redis_queue.c \
 		 -lhiredis \
-		 -levent \
 		 -o async_queuer \
 		 -Wall \
 		 -Werror \
@@ -51,7 +50,6 @@ default:
 		 deep_inspection.c \
 		 redis_queue.c \
 		 -lhiredis \
-		 -levent \
 		 -o inference_engine \
 		 -Wall \
 		 -Werror \

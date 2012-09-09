@@ -148,7 +148,7 @@ int main(int argc, char* args[])
     }
 
     /* ----------------- hiredis ----------------- */
-    struct kv_store* handle = redis_init(db, false, NULL);
+    struct kv_store* handle = redis_init(db);
     if (handle == NULL)
     {
         fprintf_light_red(stderr, "Failed getting Redis context "
