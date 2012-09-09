@@ -1,6 +1,8 @@
 #ifndef __ANALYSIS_ENGINE_QEMU_COMMON_H
 #define __ANALYSIS_ENGINE_QEMU_COMMON_H
 
+#include <inttypes.h>
+
 #define QEMU_HEADER_SIZE sizeof(struct qemu_bdrv_write_header)
 #define SECTOR_SIZE 512
 
@@ -29,5 +31,7 @@ struct qemu_bdrv_write
     struct qemu_bdrv_write_header header;
     const uint8_t* data;
 };
+
+void qemu_parse_header(uint8_t* event_stream, struct qemu_bdrv_write* write);
 
 #endif

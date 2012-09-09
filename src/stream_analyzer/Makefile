@@ -24,6 +24,7 @@ default:
 	#	 #-DNOCOLOR
 
 	@clang async_queuer.c -g \
+		 qemu_common.c \
 		 ../util/color.c \
 		 ../util/util.c \
 		 redis_queue.c \
@@ -36,6 +37,7 @@ default:
 		 #-DNOCOLOR
 
 	@clang inference_engine.c -g \
+		 qemu_common.c \
 		 ../util/color.c \
 		 ../util/util.c \
 		 ../bson/bson-encoder.c \
