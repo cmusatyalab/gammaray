@@ -88,7 +88,6 @@ int read_loop(int fd, struct kv_store* handle)
         {
             fprintf_light_red(stderr, "Stream ended while reading sector "
                                       "data.\n");
-            redis_shutdown(handle);
             return EXIT_FAILURE;
         }
 
@@ -129,7 +128,7 @@ int main(int argc, char* args[])
     db = args[2];
 
     /* ----------------- hiredis ----------------- */
-    struct kv_store* handle = redis_init(db);
+    struct kv_store* handle = redis_init(db, true);
     if (handle == NULL)
     {
         fprintf_light_red(stderr, "Failed getting Redis context "

@@ -4,15 +4,21 @@
 
 #include "hiredis.h"
 
+#define __USE_GNU
 #include <pthread.h>
+#undef __USE_GNU
+
+#include <semaphore.h>
 
 #include <assert.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #define REDIS_DEFAULT_TIMEOUT 300 /* seconds; 5 minute */
-#define REDIS_DEFAULT_PIPELINED 1 /* unitless; 16384 (4096*16384=64MB) */
+#define REDIS_DEFAULT_FLUSH_TICK 5 /* seconds; 5 */
+#define REDIS_DEFAULT_PIPELINED 16384 /* unitless; 16384 (4096*16384=64MB) */
 #define REDIS_DEFAULT_BYTES 262144000 /* bytes; 250 MiB */
 
 #define REDIS_DATA_INSERT "SET sector:%"PRIu64" "\
@@ -41,7 +47,10 @@ struct kv_store
     redisContext* connection;
     uint64_t outstanding_pipelined_cmds;
     size_t outstanding_bytes;
-    pthread_mutex_t lock;
+    pthread_mutex_t flush_lock;
+    pthread_mutex_t conn_lock;
+    pthread_mutex_t cmd_lock;
+    sem_t thread_counter;
 };
 
 int check_redis_return(struct kv_store* handle, redisReply* reply)
@@ -92,30 +101,58 @@ int redis_flush_pipeline(struct kv_store* handle)
     return EXIT_SUCCESS;
 }
 
-int redis_flush_thread_pipeline(struct thread_job* job)
+void* redis_flush_thread_pipeline(void* data)
 {
+    struct thread_job* job = (struct thread_job*) data;
     redisReply* reply;
     struct timeval start, end;
+    pthread_mutex_lock(&(job->handle->flush_lock));
     gettimeofday(&start, NULL);
-    pthread_mutex_lock(&(job->handle->lock));
 
     while (job->cmds_to_process)
     {
+        pthread_mutex_lock(&(job->handle->conn_lock));
         redisGetReply(job->handle->connection, (void**) &reply);
         if(check_redis_return(job->handle, reply))
         {
             fprintf(stderr, "ERROR FLUSHING\n");
-            pthread_mutex_unlock(&(job->handle->lock));
-            return EXIT_FAILURE;
+            pthread_mutex_unlock(&(job->handle->flush_lock));
+            assert(true);
         }
+        pthread_mutex_unlock(&(job->handle->conn_lock));
         job->cmds_to_process--;
     }
     gettimeofday(&end, NULL);
     fprintf(stderr, "redis_flush_pipeline finished in %"PRIu64
                         " microseconds\n",
                         diff_time(start, end));
-    pthread_mutex_unlock(&(job->handle->lock));
+    sem_wait(&(job->handle->thread_counter));
+    pthread_mutex_unlock(&(job->handle->flush_lock));
     free(job);
+
+    return EXIT_SUCCESS;
+}
+
+void * redis_periodic_flusher(void* data)
+{
+    struct thread_job* job = NULL;
+    fprintf(stderr, "PERIODIC FLUSHER RUNNING.\n");
+
+    while (1)
+    {
+        job = (struct thread_job*) malloc(sizeof(struct thread_job));
+        job->handle = (struct kv_store*) data;
+
+        pthread_mutex_lock(&(job->handle->cmd_lock));
+        job->cmds_to_process = job->handle->outstanding_pipelined_cmds;
+        job->handle->outstanding_pipelined_cmds = 0;
+        pthread_mutex_unlock(&(job->handle->cmd_lock));
+
+        sem_post(&(job->handle->thread_counter));
+
+        redis_flush_thread_pipeline(job);
+        sleep(REDIS_DEFAULT_FLUSH_TICK);
+    }
 
     return EXIT_SUCCESS;
 }
@@ -128,11 +165,13 @@ void redis_print_version()
                                                                 HIREDIS_PATCH);
 }
 
-struct kv_store* redis_init(char* db)
+struct kv_store* redis_init(char* db, bool background_flush)
 {
     struct timeval timeout = { 1, 500000 };
     struct kv_store* handle = (struct kv_store*)
                               malloc(sizeof(struct kv_store));
+    pthread_t thread;
+
     if (handle)
     {
         handle->connection = redisConnectWithTimeout("127.0.0.1",
@@ -150,10 +189,16 @@ struct kv_store* redis_init(char* db)
            free(handle);
            return NULL;
        }
+
+        handle->outstanding_pipelined_cmds = 0;
+        pthread_mutex_init(&(handle->flush_lock), NULL);
+        pthread_mutex_init(&(handle->conn_lock), NULL);
+        pthread_mutex_init(&(handle->cmd_lock), NULL);
+        sem_init(&(handle->thread_counter), 0, 0);
+
+        pthread_create(&thread, NULL, redis_periodic_flusher, handle);
     }
 
-    handle->outstanding_pipelined_cmds = 0;
-    pthread_mutex_init(&(handle->lock), NULL);
 
     return handle;
 }
@@ -387,9 +432,15 @@ int redis_async_write_enqueue(struct kv_store* handle, uint8_t* data,
                                                        size_t len)
 {
     struct thread_job* job;
+    pthread_t thread;
+    pthread_mutex_lock(&(handle->conn_lock));
     redisAppendCommand(handle->connection, REDIS_ASYNC_QUEUE_PUSH,
                                            data,
                                            len);
+    pthread_mutex_unlock(&(handle->conn_lock));
+
+    pthread_mutex_lock(&(handle->cmd_lock));
+
     handle->outstanding_pipelined_cmds++;
     handle->outstanding_bytes += len;
 
@@ -399,13 +450,17 @@ int redis_async_write_enqueue(struct kv_store* handle, uint8_t* data,
         job = (struct thread_job*) malloc(sizeof(struct thread_job));
         job->handle = handle;
         job->cmds_to_process = handle->outstanding_pipelined_cmds;
-        if (redis_flush_thread_pipeline(job))
+        handle->outstanding_pipelined_cmds = 0;
+        pthread_mutex_unlock(&(handle->cmd_lock));
+        sem_post(&(handle->thread_counter));
+        if (pthread_create(&thread, NULL, redis_flush_thread_pipeline, job))
         {
             assert(true);
         }
-        handle->outstanding_pipelined_cmds = 0;
         handle->outstanding_bytes = 0;
     }
+
+    pthread_mutex_unlock(&(handle->cmd_lock));
 
     return EXIT_SUCCESS;
 }
@@ -433,8 +488,20 @@ int redis_async_write_dequeue(struct kv_store* handle, uint8_t* data,
 
 void redis_shutdown(struct kv_store* handle)
 {
+    int outstanding = 0;
+
+
     if (handle)
     {
+        /* wait for all threads */
+        sem_getvalue(&(handle->thread_counter), &outstanding);
+        while (outstanding != 0)
+        {
+            fprintf(stderr, "waiting for threads: %d\n", outstanding);
+            sem_getvalue(&(handle->thread_counter), &outstanding);
+            sleep(1);
+        }
+
         redis_flush_pipeline(handle);
         redisCommand(handle->connection, "FLUSHALL");
         if (handle->connection)
@@ -442,7 +509,10 @@ void redis_shutdown(struct kv_store* handle)
             redisFree(handle->connection);
         }
 
-        pthread_mutex_destroy(&(handle->lock));
+        pthread_mutex_destroy(&(handle->flush_lock));
+        pthread_mutex_destroy(&(handle->conn_lock));
+        pthread_mutex_destroy(&(handle->cmd_lock));
+        sem_destroy(&(handle->thread_counter));
         free(handle);
     }
 }
