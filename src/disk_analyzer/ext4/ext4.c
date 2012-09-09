@@ -2344,7 +2344,6 @@ int ext4_serialize_bgds(FILE* disk, int64_t partition_offset,
     struct bson_kv v_bgd, v_sector;
     uint32_t sector = 0;
 
-
     serialized = bson_init();
     
     v_bgd.type = BSON_BINARY;
