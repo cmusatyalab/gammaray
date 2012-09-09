@@ -72,8 +72,8 @@ int redis_list_get(struct kv_store* handle, char* fmt, uint64_t src,
                    uint8_t** result[], size_t* len);
 void redis_free_list(uint8_t* list[], size_t len);
 
-void redis_async_write_enqueue(struct kv_store* handle, uint8_t* data,
-                                                        size_t len);
-void redis_async_write_dequeue(struct kv_store* handle, uint8_t* data,
-                                                        size_t* len);
+int redis_async_write_enqueue(struct kv_store* handle, uint8_t* data,
+                                                       size_t len);
+int redis_async_write_dequeue(struct kv_store* handle, uint8_t* data,
+                                                       size_t* len);
 #endif

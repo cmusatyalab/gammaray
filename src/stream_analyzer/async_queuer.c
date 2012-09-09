@@ -61,6 +61,7 @@ int read_loop(int fd, struct kv_store* store)
             return EXIT_FAILURE;
         }
 
+        qemu_parse_header(buf, &write);
         write.data = (const uint8_t*)
                      malloc(write.header.nb_sectors*SECTOR_SIZE);
 
@@ -108,7 +109,7 @@ int main(int argc, char* args[])
                          "<wolf@cs.cmu.edu>\n");
     redis_print_version();
 
-    if (argc < 5)
+    if (argc < 3)
     {
         fprintf_light_red(stderr, "Usage: %s <stream file>"
                                   " <redis db num>\n", args[0]);

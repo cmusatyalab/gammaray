@@ -36,23 +36,42 @@ struct kv_store
     bool async;
 };
 
-int check_redis_return(redisContext* c, redisReply* reply)
+int check_redis_return(struct kv_store* handle, redisReply* reply)
 {
     if (reply == NULL || ((int) reply) == REDIS_ERR)
     {
-        switch(c->err)
+        if (handle->async)
         {
-            case REDIS_ERR_IO:
-                break;
-            case REDIS_ERR_EOF:
-                break;
-            case REDIS_ERR_PROTOCOL:
-                break;
-            case REDIS_ERR_OTHER:
-                break;
-            default:
-                break;
-        };
+            switch(handle->async_connection->err)
+            {
+                case REDIS_ERR_IO:
+                    break;
+                case REDIS_ERR_EOF:
+                    break;
+                case REDIS_ERR_PROTOCOL:
+                    break;
+                case REDIS_ERR_OTHER:
+                    break;
+                default:
+                    break;
+            };
+        }
+        else
+        {
+            switch(handle->connection->err)
+            {
+                case REDIS_ERR_IO:
+                    break;
+                case REDIS_ERR_EOF:
+                    break;
+                case REDIS_ERR_PROTOCOL:
+                    break;
+                case REDIS_ERR_OTHER:
+                    break;
+                default:
+                    break;
+            };
+        }
         return EXIT_FAILURE;
     }
     freeReplyObject(reply);
@@ -63,7 +82,7 @@ int redis_select(struct kv_store* handle, char* db)
 {
     redisReply* reply;
     reply = redisCommand(handle->connection, "SELECT %s", db);
-    return check_redis_return(handle->connection, reply);
+    return check_redis_return(handle, reply);
 }
 
 int redis_flush_pipeline(struct kv_store* handle)
@@ -72,7 +91,7 @@ int redis_flush_pipeline(struct kv_store* handle)
     while (handle->outstanding_pipelined_cmds)
     {
         redisGetReply(handle->connection, (void**) &reply);
-        if(check_redis_return(handle->connection, reply))
+        if(check_redis_return(handle, reply))
         {
             return EXIT_FAILURE;
         }
@@ -87,6 +106,16 @@ void redis_disconnect_handler(const redisAsyncContext* c, int status)
     if (status != REDIS_OK)
     {
         fprintf(stderr, "Unrecoverable disconnect from Redis.\n");
+        exit(1);
+    }
+}
+
+void redis_write_handler(redisAsyncContext* c, void* reply,
+                         void* privdata)
+{
+    if (check_redis_return(privdata, reply))
+    {
+        fprintf(stderr, "Error sending write to Redis, reply is bad.\n");
         exit(1);
     }
 }
@@ -174,7 +203,7 @@ int redis_publish(struct kv_store* handle, char* channel, uint8_t* data,
     redisReply* reply;
     reply = redisCommand(handle->connection, REDIS_PUBLISH, channel, data,
                                                                      len);
-    return check_redis_return(handle->connection, reply);
+    return check_redis_return(handle, reply);
 }
 
 int redis_dequeue(struct kv_store* handle, uint64_t sector_num, uint8_t* data,
@@ -196,7 +225,7 @@ int redis_dequeue(struct kv_store* handle, uint64_t sector_num, uint8_t* data,
 
     reply = redisCommand(handle->connection, REDIS_DEL_WRITE, sector_num);
 
-    return check_redis_return(handle->connection, reply);
+    return check_redis_return(handle, reply);
 }
 
 int redis_reverse_pointer_set(struct kv_store* handle, const char* fmt,
@@ -255,7 +284,7 @@ int redis_hash_field_get(struct kv_store* handle, const char* fmt,
         *len = 0;
     }
 
-    return check_redis_return(handle->connection, reply);
+    return check_redis_return(handle, reply);
 }
 
 int redis_sector_lookup(struct kv_store* handle, uint64_t src,
@@ -276,7 +305,7 @@ int redis_sector_lookup(struct kv_store* handle, uint64_t src,
         *len = 0;
     }
 
-    return check_redis_return(handle->connection, reply);
+    return check_redis_return(handle, reply);
 }
 
 int redis_reverse_file_data_pointer_set(struct kv_store* handle,
@@ -311,7 +340,7 @@ int redis_get_fcounter(struct kv_store* handle, uint64_t* counter)
         *counter = reply->integer;
     }
 
-    return check_redis_return(handle->connection, reply);
+    return check_redis_return(handle, reply);
 }
 
 int redis_set_fcounter(struct kv_store* handle, uint64_t counter)
@@ -320,7 +349,7 @@ int redis_set_fcounter(struct kv_store* handle, uint64_t counter)
     redis_flush_pipeline(handle);
     reply = redisCommand(handle->connection, REDIS_FCOUNTER_SET, counter);
 
-    return check_redis_return(handle->connection, reply);
+    return check_redis_return(handle, reply);
 }
 
 int redis_list_get(struct kv_store* handle, char* fmt, uint64_t src,
@@ -340,7 +369,7 @@ int redis_list_get(struct kv_store* handle, char* fmt, uint64_t src,
         {
             if (reply->element[i]->type != REDIS_REPLY_STRING)
             {
-                check_redis_return(handle->connection, reply);
+                check_redis_return(handle, reply);
                 free(*result);
                 *result = NULL;
                 return EXIT_FAILURE;
@@ -355,7 +384,7 @@ int redis_list_get(struct kv_store* handle, char* fmt, uint64_t src,
         }
     }
 
-    return check_redis_return(handle->connection, reply);
+    return check_redis_return(handle, reply);
 }
 
 
@@ -374,14 +403,38 @@ void redis_free_list(uint8_t* list[], size_t len)
     }
 }
 
-void redis_async_write_enqueue(struct kv_store* handle, uint8_t* data,
-                                                        size_t len)
+int redis_async_write_enqueue(struct kv_store* handle, uint8_t* data,
+                                                       size_t len)
 {
+    if (redisAsyncCommand(handle->async_connection, redis_write_handler,
+                          handle, REDIS_ASYNC_QUEUE_PUSH, data, len) !=
+        REDIS_OK)
+    {
+        return EXIT_FAILURE;
+    }
+
+    return EXIT_SUCCESS;
 }
 
-void redis_async_write_dequeue(struct kv_store* handle, uint8_t* data,
-                                                        size_t* len)
+int redis_async_write_dequeue(struct kv_store* handle, uint8_t* data,
+                                                       size_t* len)
 {
+    redisReply* reply;
+    redis_flush_pipeline(handle);
+    reply = redisCommand(handle->connection, REDIS_ASYNC_QUEUE_POP);
+    if (reply->type == REDIS_REPLY_STRING &&
+        reply->len > 0 &&
+        reply->len <= *len)
+    {
+        memcpy(data, reply->str, reply->len);
+        *len = reply->len;
+    }
+    else
+    {
+        *len = 0;
+    }
+
+    return check_redis_return(handle, reply);
 }
 
 void redis_shutdown(struct kv_store* handle)
