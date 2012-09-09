@@ -85,7 +85,7 @@ test_ext4: default
 		/home/wolf/Dropbox/Projects/xray/sample/ext4_index.bson
 	@../bson/bson_printer \
 		/home/wolf/Dropbox/Projects/xray/sample/ext4_index.bson | \
-		head -n 10
+		head -n 40 
 	@ls -lah /home/wolf/Dropbox/Projects/xray/sample/ext4_index.bson
 	@gzip --best -c \
 		/home/wolf/Dropbox/Projects/xray/sample/ext4_index.bson \

@@ -206,6 +206,13 @@ int mbr_serialize_mbr(struct disk_mbr mbr, uint32_t active, FILE* serializef)
 
     serialized = bson_init();
 
+    value.type = BSON_STRING;
+    value.size = strlen("mbr");
+    value.key = "type";
+    value.data = "mbr";
+
+    bson_serialize(serialized, &value);
+
     value.type = BSON_BOOLEAN;
     value.key = "gpt";
     value.data = &(has_gpt);
@@ -221,6 +228,13 @@ int mbr_serialize_mbr(struct disk_mbr mbr, uint32_t active, FILE* serializef)
     value.type = BSON_INT32;
     value.key = "active_partitions";
     value.data = &active;
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_BINARY;
+    value.size = sizeof(mbr);
+    value.key = "mbr";
+    value.data = &mbr;
 
     bson_serialize(serialized, &value);
 
