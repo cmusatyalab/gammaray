@@ -1,44 +1,13 @@
 #ifndef __ANALYSIS_ENGINE_DEEP_INSPECTION_H
 #define __ANALYSIS_ENGINE_DEEP_INSPECTION_H
 
-#include "bst.h"
-#include "linkedlist.h"
 #include "ext2.h"
 #include "ext4.h"
 #include "mbr.h"
 #include "redis_queue.h"
+#include "qemu_common.h"
 
 #include <stdbool.h>
-
-/* write event */
-#define QEMU_HEADER_SIZE sizeof(struct qemu_bdrv_write_header)
-
-enum SECTOR_TYPE
-{
-    SECTOR_UNKNOWN = -1,
-    SECTOR_MBR = 0,
-    SECTOR_EXT2_PARTITION = 1,
-    SECTOR_EXT2_SUPERBLOCK = 2,
-    SECTOR_EXT2_BLOCK_GROUP_DESCRIPTOR = 3,
-    SECTOR_EXT2_BLOCK_GROUP_BLOCKMAP = 4,
-    SECTOR_EXT2_BLOCK_GROUP_INODEMAP = 5,
-    SECTOR_EXT2_INODE = 6,
-    SECTOR_EXT2_DATA = 7,
-    SECTOR_EXT4_EXTENT = 8
-};
-
-struct qemu_bdrv_write_header
-{
-    int64_t sector_num;
-    int nb_sectors;
-} __attribute__((packed));
-
-struct qemu_bdrv_write
-{
-    struct qemu_bdrv_write_header header;
-    const uint8_t* data;
-};
-
 
 /* custom indexes */
 struct mbr
