@@ -351,9 +351,9 @@ uint32_t ext4_next_block_group_descriptor(FILE* disk,
 }
 
 int ext4_next_block_group_descriptor_sectors(FILE* disk,
-                                             int64_t partition_offset,
-                                             struct ext4_superblock superblock,
-                                             struct ext4_block_group_descriptor* bgd)
+                                      int64_t partition_offset,
+                                      struct ext4_superblock superblock,
+                                      struct ext4_block_group_descriptor* bgd)
 {
     static uint32_t i = 0;
     uint64_t offset = (superblock.s_first_data_block+1) * ext4_block_size(superblock);
