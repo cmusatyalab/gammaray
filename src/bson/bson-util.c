@@ -25,7 +25,7 @@ int bson_print(FILE* stream, struct bson_info* bson)
                 fprintf(stream, "[BSON_DOUBLE] %f\n", *((double *) v1.data));
                 break;
             case BSON_STRING:
-                fprintf(stream, "[BSON_STRING] '");
+                fprintf(stream, "[BSON_STRING, %"PRIu32"] '", v1.size);
                 fwrite((uint8_t *) v1.data, v1.size, 1, stream);
                 fprintf(stream, "'\n");
                 break;
@@ -42,7 +42,7 @@ int bson_print(FILE* stream, struct bson_info* bson)
                 bson_cleanup(embedded);
                 break;
             case BSON_BINARY:
-                fprintf(stream, "[BSON_BINARY] ");
+                fprintf(stream, "[BSON_BINARY, %"PRIu32"] ", v1.size);
                 hexdump((uint8_t *) v1.data, v1.size);
                 break;
             case BSON_UNDEFINED:
