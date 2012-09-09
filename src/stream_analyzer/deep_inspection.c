@@ -108,28 +108,6 @@ void print_ext4_fs(struct ext4_fs* fs)
     fprintf_yellow(stdout, "fs->num_files %"PRIu64"\n", fs->num_files);
 }
 
-void print_partition(struct linkedlist* pt)
-{
-    struct partition* pte;
-    uint64_t i;
-
-    for (i = 0; i < linkedlist_size(pt); i++)
-    {
-        pte = linkedlist_get(pt, i);
-        fprintf_light_cyan(stdout, "-- Partition --\n");
-        fprintf_yellow(stdout, "pte->pte_num == %"PRIu64"\n", pte->pte_num);
-        fprintf_yellow(stdout, "pte->partition_type == %"PRIu64"\n",
-                                pte->partition_type);
-        fprintf_yellow(stdout, "pte->first_sector_lba == %"PRIu64"\n",
-                                pte->first_sector_lba);
-        fprintf_yellow(stdout, "pte->final_sector_lba == %"PRIu64"\n",
-                                pte->final_sector_lba);
-        fprintf_yellow(stdout, "pte->sector == %"PRIu64"\n", pte->sector);
-        fprintf_yellow(stdout, "pte->fs == %p\n", &(pte->fs));
-        print_ext4_fs(&(pte->fs));
-    }
-}
-
 void print_mbr(struct mbr* mbr)
 {
     fprintf_light_cyan(stdout, "-- MBR --\n");
