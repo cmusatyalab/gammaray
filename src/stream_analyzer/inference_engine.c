@@ -101,13 +101,6 @@ int read_loop(int fd, struct mbr* mbr, struct kv_store* store, char* vmname,
     return EXIT_SUCCESS;
 }
 
-void print_hiredis_version()
-{
-    fprintf(stdout, "Current libhiredis version is %d.%d.%d\n", HIREDIS_MAJOR,
-                                                                HIREDIS_MINOR,
-                                                                HIREDIS_PATCH);
-}
-
 uint64_t diff_time(struct timeval start, struct timeval end)
 {
     time_t delta_seconds = end.tv_sec - start.tv_sec;
@@ -129,7 +122,7 @@ int main(int argc, char* args[])
     fprintf_blue(stdout, "VM Disk Analysis Engine -- "
                          "By: Wolfgang Richter "
                          "<wolf@cs.cmu.edu>\n");
-    print_hiredis_version();
+    redis_print_version();
 
     if (argc < 5)
     {

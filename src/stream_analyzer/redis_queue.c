@@ -74,6 +74,13 @@ int redis_flush_pipeline(struct kv_store* handle)
 }
 
 /***** Core API *****/
+void redis_print_version()
+{
+    fprintf(stdout, "Current libhiredis version is %d.%d.%d\n", HIREDIS_MAJOR,
+                                                                HIREDIS_MINOR,
+                                                                HIREDIS_PATCH);
+}
+
 struct kv_store* redis_init(char* db)
 {
     struct timeval timeout = { 1, 500000 };
