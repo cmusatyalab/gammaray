@@ -1,3 +1,5 @@
+#include "util.h"
+
 #include "redis_queue.h"
 
 #include "hiredis.h"
@@ -9,9 +11,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define REDIS_DEFAULT_TIMEOUT 300 /* seconds; 5 minute default */
-#define REDIS_DEFAULT_PIPELINED 30 /* unitless; 30 default */
-#define REDIS_DEFAULT_BYTES 262144000 /* bytes; 250 MiB default */
+#define REDIS_DEFAULT_TIMEOUT 300 /* seconds; 5 minute */
+#define REDIS_DEFAULT_PIPELINED 1 /* unitless; 16384 (4096*16384=64MB) */
+#define REDIS_DEFAULT_BYTES 262144000 /* bytes; 250 MiB */
 
 #define REDIS_DATA_INSERT "SET sector:%"PRIu64" "\
                           "start:%"PRIu64\
@@ -28,11 +30,18 @@
 #define REDIS_FCOUNTER_SET "SET fcounter %"PRIu64
 
 /***** Helper Functions, not exposed *****/
+struct thread_job
+{
+    struct kv_store* handle;
+    uint64_t cmds_to_process;
+};
+
 struct kv_store
 {
     redisContext* connection;
     uint64_t outstanding_pipelined_cmds;
     size_t outstanding_bytes;
+    pthread_mutex_t lock;
 };
 
 int check_redis_return(struct kv_store* handle, redisReply* reply)
@@ -69,6 +78,7 @@ int redis_select(struct kv_store* handle, char* db)
 int redis_flush_pipeline(struct kv_store* handle)
 {
     redisReply* reply;
+
     while (handle->outstanding_pipelined_cmds)
     {
         redisGetReply(handle->connection, (void**) &reply);
@@ -78,6 +88,35 @@ int redis_flush_pipeline(struct kv_store* handle)
         }
         handle->outstanding_pipelined_cmds--;
     }
+
+    return EXIT_SUCCESS;
+}
+
+int redis_flush_thread_pipeline(struct thread_job* job)
+{
+    redisReply* reply;
+    struct timeval start, end;
+    gettimeofday(&start, NULL);
+    pthread_mutex_lock(&(job->handle->lock));
+
+    while (job->cmds_to_process)
+    {
+        redisGetReply(job->handle->connection, (void**) &reply);
+        if(check_redis_return(job->handle, reply))
+        {
+            fprintf(stderr, "ERROR FLUSHING\n");
+            pthread_mutex_unlock(&(job->handle->lock));
+            return EXIT_FAILURE;
+        }
+        job->cmds_to_process--;
+    }
+    gettimeofday(&end, NULL);
+    fprintf(stderr, "redis_flush_pipeline finished in %"PRIu64
+                        " microseconds\n",
+                        diff_time(start, end));
+    pthread_mutex_unlock(&(job->handle->lock));
+    free(job);
+
     return EXIT_SUCCESS;
 }
 
@@ -114,6 +153,7 @@ struct kv_store* redis_init(char* db)
     }
 
     handle->outstanding_pipelined_cmds = 0;
+    pthread_mutex_init(&(handle->lock), NULL);
 
     return handle;
 }
@@ -346,6 +386,7 @@ void redis_free_list(uint8_t* list[], size_t len)
 int redis_async_write_enqueue(struct kv_store* handle, uint8_t* data,
                                                        size_t len)
 {
+    struct thread_job* job;
     redisAppendCommand(handle->connection, REDIS_ASYNC_QUEUE_PUSH,
                                            data,
                                            len);
@@ -355,10 +396,14 @@ int redis_async_write_enqueue(struct kv_store* handle, uint8_t* data,
     if (handle->outstanding_pipelined_cmds >= REDIS_DEFAULT_PIPELINED ||
         handle->outstanding_bytes > REDIS_DEFAULT_BYTES)
     {
-        if (redis_flush_pipeline(handle))
+        job = (struct thread_job*) malloc(sizeof(struct thread_job));
+        job->handle = handle;
+        job->cmds_to_process = handle->outstanding_pipelined_cmds;
+        if (redis_flush_thread_pipeline(job))
         {
             assert(true);
         }
+        handle->outstanding_pipelined_cmds = 0;
         handle->outstanding_bytes = 0;
     }
 
@@ -397,6 +442,7 @@ void redis_shutdown(struct kv_store* handle)
             redisFree(handle->connection);
         }
 
+        pthread_mutex_destroy(&(handle->lock));
         free(handle);
     }
 }

@@ -39,6 +39,7 @@
 
 
 struct kv_store;
+struct thread_job;
 
 void redis_print_version();
 
