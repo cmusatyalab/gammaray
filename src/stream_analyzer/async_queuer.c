@@ -1,14 +1,13 @@
 /*****************************************************************************
  * Author: Wolfgang Richter <wolf@cs.cmu.edu>                                *
- * Purpose: Analyze a stream of disk block writes and infer file-level       * 
- *          mutations given context from a pre-indexed raw disk image.       *
+ * Purpose: Push asynchronously all writes into a Redis queue.               * 
  *                                                                           *
  *****************************************************************************/
 
 #include "color.h"
-#include "deep_inspection.h"
 
 #include "redis_queue.h"
+#include "qemu_common.h"
 
 #include <inttypes.h>
 #include <sys/time.h>
@@ -21,14 +20,18 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define SECTOR_SIZE 512 
+uint64_t diff_time(struct timeval start, struct timeval end)
+{
+    time_t delta_seconds = end.tv_sec - start.tv_sec;
+    suseconds_t delta_micro = end.tv_usec - start.tv_usec;
+    uint64_t micros = delta_seconds * 1000000 + delta_micro;
+    return micros;
+}
 
-int read_loop(int fd, struct mbr* mbr, struct kv_store* store, char* vmname,
-              uint64_t block_size)
+int read_loop(int fd, struct kv_store* store)
 {
     uint8_t buf[QEMU_HEADER_SIZE];
     int64_t total = 0, read_ret = 0;
-    int sector_type = SECTOR_UNKNOWN;
     struct qemu_bdrv_write write;
 
     while (1)
@@ -58,7 +61,6 @@ int read_loop(int fd, struct mbr* mbr, struct kv_store* store, char* vmname,
             return EXIT_FAILURE;
         }
 
-        qemu_parse_header(buf, &write);
         write.data = (const uint8_t*)
                      malloc(write.header.nb_sectors*SECTOR_SIZE);
 
@@ -88,67 +90,36 @@ int read_loop(int fd, struct mbr* mbr, struct kv_store* store, char* vmname,
             return EXIT_FAILURE;
         }
 
-        qemu_print_write(&write);
-        sector_type = qemu_infer_sector_type(&write, store, block_size);
-        qemu_print_sector_type(sector_type);
-        if (sector_type == SECTOR_EXT2_INODE ||
-            sector_type == SECTOR_EXT2_DATA)
-            qemu_deep_inspect(&write, store, vmname, block_size);
         free((void*) write.data);
-        fflush(stdout);
     }
 
     return EXIT_SUCCESS;
-}
-
-uint64_t diff_time(struct timeval start, struct timeval end)
-{
-    time_t delta_seconds = end.tv_sec - start.tv_sec;
-    suseconds_t delta_micro = end.tv_usec - start.tv_usec;
-    uint64_t micros = delta_seconds * 1000000 + delta_micro;
-    return micros;
 }
 
 /* main thread of execution */
 int main(int argc, char* args[])
 {
     int fd, ret;
-    uint64_t block_size, load_time;
-    char* index, *db, *stream, *vmname;
-    struct mbr mbr;
-    FILE* indexf;
+    char* db, *stream;
     struct timeval start, end;
 
-    fprintf_blue(stdout, "VM Disk Analysis Engine -- "
+    fprintf_blue(stdout, "Async Qemu Queue Pusher -- "
                          "By: Wolfgang Richter "
                          "<wolf@cs.cmu.edu>\n");
     redis_print_version();
 
     if (argc < 5)
     {
-        fprintf_light_red(stderr, "Usage: %s <disk index file> <stream file>"
-                                  " <redis db num> <vmname>\n", args[0]);
+        fprintf_light_red(stderr, "Usage: %s <stream file>"
+                                  " <redis db num>\n", args[0]);
         return EXIT_FAILURE;
     }
 
-    index = args[1];
-    stream = args[2];
-    db = args[3];
-    vmname = args[4];
-
-    fprintf_cyan(stdout, "%s: loading index: %s\n\n", vmname, index);
-
-    indexf = fopen(index, "r");
-
-    if (indexf == NULL)
-    {
-        fprintf_light_red(stderr, "Error opening index file. "
-                                  "Does it exist?\n");
-        return EXIT_FAILURE;
-    }
+    stream = args[1];
+    db = args[2];
 
     /* ----------------- hiredis ----------------- */
-    struct kv_store* handle = redis_init(db, false);
+    struct kv_store* handle = redis_init(db, true);
     if (handle == NULL)
     {
         fprintf_light_red(stderr, "Failed getting Redis context "
@@ -156,17 +127,7 @@ int main(int argc, char* args[])
         return EXIT_FAILURE;
     }
 
-    gettimeofday(&start, NULL);
-    if (qemu_load_index(indexf, &mbr, handle))
-    {
-        fprintf_light_red(stderr, "Error deserializing index.\n");
-        return EXIT_FAILURE;
-    }
-    gettimeofday(&end, NULL);
-
-    load_time = diff_time(start, end);
-
-    fprintf_cyan(stdout, "%s: attaching to stream: %s\n\n", vmname, stream);
+    fprintf_cyan(stdout, "Attaching to stream: %s\n\n", stream);
 
     if (strcmp(stream, "-") != 0)
     {
@@ -184,18 +145,13 @@ int main(int argc, char* args[])
         return EXIT_FAILURE;
     }
 
-    fclose(indexf);
-    block_size = qemu_get_block_size(handle, 0);
     gettimeofday(&start, NULL);
-    ret = read_loop(fd, &mbr, handle, vmname, block_size);
+    ret = read_loop(fd, handle);
     gettimeofday(&end, NULL);
-    fprintf_light_red(stderr, "load_index time: %"PRIu64" microseconds\n",
-                              load_time);
     fprintf_light_red(stderr, "read_loop time: %"PRIu64" microseconds\n",
                               diff_time(start, end));
     close(fd);
     redis_flush_pipeline(handle);
-    exit(0);
     redis_shutdown(handle);
 
     return EXIT_SUCCESS;

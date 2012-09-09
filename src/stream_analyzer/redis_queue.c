@@ -1,5 +1,8 @@
 #include "redis_queue.h"
 
+#include "hiredis.h"
+#include "async.h"
+
 #include <assert.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -24,8 +27,13 @@
 /***** Helper Functions, not exposed *****/
 struct kv_store
 {
-    redisContext* connection;
+    union
+    {
+        redisContext* connection;
+        redisAsyncContext* async_connection;
+    };
     uint64_t outstanding_pipelined_cmds;
+    bool async;
 };
 
 int check_redis_return(redisContext* c, redisReply* reply)
@@ -73,6 +81,16 @@ int redis_flush_pipeline(struct kv_store* handle)
     return EXIT_SUCCESS;
 }
 
+/***** Async Callbacks, also not exposed *****/
+void redis_disconnect_handler(const redisAsyncContext* c, int status)
+{
+    if (status != REDIS_OK)
+    {
+        fprintf(stderr, "Unrecoverable disconnect from Redis.\n");
+        exit(1);
+    }
+}
+
 /***** Core API *****/
 void redis_print_version()
 {
@@ -81,30 +99,52 @@ void redis_print_version()
                                                                 HIREDIS_PATCH);
 }
 
-struct kv_store* redis_init(char* db)
+struct kv_store* redis_init(char* db, bool async)
 {
     struct timeval timeout = { 1, 500000 };
     struct kv_store* handle = (struct kv_store*)
                               malloc(sizeof(struct kv_store));
     if (handle)
     {
-        handle->connection = redisConnectWithTimeout((char*)"127.0.0.1", 6379,
-                                              timeout);
-        handle->outstanding_pipelined_cmds = 0;
-        if (handle->connection->err)
+        if (async)
         {
-            redisFree(handle->connection);
-            free(handle);
-            return NULL;
-        }
+            handle->async_connection = redisAsyncConnect("127.0.0.1", 6379);
+            if (handle->async_connection->err)
+            {
+                free(handle);
+                return NULL;
+            }
 
-       if (redis_select(handle, db))
-       {
-           redisFree(handle->connection);
-           free(handle);
-           return NULL;
-       }
+            if (redisAsyncSetDisconnectCallback(handle->async_connection,
+                                                redis_disconnect_handler) !=
+                REDIS_OK)
+            {
+                free(handle);
+                return NULL;
+            }
+        }
+        else
+        {
+            handle->connection = redisConnectWithTimeout("127.0.0.1",
+                                                         6379, timeout);
+            handle->outstanding_pipelined_cmds = 0;
+            if (handle->connection->err)
+            {
+                redisFree(handle->connection);
+                free(handle);
+                return NULL;
+            }
+
+           if (redis_select(handle, db))
+           {
+               redisFree(handle->connection);
+               free(handle);
+               return NULL;
+           }
+        }
     }
+
+    handle->async = async;
 
     return handle;
 }
@@ -334,15 +374,31 @@ void redis_free_list(uint8_t* list[], size_t len)
     }
 }
 
+void redis_async_write_enqueue(struct kv_store* handle, uint8_t* data,
+                                                        size_t len)
+{
+}
+
+void redis_async_write_dequeue(struct kv_store* handle, uint8_t* data,
+                                                        size_t* len)
+{
+}
+
 void redis_shutdown(struct kv_store* handle)
 {
     if (handle)
     {
         redisCommand(handle->connection, "FLUSHALL");
-        if (handle->connection)
+        if (handle->connection && !(handle->async))
         {
             redisFree(handle->connection);
         }
+
+        if (handle->async_connection && handle->async)
+        {
+            redisAsyncDisconnect(handle->async_connection);
+        }
+
         free(handle);
     }
 }

@@ -23,6 +23,18 @@ default:
 	#	 -I/usr/include/hiredis \
 	#	 #-DNOCOLOR
 
+	@clang async_queuer.c -g \
+		 ../util/color.c \
+		 ../util/util.c \
+		 redis_queue.c \
+		 -lhiredis \
+		 -o async_queuer \
+		 -Wall \
+		 -Werror \
+		 -I../util \
+		 -I/usr/include/hiredis \
+		 #-DNOCOLOR
+
 	@clang inference_engine.c -g \
 		 ../util/color.c \
 		 ../util/util.c \

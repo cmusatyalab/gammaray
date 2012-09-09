@@ -2,8 +2,8 @@
 #define __STREAM_ANALYZER_REDIS_H
 
 #include <inttypes.h>
-
-#include "hiredis.h"
+#include <stddef.h>
+#include <stdbool.h>
 
 #define REDIS_MBR_SECTOR_INSERT "HSET mbr:%"PRIu64" %s %b"
 #define REDIS_MBR_SECTOR_GET "HGET mbr:%"PRIu64" %s"
@@ -34,12 +34,15 @@
 #define REDIS_EXTENTS_LGET "LRANGE extents:%"PRIu64" 0 -1"
 #define REDIS_EXTENTS_SECTOR_INSERT "SET sector:%"PRIu64"' lextents:%"PRIu64
 
+#define REDIS_ASYNC_QUEUE_PUSH "LPUSH writequeue %b"
+#define REDIS_ASYNC_QUEUE_POP "BRPOP writequeue"
+
 
 struct kv_store;
 
 void redis_print_version();
 
-struct kv_store* redis_init(char* db);
+struct kv_store* redis_init(char* db, bool async);
 void redis_shutdown(struct kv_store* store);
 
 int redis_get_fcounter(struct kv_store* handle, uint64_t* counter);
@@ -68,4 +71,9 @@ int redis_sector_lookup(struct kv_store* store, uint64_t sector, uint8_t* data,
 int redis_list_get(struct kv_store* handle, char* fmt, uint64_t src,
                    uint8_t** result[], size_t* len);
 void redis_free_list(uint8_t* list[], size_t len);
+
+void redis_async_write_enqueue(struct kv_store* handle, uint8_t* data,
+                                                        size_t len);
+void redis_async_write_dequeue(struct kv_store* handle, uint8_t* data,
+                                                        size_t* len);
 #endif
