@@ -311,7 +311,9 @@ uint64_t ext4_num_block_groups(struct ext4_superblock superblock)
 uint32_t ext4_next_block_group_descriptor(FILE* disk,
                                      int64_t partition_offset,
                                      struct ext4_superblock superblock,
-                                     struct ext4_block_group_descriptor* bgd)
+                                     struct ext4_block_group_descriptor* bgd,
+                                     uint32_t* sector,
+                                     uint32_t* s_offset)
 {
     static uint32_t i = 0;
     uint64_t offset = (superblock.s_first_data_block+1) *
@@ -338,7 +340,11 @@ uint32_t ext4_next_block_group_descriptor(FILE* disk,
             return 0;
         }
         i++;
-        return (partition_offset + offset + i*sizeof(struct ext4_block_group_descriptor)) / SECTOR_SIZE;
+        *sector = (partition_offset + offset +
+                   i*sizeof(struct ext4_block_group_descriptor)) / SECTOR_SIZE;
+        *s_offset = (partition_offset + offset +
+                   i*sizeof(struct ext4_block_group_descriptor)) % SECTOR_SIZE;
+        return *sector;
     }
 
     return 0; 
@@ -2124,8 +2130,10 @@ int ext4_list_block_groups(FILE* disk, int64_t partition_offset,
                            struct ext4_superblock superblock)
 {
     struct ext4_block_group_descriptor bgd;
+    uint32_t sector, offset;
 
-    while (ext4_next_block_group_descriptor(disk, partition_offset, superblock, &bgd) > 0)
+    while (ext4_next_block_group_descriptor(disk, partition_offset, superblock,
+                                            &bgd, &sector, &offset) > 0)
     {
        if (print_ext4_block_group_descriptor(bgd))
        {
@@ -2226,13 +2234,16 @@ int ext4_serialize_bgd_sectors(struct bson_info* serialized,
 int ext4_print_sectormap(FILE* disk, int64_t partition_offset,
                          struct ext4_superblock superblock)
 {
+    uint32_t sector, offset;
     /* print superblock sector */
-    fprintf_yellow(stdout, "Superblock sector %"PRId64"\n", (partition_offset + EXT4_SUPERBLOCK_OFFSET) / SECTOR_SIZE);
+    fprintf_yellow(stdout, "Superblock sector %"PRId64"\n",
+                    (partition_offset + EXT4_SUPERBLOCK_OFFSET) / SECTOR_SIZE);
 
     /* walk block group descriptor table */
     struct ext4_block_group_descriptor bgd;
 
-    while (ext4_next_block_group_descriptor(disk, partition_offset, superblock, &bgd) > 0)
+    while (ext4_next_block_group_descriptor(disk, partition_offset, superblock,
+                                            &bgd, &sector, &offset) > 0)
     {
        if (print_sectors_ext4_block_group_descriptor(partition_offset, bgd, superblock))
        {
@@ -2341,29 +2352,42 @@ int ext4_serialize_bgds(FILE* disk, int64_t partition_offset,
 {
     struct ext4_block_group_descriptor bgd;
     struct bson_info* serialized;
-    struct bson_kv v_bgd, v_sector;
-    uint32_t sector = 0;
+    struct bson_kv v_type, v_bgd, v_sector, v_offset;
+    uint32_t sector = 0, offset = 0;
 
     serialized = bson_init();
     
+    v_type.type = BSON_STRING;
+    v_type.key = "type";
+    v_type.size = strlen("bgd");
+    v_type.data = "bgd";
+
     v_bgd.type = BSON_BINARY;
     v_bgd.key = "bgd";
     v_bgd.subtype = BSON_BINARY_GENERIC;
     v_bgd.size = sizeof(struct ext4_block_group_descriptor);
+    v_bgd.data = &bgd;
     
     v_sector.type = BSON_INT32;
     v_sector.key = "sector";
+    v_sector.data = &sector;
 
-    while ((sector = ext4_next_block_group_descriptor(disk,
-                                                     partition_offset,
-                                                     *superblock,
-                                                     &bgd)) > 0)
+    v_offset.type = BSON_INT32;
+    v_offset.key = "offset";
+    v_offset.data = &offset;
+
+    while ((ext4_next_block_group_descriptor(disk,
+                                             partition_offset,
+                                             *superblock,
+                                             &bgd,
+                                             &sector,
+                                             &offset)) > 0)
     {
-        v_bgd.data = &bgd;
-        bson_serialize(serialized, &v_bgd);
 
-        v_sector.data = &sector;
+        bson_serialize(serialized, &v_type);
+        bson_serialize(serialized, &v_bgd);
         bson_serialize(serialized, &v_sector);
+        bson_serialize(serialized, &v_offset);
 
         ext4_serialize_bgd_sectors(serialized, bgd, superblock,
                                    partition_offset);
@@ -2709,6 +2733,13 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
     if ((root_inode.i_mode & 0xa000) == 0xa000) /* symlink */
     {
         value.type = BSON_STRING;
+        value.size = strlen("file");
+        value.key = "type";
+        value.data = "file";
+
+        bson_serialize(bson, &value);
+
+        value.type = BSON_STRING;
         value.size = strlen(prefix);
         value.key = "path";
         value.data = prefix;
@@ -2740,6 +2771,13 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
     else if ((root_inode.i_mode & 0x8000) == 0x8000) /* file, no dir entries more */
     {
         value.type = BSON_STRING;
+        value.size = strlen("file");
+        value.key = "type";
+        value.data = "file";
+
+        bson_serialize(bson, &value);
+
+        value.type = BSON_STRING;
         value.size = strlen(prefix);
         value.key = "path";
         value.data = prefix;
@@ -2770,6 +2808,14 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
     }
     else if ((root_inode.i_mode & 0x4000) == 0x4000)
     {
+        value.type = BSON_STRING;
+        value.size = strlen("file");
+        value.key = "type";
+        value.data = "file";
+
+        bson_serialize(bson, &value);
+
+
         value.type = BSON_STRING;
         value.size = strlen(prefix);
         value.key = "path";
