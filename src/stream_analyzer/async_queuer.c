@@ -5,6 +5,7 @@
  *****************************************************************************/
 
 #include "color.h"
+#include "util.h"
 
 #include "redis_queue.h"
 #include "qemu_common.h"
@@ -12,24 +13,14 @@
 #include <event2/event.h>
 
 #include <inttypes.h>
-#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <signal.h>
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-uint64_t diff_time(struct timeval start, struct timeval end)
-{
-    time_t delta_seconds = end.tv_sec - start.tv_sec;
-    suseconds_t delta_micro = end.tv_usec - start.tv_usec;
-    uint64_t micros = delta_seconds * 1000000 + delta_micro;
-    return micros;
-}
 
 int read_loop(int fd, struct kv_store* handle)
 {
@@ -103,6 +94,8 @@ int read_loop(int fd, struct kv_store* handle)
 
         /* the mountain of things i still regret ! */
         redis_async_write_enqueue(handle, write.data, len);
+
+        free(write.data);
 
         gettimeofday(&end, NULL);
         fprintf(stderr, "[%"PRIu64"]read_loop finished in %"PRIu64

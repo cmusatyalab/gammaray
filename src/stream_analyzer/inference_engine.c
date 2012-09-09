@@ -6,12 +6,12 @@
  *****************************************************************************/
 
 #include "color.h"
-#include "deep_inspection.h"
+#include "util.h"
 
+#include "deep_inspection.h"
 #include "redis_queue.h"
 
 #include <inttypes.h>
-#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -99,14 +99,6 @@ int read_loop(int fd, struct mbr* mbr, struct kv_store* store, char* vmname,
     }
 
     return EXIT_SUCCESS;
-}
-
-uint64_t diff_time(struct timeval start, struct timeval end)
-{
-    time_t delta_seconds = end.tv_sec - start.tv_sec;
-    suseconds_t delta_micro = end.tv_usec - start.tv_usec;
-    uint64_t micros = delta_seconds * 1000000 + delta_micro;
-    return micros;
 }
 
 /* main thread of execution */

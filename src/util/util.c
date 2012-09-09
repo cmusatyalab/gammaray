@@ -159,3 +159,11 @@ int pretty_print_bytes(uint64_t bytes, char* buf, uint64_t bufsize)
 
     return EXIT_SUCCESS;
 }
+
+uint64_t diff_time(struct timeval start, struct timeval end)
+{
+    time_t delta_seconds = end.tv_sec - start.tv_sec;
+    suseconds_t delta_micro = end.tv_usec - start.tv_usec;
+    uint64_t micros = delta_seconds * 1000000 + delta_micro;
+    return micros;
+}
