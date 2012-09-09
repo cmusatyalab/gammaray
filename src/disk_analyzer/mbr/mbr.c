@@ -252,9 +252,16 @@ int mbr_serialize_partition(uint32_t pte_num, struct partition_table_entry pte,
     struct bson_kv value;
     int32_t partition_type = pte.partition_type;
     int32_t final_sector = pte.first_sector_lba + pte.sector_count;
-    int ret, sector = 0;
+    int ret;
 
     serialized = bson_init();
+
+    value.type = BSON_STRING;
+    value.size = strlen("partition");
+    value.key = "type";
+    value.data = "partition";
+
+    bson_serialize(serialized, &value);
 
     value.type = BSON_INT32;
     value.key = "pte_num";
@@ -277,12 +284,6 @@ int mbr_serialize_partition(uint32_t pte_num, struct partition_table_entry pte,
     value.type = BSON_INT32;
     value.key = "final_sector_lba";
     value.data = &(final_sector);
-
-    bson_serialize(serialized, &value);
-
-    value.type = BSON_INT32;
-    value.key = "sector";
-    value.data = &sector;
 
     bson_serialize(serialized, &value);
 
