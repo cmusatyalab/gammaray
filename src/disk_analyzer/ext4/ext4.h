@@ -185,8 +185,8 @@ int ext4_print_sectormap(FILE* disk, int64_t partition_offset,
 int64_t ext4_sector_from_block(uint64_t block, struct ext4_superblock super,
                                int64_t partition_offset);
 char* ext4_last_mount_point(struct ext4_superblock* superblock);
-int ext4_serialize_fs(struct ext4_superblock* superblock,
-                      char* mount_point, FILE* serializef);
+int ext4_serialize_fs(struct ext4_superblock* superblock, int64_t offset,
+                      int32_t pte_num, char* mount_point, FILE* serializef);
 int ext4_serialize_bgds(FILE* disk, int64_t partition_offset,
                         struct ext4_superblock* superblock, FILE* serializef);
 int ext4_serialize_fs_tree(FILE* disk, int64_t partition_offset,

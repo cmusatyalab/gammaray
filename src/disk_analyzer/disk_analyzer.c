@@ -30,7 +30,7 @@ int main(int argc, char* args[])
     struct ntfs_boot_file ntfs_bootf;
     struct partition_table_entry pte;
     int64_t partition_offset;
-    int i, active_count = 0;
+    int32_t i, active_count = 0;
     char buf[4096];
 
     fprintf_blue(stdout, "Raw Disk Analyzer -- By: Wolfgang Richter "
@@ -230,7 +230,7 @@ int main(int argc, char* args[])
                     return EXIT_FAILURE;
                 }
 
-                if (ext4_serialize_fs(&ext4_superblock, 
+                if (ext4_serialize_fs(&ext4_superblock, partition_offset, i,
                                       ext4_last_mount_point(&ext4_superblock),
                                       serializef))
                 {

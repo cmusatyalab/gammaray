@@ -2252,10 +2252,11 @@ char* ext4_last_mount_point(struct ext4_superblock* superblock)
 }
 
 int ext4_serialize_fs(struct ext4_superblock* superblock,
+                      int64_t offset,
+                      int32_t pte_num,
                       char* mount_point, 
                       FILE* serializedf)
 {
-    int32_t fs_type = MBR_FS_TYPE_EXT4;
     /* round up integer arithmetic */
     int32_t num_block_groups = (ext4_s_blocks_count(*superblock) +
                                 (superblock->s_blocks_per_group - 1)) /
@@ -2272,9 +2273,23 @@ int ext4_serialize_fs(struct ext4_superblock* superblock,
     serialized = bson_init();
     sectors = bson_init();
 
+    value.type = BSON_STRING;
+    value.size = strlen("fs");
+    value.key = "type";
+    value.data = "fs";
+
+    bson_serialize(serialized, &value);
+
     value.type = BSON_INT32;
-    value.key = "fs_type";
-    value.data = &(fs_type);
+    value.key = "pte_num";
+    value.data = &(pte_num);
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_STRING;
+    value.size = strlen("ext4");
+    value.key = "fs";
+    value.data = "ext4";
 
     bson_serialize(serialized, &value);
 
@@ -2294,6 +2309,14 @@ int ext4_serialize_fs(struct ext4_superblock* superblock,
     value.type = BSON_INT32;
     value.key = "num_files";
     value.data = &(num_files);
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT64;
+    value.key = "superblock_sector";
+    offset += 1024;
+    offset /= SECTOR_SIZE;
+    value.data = &(offset);
 
     bson_serialize(serialized, &value);
 
