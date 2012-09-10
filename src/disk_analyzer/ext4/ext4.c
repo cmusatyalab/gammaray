@@ -1418,7 +1418,18 @@ int ext4_reconstruct_tree(FILE* disk, int64_t partition_offset,
                               copy);
         return 0;
     }
-    else if ((root_inode.i_mode & 0x4000) == 0x4000)
+    else if ((root_inode.i_mode & 0x6000) == 0x6000) /* block special file */
+    {
+        strcpy(copy, copy_prefix);
+        prefix[strlen(prefix)-1] = '\0'; /* remove trailing slash */
+        strcat(copy, prefix);
+        fprintf_light_red(stdout, "Skipping block special file: %s\n", copy);
+        //mknod(copy, ext4_inode_mode(root_inode.i_mode), NULL);
+        //ext4_reconstruct_file(disk, partition_offset, superblock, root_inode,
+        //                      copy);
+        return 0;
+    }
+    else if ((root_inode.i_mode & 0x4000) == 0x4000) /* dir */
     {
         strcpy(copy, copy_prefix);
         strcat(copy, prefix);
