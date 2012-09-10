@@ -1436,7 +1436,56 @@ int __deserialize_ext4_file(FILE* index, struct bson_info* bson,
     return EXIT_SUCCESS;
 }
 
-int qemu_load_index(FILE* index, struct mbr* mbr, struct kv_store* store)
+int __deserialize_document(FILE* index, struct kv_store* store,
+                           struct bson_info* bson)
+{
+    return EXIT_FAILURE;
+}
+
+int qemu_load_index(FILE* index, struct kv_store* store)
+{
+    struct bson_kv value1, value2;
+    struct bson_info* bson = bson_init();
+
+    if (bson_readf(bson, index) != 1)
+        return EXIT_FAILURE;
+
+    if (bson_deserialize(bson, &value1, &value2) != 1)
+        return EXIT_FAILURE;
+    
+    if (strcmp(value1.key, "type") != 0)
+    {
+        fprintf_light_red(stderr, "Document missing 'type' field.\n");
+        return EXIT_FAILURE;
+    }
+
+    if (strcmp(value1.data, "file") == 0)
+    {
+        fprintf_light_yellow(stdout, "-- Deserializing a file record --\n");
+    }
+    else if (strcmp(value1.data, "bgd") == 0)
+    {
+        fprintf_light_yellow(stdout, "-- Deserializing a bgd record --\n");
+    }
+    else if (strcmp(value1.data, "fs") == 0)
+    {
+        fprintf_light_yellow(stdout, "-- Deserializing a fs record --\n");
+    }
+    else if (strcmp(value1.data, "partition") == 0)
+    {
+        fprintf_light_yellow(stdout, "-- Deserializing a partition record --\n");
+    }
+    else if (strcmp(value1.data, "mbr") == 0)
+    {
+        fprintf_light_yellow(stdout, "-- Deserializing a mbr record --\n");
+    }
+
+    bson_cleanup(bson);
+
+    return __deserialize_document(index, store, bson);
+}
+
+int __qemu_load_index(FILE* index, struct mbr* mbr, struct kv_store* store)
 {
     uint64_t i, j;
     uint32_t num_block_groups, num_files;
