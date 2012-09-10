@@ -174,11 +174,13 @@ int bson_deserialize(struct bson_info* bson_info, struct bson_kv* value,
 
     deserialize_cstring(bson_info, value);
     value->key = value->data;
+    value->size = 0;
 
     switch(value->type)
     {
         case BSON_DOUBLE:
             value->data = &(bson_info->buffer[bson_info->position]);
+            value->size = 8;
             bson_info->position += 8;
             bson_info->size -= 8;
             break;
@@ -214,6 +216,7 @@ int bson_deserialize(struct bson_info* bson_info, struct bson_kv* value,
             break;
         case BSON_BOOLEAN:
             value->data = &(bson_info->buffer[bson_info->position]);
+            value->size = 1;
             bson_info->position += 1;
             bson_info->size -= 1;
             break;
@@ -252,6 +255,7 @@ int bson_deserialize(struct bson_info* bson_info, struct bson_kv* value,
             break;
         case BSON_INT32:
             value->data = &(bson_info->buffer[bson_info->position]);
+            value->size = 4;
             bson_info->position += 4;
             bson_info->size -= 4;
             break;
@@ -262,6 +266,7 @@ int bson_deserialize(struct bson_info* bson_info, struct bson_kv* value,
             break;
         case BSON_INT64:
             value->data = &(bson_info->buffer[bson_info->position]);
+            value->size = 8;
             bson_info->position += 8;
             bson_info->size -= 8;
             break;
