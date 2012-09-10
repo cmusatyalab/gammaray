@@ -2407,7 +2407,11 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
                                        struct ext4_superblock superblock,
                                        uint32_t block_num,
                                        struct ext4_inode inode,
-                                       struct bson_info* sectors)
+                                       struct bson_info* sectors,
+                                       struct bson_info* data,
+                                       struct bson_info* extents,
+                                       bool save_data,
+                                       bool save_extents)
 {
     int i;
     struct ext4_extent_header hdr; 
@@ -2416,12 +2420,28 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
     struct ext4_extent extent;
     uint8_t buf[ext4_block_size(superblock)];
 
-    struct bson_kv value;
-    int64_t sector;
+    struct bson_kv value, data_value, extent_value;
+    uint32_t sector;
     uint32_t sectors_per_block = ext4_block_size(superblock) / SECTOR_SIZE;
     char count[11];
     value.type = BSON_INT32;
     value.key = count;
+
+    if (save_data)
+    {
+        data_value.key = count;
+        data_value.type = BSON_BINARY;
+        data_value.data = buf;
+        data_value.size = ext4_block_size(superblock);
+    }
+
+    if (save_extents)
+    {
+        extent_value.key = count;
+        extent_value.type = BSON_BINARY;
+        extent_value.data = buf;
+        extent_value.size = ext4_block_size(superblock);
+    }
 
     memcpy(buf, inode.i_block, (size_t) 60);
     hdr = *((struct ext4_extent_header*) buf);
@@ -2438,6 +2458,16 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
             {
                 ext4_read_block(disk, partition_offset, superblock,
                                 ext4_extent_index_leaf(idx2), buf);
+                
+                if (save_extents && block_num == idx2.ei_block)
+                {
+                    sector = ext4_extent_index_leaf(idx2) * sectors_per_block +
+                             partition_offset / SECTOR_SIZE;
+                    
+                    snprintf(count, 11, "%"PRIu32, sector);
+                    bson_serialize(extents, &extent_value);
+                }
+                
                 i = -1; /* allow loop-expr to run (++) */
                 hdr = *((struct ext4_extent_header*) buf);
                 idx.ei_block = (uint32_t) 2 << 31;
@@ -2449,6 +2479,16 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
             {
                 ext4_read_block(disk, partition_offset, superblock,
                                 ext4_extent_index_leaf(idx), buf);
+
+                if (save_extents && idx.ei_block == block_num)
+                {
+                    sector = ext4_extent_index_leaf(idx) * sectors_per_block +
+                             partition_offset / SECTOR_SIZE;
+                    
+                    snprintf(count, 11, "%"PRIu32, sector);
+                    bson_serialize(extents, &extent_value);
+                }
+
                 i = -1; /* allow loop-expr to run (++) */
                 hdr = *((struct ext4_extent_header*) buf);
                 idx.ei_block = (uint32_t) 2 << 31;
@@ -2475,6 +2515,15 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
                                          sectors_per_block));
                 value.data = &sector;
                 bson_serialize(sectors, &value);
+
+                if (save_data)
+                {
+                    ext4_read_block(disk, partition_offset, superblock,
+                                    (ext4_extent_start(extent) + block_num),
+                                    (uint8_t*) buf);
+                    bson_serialize(data, &data_value);
+                }
+
                 return 0;
             }
         }
@@ -2485,7 +2534,9 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
 
 int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
                                  struct ext4_superblock superblock, uint32_t block_num,
-                                 struct ext4_inode inode, struct bson_info* sectors)
+                                 struct ext4_inode inode, struct bson_info* sectors,
+                                 struct bson_info* data, struct bson_info* extents,
+                                 bool data_save, bool save_extents)
 {
     uint32_t block_size = ext4_block_size(superblock);
     uint32_t addresses_in_block = block_size / 4;
@@ -2505,11 +2556,27 @@ int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
                                          (addresses_in_block)*
                                          (addresses_in_block);
 
-    struct bson_kv value;
+    struct bson_kv value, data_value, extent_value;
     char count[11];
-    int64_t sector;
+    uint32_t sector;
     value.type = BSON_INT32;
     value.key = count;
+
+    if (data_save)
+    {
+        data_value.key = count;
+        data_value.type = BSON_BINARY;
+        data_value.data = buf;
+        data_value.size = ext4_block_size(superblock);
+    }
+
+    if (save_extents)
+    {
+        extent_value.key = count;
+        extent_value.type = BSON_BINARY;
+        extent_value.data = buf;
+        extent_value.size = ext4_block_size(superblock);
+    }
 
     if (block_num < direct_low || block_num > triple_high)
     {
@@ -2531,6 +2598,13 @@ int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
         value.data = &sector;
         bson_serialize(sectors, &value);
 
+        if (data_save)
+        {
+            ext4_read_block(disk, partition_offset, superblock,
+                            inode.i_block[block_num], (uint8_t*) buf);
+            bson_serialize(data, &data_value);
+        }
+
         return 0;
     }
 
@@ -2545,6 +2619,14 @@ int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
         ext4_read_block(disk, partition_offset, superblock, inode.i_block[12],
                         (uint8_t*) buf);
 
+        if (save_extents && block_num == 0)
+        {
+            snprintf(count, 11, "%"PRIu32, (uint32_t) (inode.i_block[12] *
+                                            sectors_per_block +
+                                            partition_offset / SECTOR_SIZE));
+            bson_serialize(extents, &extent_value);
+        }
+
         if (buf[block_num] == 0)
             return 1;
 
@@ -2555,6 +2637,13 @@ int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
                                          sectors_per_block));
         value.data = &sector;
         bson_serialize(sectors, &value);
+
+        if (data_save)
+        {
+            ext4_read_block(disk, partition_offset, superblock,
+                            buf[block_num], (uint8_t*) buf);
+            bson_serialize(data, &data_value);
+        }
 
         return 0;
     }
@@ -2573,12 +2662,30 @@ int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
         if (buf[block_num / addresses_in_block] == 0)
             return 1;
 
+        if (save_extents && block_num / addresses_in_block == 0)
+        {
+            snprintf(count, 11, "%"PRIu32, (uint32_t) (inode.i_block[13] *
+                                            sectors_per_block +
+                                            partition_offset / SECTOR_SIZE));
+            bson_serialize(extents, &extent_value);
+        }
+
+        sector = (buf[block_num / addresses_in_block] *
+                  ext4_block_size(superblock) + partition_offset) /
+                  SECTOR_SIZE;
+
         ext4_read_block(disk, partition_offset, /* indirect */
                         superblock, buf[block_num / addresses_in_block],
                         (uint8_t*) buf);
 
         if (buf[block_num % addresses_in_block] == 0)
             return 1;
+
+        if (save_extents && block_num % addresses_in_block == 0)
+        {
+            snprintf(count, 11, "%"PRIu32, sector);
+            bson_serialize(extents, &extent_value);
+        }
 
         sector = (buf[block_num % addresses_in_block] *
                   ext4_block_size(superblock) + partition_offset) /
@@ -2589,6 +2696,14 @@ int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
         value.data = &sector;
         bson_serialize(sectors, &value);
     
+        if (data_save)
+        {
+            ext4_read_block(disk, partition_offset, superblock,
+                            buf[block_num % addresses_in_block],
+                            (uint8_t*) buf);
+            bson_serialize(data, &data_value);
+        }
+
         return 0;
     }
 
@@ -2600,12 +2715,25 @@ int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
         if (inode.i_block[14] == 0)
             return 1;
 
+
         ext4_read_block(disk, partition_offset, /* triple */
                         superblock, inode.i_block[14], (uint8_t*) buf);
 
         if (buf[block_num / (addresses_in_block*addresses_in_block)] == 0)
             return 1;
         
+        if (save_extents && block_num / (addresses_in_block*addresses_in_block) == 0)
+        {
+            snprintf(count, 11, "%"PRIu32, (uint32_t) (inode.i_block[14] *
+                                            sectors_per_block +
+                                            partition_offset / SECTOR_SIZE));
+            bson_serialize(extents, &extent_value);
+        }
+        
+        sector = (buf[block_num / (addresses_in_block*addresses_in_block)] *
+                  ext4_block_size(superblock) + partition_offset) /
+                  SECTOR_SIZE;
+
         ext4_read_block(disk, partition_offset, /* double */
                         superblock,
                         buf[block_num / (addresses_in_block*
@@ -2614,6 +2742,16 @@ int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
 
         if (buf[block_num / addresses_in_block] == 0)
             return 1;
+        
+        if (save_extents && block_num / addresses_in_block == 0)
+        {
+            snprintf(count, 11, "%"PRIu32, sector);
+            bson_serialize(extents, &extent_value);
+        }
+        
+        sector = (buf[block_num / addresses_in_block] *
+                  ext4_block_size(superblock) + partition_offset) /
+                  SECTOR_SIZE;
 
         ext4_read_block(disk, partition_offset, /* indirect */
                         superblock, buf[block_num / addresses_in_block],
@@ -2621,6 +2759,12 @@ int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
 
         if (buf[block_num % addresses_in_block] == 0)
             return 1;
+        
+        if (save_extents && block_num % addresses_in_block == 0)
+        {
+            snprintf(count, 11, "%"PRIu32, sector);
+            bson_serialize(extents, &extent_value);
+        }
 
         sector = (buf[block_num % addresses_in_block] *
                   ext4_block_size(superblock) + partition_offset) /
@@ -2630,6 +2774,14 @@ int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
                                          sectors_per_block));
         value.data = &sector;
         bson_serialize(sectors, &value);
+    
+        if (data_save)
+        {
+            ext4_read_block(disk, partition_offset, superblock,
+                            buf[block_num % addresses_in_block],
+                            (uint8_t*) buf);
+            bson_serialize(data, &data_value);
+        }
 
         return 0;
     }
@@ -2640,12 +2792,15 @@ int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
 int ext4_serialize_file_sectors(FILE* disk, int64_t partition_offset,
                                 struct ext4_superblock superblock, 
                                 struct ext4_inode inode,
-                                struct bson_info* serialized)
+                                struct bson_info* serialized,
+                                bool save_data, bool save_extents)
 {
     uint64_t block_size = ext4_block_size(superblock),
              file_size = ext4_file_size(inode);
-    struct bson_info* sectors;
-    struct bson_kv value;
+    struct bson_info* sectors = NULL;
+    struct bson_info* data = NULL;
+    struct bson_info* extents = NULL;
+    struct bson_kv value, data_value, extent_value;
     uint64_t num_blocks;
     uint64_t count;
 
@@ -2664,8 +2819,26 @@ int ext4_serialize_file_sectors(FILE* disk, int64_t partition_offset,
 
     value.type = BSON_ARRAY;
     value.key = "sectors";
+
+    if (save_data)
+    {
+        data_value.type = BSON_ARRAY;
+        data_value.key = "data";
+    }
+
+    if (save_extents)
+    {
+        extent_value.type = BSON_ARRAY;
+        extent_value.key = "extents";
+    }
     
     sectors = bson_init();
+
+    if (save_data)
+        data = bson_init();
+
+    if (save_extents)
+        extents = bson_init();
 
     if ((inode.i_mode & 0xa000) == 0xa000)
         goto skip;
@@ -2677,11 +2850,13 @@ int ext4_serialize_file_sectors(FILE* disk, int64_t partition_offset,
         if (inode.i_flags & 0x80000) /* check if extents in use */
             ret_check = ext4_serialize_file_extent_sectors(disk, partition_offset,
                                                           superblock, count, inode,
-                                                          sectors);
+                                                          sectors, data, extents, save_data,
+                                                          save_extents);
         else
             ret_check = ext4_serialize_file_block_sectors(disk, partition_offset,
                                                           superblock, count, inode,
-                                                          sectors);
+                                                          sectors, data, extents, save_data,
+                                                          save_extents);
         
         if (ret_check < 0) /* error reading */
         {
@@ -2704,9 +2879,24 @@ skip:
 
     bson_finalize(sectors);
     value.data = sectors;
-
     bson_serialize(serialized, &value);
     bson_cleanup(sectors);
+
+    if (save_data)
+    {
+        bson_finalize(data);
+        data_value.data = data;
+        bson_serialize(serialized, &data_value);
+        bson_cleanup(data);
+    }
+
+    if (save_extents)
+    {
+        bson_finalize(extents);
+        extent_value.data = extents;
+        bson_serialize(serialized, &extent_value);
+        bson_cleanup(extents);
+    }
 
    return 0;
 }
@@ -2761,7 +2951,7 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
         bson_serialize(bson, &value);
 
         ext4_serialize_file_sectors(disk, partition_offset, superblock,
-                                    root_inode, bson);
+                                    root_inode, bson, false, true);
 
         bson_finalize(bson);
         bson_writef(bson, serializef);
@@ -2799,14 +2989,14 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
         bson_serialize(bson, &value);
 
         ext4_serialize_file_sectors(disk, partition_offset, superblock,
-                                    root_inode, bson);
+                                    root_inode, bson, false, true);
         
         bson_finalize(bson);
         bson_writef(bson, serializef);
         bson_cleanup(bson);        
         return 0;
     }
-    else if ((root_inode.i_mode & 0x4000) == 0x4000)
+    else if ((root_inode.i_mode & 0x4000) == 0x4000) /* dir */
     {
         value.type = BSON_STRING;
         value.size = strlen("file");
@@ -2837,8 +3027,9 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
 
         bson_serialize(bson, &value);
 
+        /* true, serialize data with sectors */
         ext4_serialize_file_sectors(disk, partition_offset,
-                                    superblock, root_inode, bson);
+                                    superblock, root_inode, bson, true, true);
         
         bson_finalize(bson);
         bson_writef(bson, serializef);
