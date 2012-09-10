@@ -625,6 +625,13 @@ int ext4_read_inode_serialized(FILE* disk, int64_t partition_offset,
         return -1;
     }
 
+    val.type = BSON_STRING;
+    val.size = strlen("file");
+    val.key = "type";
+    val.data = "file";
+
+    bson_serialize(bson, &val);
+    
     sector = (partition_offset + inode_table_offset + inode_offset) /
              SECTOR_SIZE;
     val.type = BSON_INT64;
@@ -2923,13 +2930,6 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
     if ((root_inode.i_mode & 0xa000) == 0xa000) /* symlink */
     {
         value.type = BSON_STRING;
-        value.size = strlen("file");
-        value.key = "type";
-        value.data = "file";
-
-        bson_serialize(bson, &value);
-
-        value.type = BSON_STRING;
         value.size = strlen(prefix);
         value.key = "path";
         value.data = prefix;
@@ -2961,13 +2961,6 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
     else if ((root_inode.i_mode & 0x8000) == 0x8000) /* file, no dir entries more */
     {
         value.type = BSON_STRING;
-        value.size = strlen("file");
-        value.key = "type";
-        value.data = "file";
-
-        bson_serialize(bson, &value);
-
-        value.type = BSON_STRING;
         value.size = strlen(prefix);
         value.key = "path";
         value.data = prefix;
@@ -2998,14 +2991,6 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
     }
     else if ((root_inode.i_mode & 0x4000) == 0x4000) /* dir */
     {
-        value.type = BSON_STRING;
-        value.size = strlen("file");
-        value.key = "type";
-        value.data = "file";
-
-        bson_serialize(bson, &value);
-
-
         value.type = BSON_STRING;
         value.size = strlen(prefix);
         value.key = "path";
