@@ -149,13 +149,13 @@ int main(int argc, char* args[])
     }
 
     gettimeofday(&start, NULL);
-    if (qemu_load_index(indexf, &mbr, handle))
+    if (qemu_load_index(indexf, handle))
     {
         fprintf_light_red(stderr, "Error deserializing index.\n");
         return EXIT_FAILURE;
     }
     gettimeofday(&end, NULL);
-
+    exit(0);
     load_time = diff_time(start, end);
 
     fprintf_cyan(stdout, "%s: attaching to stream: %s\n\n", vmname, stream);
@@ -187,7 +187,6 @@ int main(int argc, char* args[])
                               diff_time(start, end));
     close(fd);
     redis_flush_pipeline(handle);
-    exit(0);
     redis_shutdown(handle);
 
     return EXIT_SUCCESS;

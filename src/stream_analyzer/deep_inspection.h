@@ -58,8 +58,7 @@ struct ext4_bgd
 } __attribute__((packed));
 
 /* functions */
-int qemu_load_index(FILE* index, struct kv_store* store,
-                    struct bson_info* bson);
+int qemu_load_index(FILE* index, struct kv_store* store);
 int qemu_print_write(struct qemu_bdrv_write* write);
 enum SECTOR_TYPE qemu_infer_sector_type(struct qemu_bdrv_write* write, 
                                         struct kv_store* store,
