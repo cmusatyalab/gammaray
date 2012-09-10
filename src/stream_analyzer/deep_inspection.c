@@ -1452,6 +1452,127 @@ int __deserialize_bgd(struct bson_info* bson, struct kv_store* store,
     return EXIT_SUCCESS;
 }
 
+int __deserialize_file(struct bson_info* bson, struct kv_store* store,
+                       uint64_t id)
+{
+    struct bson_info* bson2;
+    struct bson_kv value1, value2;
+
+    uint64_t counter = 0, sector = 0;
+
+    while (bson_deserialize(bson, &value1, &value2))
+    {
+        if (strcmp(value1.key, "inode_sector") == 0)
+        {
+            if (redis_reverse_pointer_set(store, REDIS_INODES_INSERT,
+                                      (uint64_t) *((uint32_t *) value1.data),
+                                      id))
+                return EXIT_FAILURE;
+
+            if (redis_reverse_pointer_set(store, REDIS_INODES_SECTOR_INSERT,
+                                      (uint64_t) *((uint32_t *) value1.data),
+                                      (uint64_t) *((uint32_t *) value1.data)))
+                return EXIT_FAILURE;
+        }
+        else if (strcmp(value1.key, "data") == 0)
+        {
+            bson2 = bson_init();
+            bson2->buffer = malloc(value2.size);
+
+            if (bson2->buffer == NULL)
+                return EXIT_FAILURE;
+            
+            memcpy(bson2->buffer, value2.data, value2.size);
+            bson_make_readable(bson2);
+
+            while (bson_deserialize(bson2, &value1, &value2) == 1)
+            {
+                sscanf((const char*) value1.data, "%"SCNu64, &sector);
+
+                if (redis_hash_field_set(store, REDIS_DIR_SECTOR_INSERT, sector,
+                                 "data", (const uint8_t*) value1.data,
+                                 (size_t) value1.size))
+                    return EXIT_FAILURE;
+
+                if (redis_reverse_pointer_set(store, REDIS_DIRS_INSERT,
+                                      id,
+                                      sector))
+                return EXIT_FAILURE;
+
+                if (redis_reverse_pointer_set(store, REDIS_DIRS_SECTOR_INSERT,
+                                      sector,
+                                      id))
+                return EXIT_FAILURE;
+            }
+
+            bson_cleanup(bson2);
+        }
+        else if (strcmp(value1.key, "sectors") == 0)
+        {
+            counter = 0;
+            bson2 = bson_init();
+            bson2->buffer = malloc(value2.size);
+
+            if (bson2->buffer == NULL)
+                return EXIT_FAILURE;
+            
+            memcpy(bson2->buffer, value2.data, value2.size);
+            bson_make_readable(bson2);
+
+            while (bson_deserialize(bson2, &value1, &value2) == 1)
+            {
+                redis_reverse_file_data_pointer_set(store, (uint64_t) *((uint32_t*)value1.data),
+                                                    counter, counter + SECTOR_SIZE, id);
+                counter += SECTOR_SIZE;
+            }
+
+            bson_cleanup(bson2);
+        }
+        else if (strcmp(value1.key, "extents") == 0)
+        {
+            bson2 = bson_init();
+            bson2->buffer = malloc(value2.size);
+
+            if (bson2->buffer == NULL)
+                return EXIT_FAILURE;
+            
+            memcpy(bson2->buffer, value2.data, value2.size);
+            bson_make_readable(bson2);
+
+            while (bson_deserialize(bson2, &value1, &value2) == 1)
+            {
+                sscanf((const char*) value1.data, "%"SCNu64, &sector);
+
+                if (redis_hash_field_set(store, REDIS_EXTENT_SECTOR_INSERT, sector,
+                                 "data", (const uint8_t*) value1.data,
+                                 (size_t) value1.size))
+                    return EXIT_FAILURE;
+
+                if (redis_reverse_pointer_set(store, REDIS_EXTENTS_INSERT,
+                                      id,
+                                      sector))
+                return EXIT_FAILURE;
+
+                if (redis_reverse_pointer_set(store, REDIS_EXTENTS_SECTOR_INSERT,
+                                      sector,
+                                      id))
+                return EXIT_FAILURE;
+            }
+
+            bson_cleanup(bson2);
+        }
+        else
+        {
+            if (redis_hash_field_set(store, REDIS_INODE_SECTOR_INSERT, id,
+                                 value1.key, (const uint8_t*) value1.data,
+                                 (size_t) value1.size))
+                return EXIT_FAILURE;
+        }
+    }
+
+    return EXIT_SUCCESS;
+}
+
 int qemu_load_index(FILE* index, struct kv_store* store)
 {
     struct bson_kv value1, value2;

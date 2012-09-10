@@ -22,9 +22,9 @@
 #define REDIS_DEFAULT_BYTES 262144000 /* bytes; 250 MiB */
 
 #define REDIS_DATA_INSERT "SET sector:%"PRIu64" "\
-                          "start:%"PRIu64\
-                          "end:%"PRIu64\
-                          "inode:%"PRIu64
+                          "start:%"PRIu64":"\
+                          "end:%"PRIu64":"\
+                          "file:%"PRIu64
 
 #define REDIS_ENQUEUE_WRITE "SETEX sector:%"PRIu64" %d %b"
 #define REDIS_DEQUEUE_WRITE "GET sector:%"PRIu64

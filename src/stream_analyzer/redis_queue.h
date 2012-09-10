@@ -19,19 +19,25 @@
 #define REDIS_BGDS_LGET "LRANGE bgds:%"PRIu64" 0 -1"
 #define REDIS_BGDS_SECTOR_INSERT "SET sector:%"PRIu64" lbgds:%"PRIu64
 
-#define REDIS_BLOCKDMAP_INSERT "SET sector:%"PRIu64" bgd:%"PRIu64
+#define REDIS_BLOCKDMAP_INSERT "SET sector:%"PRIu64" file:%"PRIu64
 
-#define REDIS_INODE_SECTOR_INSERT "HSET inode:%"PRIu64" %s %b"
-#define REDIS_INODE_SECTOR_GET "HGET inode:%"PRIu64" %s"
-#define REDIS_INODES_INSERT "RPUSH inodes:%"PRIu64" inode:%"PRIu64
-#define REDIS_INODES_LGET "LRANGE inodes:%"PRIu64" 0 -1"
-#define REDIS_INODES_SECTOR_INSERT "SET sector:%"PRIu64" linodes:%"PRIu64
+#define REDIS_INODE_SECTOR_INSERT "HSET file:%"PRIu64" %s %b"
+#define REDIS_INODE_SECTOR_GET "HGET file:%"PRIu64" %s"
+#define REDIS_INODES_INSERT "RPUSH files:%"PRIu64" file:%"PRIu64
+#define REDIS_INODES_LGET "LRANGE files:%"PRIu64" 0 -1"
+#define REDIS_INODES_SECTOR_INSERT "SET sector:%"PRIu64" lfiles:%"PRIu64
 
 #define REDIS_EXTENT_SECTOR_INSERT "HSET extent:%"PRIu64" %s %b"
 #define REDIS_EXTENT_SECTOR_GET "HGET extent:%"PRIu64" %s"
 #define REDIS_EXTENTS_INSERT "RPUSH extents:%"PRIu64" extent:%"PRIu64
 #define REDIS_EXTENTS_LGET "LRANGE extents:%"PRIu64" 0 -1"
 #define REDIS_EXTENTS_SECTOR_INSERT "SET sector:%"PRIu64"' lextents:%"PRIu64
+
+#define REDIS_DIR_SECTOR_INSERT "HSET dirdata:%"PRIu64" %s %b"
+#define REDIS_DIR_SECTOR_GET "HGET dirdata:%"PRIu64" %s"
+#define REDIS_DIRS_INSERT "RPUSH dirdatas:%"PRIu64" dirdata:%"PRIu64
+#define REDIS_DIRS_LGET "LRANGE dirdatas:%"PRIu64" 0 -1"
+#define REDIS_DIRS_SECTOR_INSERT "SET sector:%"PRIu64"' ldirdatas:%"PRIu64
 
 #define REDIS_ASYNC_QUEUE_PUSH "LPUSH writequeue %b"
 #define REDIS_ASYNC_QUEUE_POP "BRPOP writequeue"
