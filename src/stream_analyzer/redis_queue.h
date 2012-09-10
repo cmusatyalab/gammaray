@@ -9,9 +9,9 @@
 #define REDIS_MBR_SECTOR_GET "HGET mbr:%"PRIu64" %s"
 #define REDIS_MBR_INSERT "SET sector:%"PRIu64" mbr:%"PRIu64
 
-#define REDIS_SUPERBLOCK_SECTOR_INSERT "HSET superblock:%"PRIu64" %s %b"
-#define REDIS_SUPERBLOCK_SECTOR_GET "HGET superblock:%"PRIu64" %s"
-#define REDIS_SUPERBLOCK_INSERT "SET sector:%"PRIu64" superblock:%"PRIu64
+#define REDIS_SUPERBLOCK_SECTOR_INSERT "HSET fs:%"PRIu64" %s %b"
+#define REDIS_SUPERBLOCK_SECTOR_GET "HGET fs:%"PRIu64" %s"
+#define REDIS_SUPERBLOCK_INSERT "SET sector:%"PRIu64" fs:%"PRIu64
 
 #define REDIS_BGD_SECTOR_INSERT "HSET bgd:%"PRIu64" %s %b"
 #define REDIS_BGD_SECTOR_GET "HGET bgd:%"PRIu64" %s"
@@ -60,9 +60,10 @@ int redis_publish(struct kv_store* handle, char* channel, uint8_t* data,
 int redis_reverse_pointer_set(struct kv_store* handle, const char* fmt,
                               uint64_t src, uint64_t dst);
 int redis_hash_field_set(struct kv_store* handle, const char* fmt,
-                         uint64_t src, char* field, uint8_t* data, size_t len);
+                         uint64_t src, const char* field, const uint8_t* data,
+                         size_t len);
 int redis_hash_field_get(struct kv_store* handle, const char* fmt,
-                         uint64_t src, char* field, uint8_t* data,
+                         uint64_t src, const char* field, uint8_t* data,
                          size_t* len);
 int redis_reverse_file_data_pointer_set(struct kv_store* handle,
                                         uint64_t src, uint64_t start,
