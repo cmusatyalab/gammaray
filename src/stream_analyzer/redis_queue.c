@@ -196,7 +196,8 @@ struct kv_store* redis_init(char* db, bool background_flush)
         pthread_mutex_init(&(handle->cmd_lock), NULL);
         sem_init(&(handle->thread_counter), 0, 0);
 
-        pthread_create(&thread, NULL, redis_periodic_flusher, handle);
+        if (background_flush)
+            pthread_create(&thread, NULL, redis_periodic_flusher, handle);
     }
 
 
@@ -272,7 +273,7 @@ int redis_reverse_pointer_set(struct kv_store* handle, const char* fmt,
 }
 
 int redis_hash_field_set(struct kv_store* handle, const char* fmt,
-                         uint64_t src, char* field, uint8_t* data, size_t len)
+                         uint64_t src, const char* field, const uint8_t* data, size_t len)
 {
     redisAppendCommand(handle->connection, fmt,
                                            src,
@@ -292,7 +293,7 @@ int redis_hash_field_set(struct kv_store* handle, const char* fmt,
 }
 
 int redis_hash_field_get(struct kv_store* handle, const char* fmt,
-                         uint64_t src, char* field, uint8_t* data, size_t* len)
+                         uint64_t src, const char* field, uint8_t* data, size_t* len)
 {
     redisReply* reply;
     redis_flush_pipeline(handle);
