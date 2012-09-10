@@ -1128,87 +1128,6 @@ int qemu_infer_sector_type(struct qemu_bdrv_write* write,
    return SECTOR_UNKNOWN;
 }*/
 
-int __deserialize_mbr(FILE* index, struct bson_info* bson, struct mbr* mbr,
-                      struct kv_store* store)
-{
-    struct bson_kv value1, value2;
-
-    if (bson_readf(bson, index) != 1)
-        return EXIT_FAILURE;
-
-    if (bson_deserialize(bson, &value1, &value2) != 1)
-        return EXIT_FAILURE;
-    
-    if (strcmp(value1.key, "gpt") != 0)
-        return EXIT_FAILURE;
-
-    mbr->gpt = (uint8_t*)value1.data;
-
-    if (bson_deserialize(bson, &value1, &value2) != 1)
-        return EXIT_FAILURE;
-    
-    if (strcmp(value1.key, "sector") != 0)
-        return EXIT_FAILURE;
-
-    mbr->sector = *((uint32_t*)value1.data);
-    redis_hash_field_set(store, REDIS_MBR_SECTOR_INSERT,
-                         mbr->sector, "gpt", ((uint8_t*) &(mbr->gpt)),
-                         sizeof(bool));
-
-    if (bson_deserialize(bson, &value1, &value2) != 1)
-        return EXIT_FAILURE;
-    
-    if (strcmp(value1.key, "active_partitions") != 0)
-        return EXIT_FAILURE;
-
-    mbr->active_partitions = *((uint32_t*)value1.data);
-    redis_hash_field_set(store, REDIS_MBR_SECTOR_INSERT,
-                         mbr->sector, "partitions", ((uint8_t*)value1.data),
-                         sizeof(uint32_t));
-    return EXIT_SUCCESS;
-}
-
-int __deserialize_partition(FILE* index, struct bson_info* bson,
-                            struct kv_store* store)
-{
-    struct bson_kv value1, value2;
-
-    if (bson_readf(bson, index) != 1)
-        return EXIT_FAILURE;
-
-    if (bson_deserialize(bson, &value1, &value2) != 1)
-        return EXIT_FAILURE;
-    
-    if (strcmp(value1.key, "pte_num") != 0)
-        return EXIT_FAILURE;
-
-    if (bson_deserialize(bson, &value1, &value2) != 1)
-        return EXIT_FAILURE;
-    
-    if (strcmp(value1.key, "partition_type") != 0)
-        return EXIT_FAILURE;
-
-    if (bson_deserialize(bson, &value1, &value2) != 1)
-        return EXIT_FAILURE;
-    
-    if (strcmp(value1.key, "first_sector_lba") != 0)
-        return EXIT_FAILURE;
-
-    if (bson_deserialize(bson, &value1, &value2) != 1)
-        return EXIT_FAILURE;
-    
-    if (strcmp(value1.key, "final_sector_lba") != 0)
-        return EXIT_FAILURE;
-
-    if (bson_deserialize(bson, &value1, &value2) != 1)
-        return EXIT_FAILURE;
-    
-    if (strcmp(value1.key, "sector") != 0)
-        return EXIT_FAILURE;
-
-    return EXIT_SUCCESS;
-}
-
 int __deserialize_ext4_fs(FILE* index, struct bson_info* bson,
                           struct kv_store* store)
 {
@@ -1436,53 +1355,151 @@ int __deserialize_ext4_file(FILE* index, struct bson_info* bson,
     return EXIT_SUCCESS;
 }
 
-int __deserialize_document(FILE* index, struct kv_store* store,
-                           struct bson_info* bson)
+int __deserialize_mbr(struct bson_info* bson, struct kv_store* store, uint64_t id)
 {
-    return EXIT_FAILURE;
+    struct bson_kv value1, value2;
+
+    while (bson_deserialize(bson, &value1, &value2))
+    {
+        if (strcmp(value1.key, "sector") == 0)
+        {
+            if (redis_reverse_pointer_set(store, REDIS_MBR_INSERT,
+                                      (uint64_t) *((uint32_t *) value1.data),
+                                      id))
+                return EXIT_FAILURE;
+        }
+        else
+        {
+            if (redis_hash_field_set(store, REDIS_MBR_SECTOR_INSERT, id,
+                                 value1.key, (const uint8_t*) value1.data, (size_t) value1.size))
+                return EXIT_FAILURE;
+        }
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int __deserialize_partition(struct bson_info* bson, struct kv_store* store,
+                            uint64_t id)
+{
+    struct bson_kv value1, value2;
+
+    while (bson_deserialize(bson, &value1, &value2))
+    {
+         if (strcmp(value1.key, "superblock_sector") == 0)
+        {
+            if (redis_reverse_pointer_set(store, REDIS_SUPERBLOCK_INSERT,
+                                      (uint64_t) *((uint32_t *) value1.data),
+                                      id))
+                return EXIT_FAILURE;
+        }
+        else
+        {
+            if (redis_hash_field_set(store, REDIS_SUPERBLOCK_SECTOR_INSERT, id,
+                                 value1.key, (const uint8_t*) value1.data,
+                                 (size_t) value1.size))
+                return EXIT_FAILURE;
+        }
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int __deserialize_fs(struct bson_info* bson, struct kv_store* store,
+                            uint64_t id)
+{
+    struct bson_kv value1, value2;
+
+    while (bson_deserialize(bson, &value1, &value2))
+    {
+        if (redis_hash_field_set(store, REDIS_SUPERBLOCK_SECTOR_INSERT, id,
+                                 value1.key, (const uint8_t*) value1.data,
+                                 (size_t) value1.size))
+            return EXIT_FAILURE;
+    }
+
+    return EXIT_SUCCESS;
 }
 
 int qemu_load_index(FILE* index, struct kv_store* store)
 {
     struct bson_kv value1, value2;
     struct bson_info* bson = bson_init();
+    uint64_t fs_id = 0;
 
-    if (bson_readf(bson, index) != 1)
-        return EXIT_FAILURE;
+    while (bson_readf(bson, index) == 1)
+    {
+        if (bson_deserialize(bson, &value1, &value2) != 1)
+            return EXIT_FAILURE;
+        
+        if (strcmp(value1.key, "type") != 0)
+        {
+            fprintf_light_red(stderr, "Document missing 'type' field.\n");
+            return EXIT_FAILURE;
+        }
 
-    if (bson_deserialize(bson, &value1, &value2) != 1)
-        return EXIT_FAILURE;
-    
-    if (strcmp(value1.key, "type") != 0)
-    {
-        fprintf_light_red(stderr, "Document missing 'type' field.\n");
-        return EXIT_FAILURE;
-    }
+        if (strcmp(value1.data, "file") == 0)
+        {
+            fprintf_light_yellow(stdout, "-- Deserializing a file "
+                                         "record --\n");
+        }
+        else if (strcmp(value1.data, "bgd") == 0)
+        {
+            fprintf_light_yellow(stdout, "-- Deserializing a bgd record --\n");
+        }
+        else if (strcmp(value1.data, "fs") == 0)
+        {
+            fprintf_light_yellow(stdout, "-- Deserializing a fs record --\n");
 
-    if (strcmp(value1.data, "file") == 0)
-    {
-        fprintf_light_yellow(stdout, "-- Deserializing a file record --\n");
-    }
-    else if (strcmp(value1.data, "bgd") == 0)
-    {
-        fprintf_light_yellow(stdout, "-- Deserializing a bgd record --\n");
-    }
-    else if (strcmp(value1.data, "fs") == 0)
-    {
-        fprintf_light_yellow(stdout, "-- Deserializing a fs record --\n");
-    }
-    else if (strcmp(value1.data, "partition") == 0)
-    {
-        fprintf_light_yellow(stdout, "-- Deserializing a partition record --\n");
-    }
-    else if (strcmp(value1.data, "mbr") == 0)
-    {
-        fprintf_light_yellow(stdout, "-- Deserializing a mbr record --\n");
+            if (bson_deserialize(bson, &value1, &value2) != 1)
+                return EXIT_FAILURE;
+            
+            if (strcmp(value1.key, "pte_num") != 0)
+            {
+                fprintf_light_red(stderr, "fs missing 'pte_num' "
+                                          "field.\n");
+                return EXIT_FAILURE;
+            }
+
+            fs_id = (uint64_t) *((uint32_t*) value1.data);
+            __deserialize_fs(bson, store, fs_id);
+
+            redis_flush_pipeline(store); exit(0);
+        }
+        else if (strcmp(value1.data, "partition") == 0)
+        {
+            fprintf_light_yellow(stdout, "-- Deserializing a partition "
+                                         "record --\n");
+            if (bson_deserialize(bson, &value1, &value2) != 1)
+                return EXIT_FAILURE;
+            
+            if (strcmp(value1.key, "pte_num") != 0)
+            {
+                fprintf_light_red(stderr, "Partition missing 'pte_num' "
+                                          "field.\n");
+                return EXIT_FAILURE;
+            }
+
+            fs_id = (uint64_t) *((uint32_t*) value1.data);
+            __deserialize_partition(bson, store, fs_id);
+
+        }
+        else if (strcmp(value1.data, "mbr") == 0)
+        {
+            fprintf_light_yellow(stdout, "-- Deserializing a mbr record --\n");
+            if (__deserialize_mbr(bson, store, (uint64_t) 0))
+                return EXIT_FAILURE;
+        }
+        else
+        {
+            fprintf_light_red(stderr, "Unhandled type: %s\n", value1.data);
+            return EXIT_FAILURE;
+        }
     }
 
     bson_cleanup(bson);
 
-    return __deserialize_document(index, store, bson);
+    return EXIT_SUCCESS;
 }
 
 int __qemu_load_index(FILE* index, struct mbr* mbr, struct kv_store* store)
@@ -1494,13 +1511,6 @@ int __qemu_load_index(FILE* index, struct mbr* mbr, struct kv_store* store)
 
     bson = bson_init();
 
-    /* mbr */
-    if (__deserialize_mbr(index, bson, mbr, store))
-    {
-        fprintf_light_red(stderr, "Error loading MBR document.\n");
-        return EXIT_FAILURE;
-    }
-
     fprintf_yellow(stdout, "Deserializing %"PRIu64" partitions.\n",
                             mbr->active_partitions);
 
@@ -1508,7 +1518,7 @@ int __qemu_load_index(FILE* index, struct mbr* mbr, struct kv_store* store)
     for (i = 0; i < mbr->active_partitions; i++)
     {
         fprintf_light_cyan(stdout, "Partition loop.\n");
-        if (__deserialize_partition(index, bson, store))
+        if (__deserialize_partition(bson, store, i))
         {
             fprintf_light_red(stderr, "Error loading partition document.\n");
             return EXIT_FAILURE;
