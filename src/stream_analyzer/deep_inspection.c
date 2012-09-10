@@ -1386,7 +1386,7 @@ int __deserialize_partition(struct bson_info* bson, struct kv_store* store,
 
     while (bson_deserialize(bson, &value1, &value2))
     {
-         if (strcmp(value1.key, "superblock_sector") == 0)
+        if (strcmp(value1.key, "superblock_sector") == 0)
         {
             if (redis_reverse_pointer_set(store, REDIS_SUPERBLOCK_INSERT,
                                       (uint64_t) *((uint32_t *) value1.data),
@@ -1421,11 +1421,44 @@ int __deserialize_fs(struct bson_info* bson, struct kv_store* store,
     return EXIT_SUCCESS;
 }
 
+int __deserialize_bgd(struct bson_info* bson, struct kv_store* store,
+                      uint64_t id)
+{
+    struct bson_kv value1, value2;
+
+    while (bson_deserialize(bson, &value1, &value2))
+    {
+        if (strcmp(value1.key, "sector") == 0)
+        {
+            if (redis_reverse_pointer_set(store, REDIS_BGDS_INSERT,
+                                      (uint64_t) *((uint32_t *) value1.data),
+                                      id))
+                return EXIT_FAILURE;
+
+            if (redis_reverse_pointer_set(store, REDIS_BGDS_SECTOR_INSERT,
+                                      (uint64_t) *((uint32_t *) value1.data),
+                                      (uint64_t) *((uint32_t *) value1.data)))
+                return EXIT_FAILURE;
+        }
+        else
+        {
+            if (redis_hash_field_set(store, REDIS_BGD_SECTOR_INSERT, id,
+                                 value1.key, (const uint8_t*) value1.data,
+                                 (size_t) value1.size))
+                return EXIT_FAILURE;
+        }
+    }
+
+    return EXIT_SUCCESS;
+}
+
 int qemu_load_index(FILE* index, struct kv_store* store)
 {
     struct bson_kv value1, value2;
     struct bson_info* bson = bson_init();
     uint64_t fs_id = 0;
+    uint64_t bgd_counter = 0;
+    uint64_t file_counter = 0;
 
     while (bson_readf(bson, index) == 1)
     {
@@ -1442,10 +1475,13 @@ int qemu_load_index(FILE* index, struct kv_store* store)
         {
             fprintf_light_yellow(stdout, "-- Deserializing a file "
                                          "record --\n");
+            __deserialize_file(bson, store, file_counter++);
+            redis_flush_pipeline(store); exit(0);
         }
         else if (strcmp(value1.data, "bgd") == 0)
         {
             fprintf_light_yellow(stdout, "-- Deserializing a bgd record --\n");
+            __deserialize_bgd(bson, store, bgd_counter++);
         }
         else if (strcmp(value1.data, "fs") == 0)
         {
@@ -1463,8 +1499,6 @@ int qemu_load_index(FILE* index, struct kv_store* store)
 
             fs_id = (uint64_t) *((uint32_t*) value1.data);
             __deserialize_fs(bson, store, fs_id);
-
-            redis_flush_pipeline(store); exit(0);
         }
         else if (strcmp(value1.data, "partition") == 0)
         {
@@ -1498,6 +1532,8 @@ int qemu_load_index(FILE* index, struct kv_store* store)
     }
 
     bson_cleanup(bson);
+    redis_set_fcounter(store, file_counter);
+    redis_flush_pipeline(store);
 
     return EXIT_SUCCESS;
 }
