@@ -2212,22 +2212,8 @@ int ext4_serialize_bgd_sectors(struct bson_info* serialized,
 
     bson_serialize(serialized, &value);
 
-    sector = (ext4_bgd_block_bitmap(bgd) * block_size + offset + block_size) /
-             SECTOR_SIZE - 1;
-    value.key = "block_bitmap_sector_end";
-    value.data = &sector; 
-
-    bson_serialize(serialized, &value);
-
     sector = (ext4_bgd_inode_bitmap(bgd) * block_size + offset) / SECTOR_SIZE;
     value.key = "inode_bitmap_sector_start";
-    value.data = &sector; 
-
-    bson_serialize(serialized, &value);
-    
-    sector = (ext4_bgd_inode_bitmap(bgd) * block_size + offset + block_size) / 
-             SECTOR_SIZE - 1;
-    value.key = "inode_bitmap_sector_end";
     value.data = &sector; 
 
     bson_serialize(serialized, &value);
