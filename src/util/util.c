@@ -160,6 +160,45 @@ int pretty_print_bytes(uint64_t bytes, char* buf, uint64_t bufsize)
     return EXIT_SUCCESS;
 }
 
+/* buf should be at least 13 bytes long */
+int pretty_print_microseconds(uint64_t micros, char* buf, uint64_t bufsize)
+{
+    uint64_t millis = 1000;
+    uint64_t seconds = millis*millis;
+    uint64_t minutes = 60*seconds;
+    uint64_t hours = 60*minutes;
+    uint64_t days = 24*hours;
+
+
+    if (micros > days)
+    {
+        snprintf(buf, bufsize, "%0.3f days", ((double) micros) / days);
+    }
+    else if (micros > hours)
+    {
+        snprintf(buf, bufsize, "%0.3f hours", ((double) micros) / hours);
+    }
+    else if (micros > minutes)
+    {
+        snprintf(buf, bufsize, "%0.3f minutes", ((double) micros ) / minutes);
+    }
+    else if (micros > seconds)
+    {
+        snprintf(buf, bufsize, "%0.3f seconds", ((double) micros) / seconds);
+    }
+    else if (micros > millis)
+    {
+        snprintf(buf, bufsize, "%0.3f milliseconds",
+                                ((double) micros) / millis);
+    }
+    else
+    {
+        snprintf(buf, bufsize, "%"PRIu64" microseconds", micros);
+    }
+
+    return EXIT_SUCCESS;
+}
+
 uint64_t diff_time(struct timeval start, struct timeval end)
 {
     time_t delta_seconds = end.tv_sec - start.tv_sec;

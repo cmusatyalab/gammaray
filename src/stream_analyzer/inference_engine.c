@@ -85,13 +85,14 @@ int read_loop(int fd, struct kv_store* store, char* vmname,
         {
             fprintf_light_red(stderr, "Stream ended while reading sector "
                                       "data.\n");
+            free((void*) write.data);
             return EXIT_FAILURE;
         }
 
         qemu_print_write(&write);
         sector_type = qemu_infer_sector_type(&write, store, block_size);
         qemu_print_sector_type(sector_type);
-        qemu_deep_inspect(&write, store, vmname, block_size);
+        //qemu_deep_inspect(&write, store, vmname, block_size);
         free((void*) write.data);
         fflush(stdout);
     }
@@ -107,6 +108,7 @@ int main(int argc, char* args[])
     char* index, *db, *stream, *vmname;
     FILE* indexf;
     struct timeval start, end;
+    char pretty_micros[32];
 
     fprintf_blue(stdout, "VM Disk Analysis Engine -- "
                          "By: Wolfgang Richter "
@@ -177,13 +179,16 @@ int main(int argc, char* args[])
     gettimeofday(&start, NULL);
     ret = read_loop(fd, handle, vmname, block_size);
     gettimeofday(&end, NULL);
-    fprintf_light_red(stderr, "load_index time: %"PRIu64" microseconds\n",
-                              load_time);
-    fprintf_light_red(stderr, "read_loop time: %"PRIu64" microseconds\n",
-                              diff_time(start, end));
+
+    pretty_print_microseconds(load_time, pretty_micros, 32);
+    fprintf_light_red(stderr, "load_index time: %s.\n", pretty_micros);
+
+    pretty_print_microseconds(diff_time(start, end), pretty_micros, 32);
+    fprintf_light_red(stderr, "read_loop time: %s.\n", pretty_micros);
+
     close(fd);
     redis_flush_pipeline(handle);
-    //redis_shutdown(handle);
+    redis_shutdown(handle);
 
     return ret;
 }
