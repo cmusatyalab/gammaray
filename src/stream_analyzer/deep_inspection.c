@@ -955,13 +955,13 @@ enum SECTOR_TYPE __sector_type(const char* str)
 {
     if (strncmp(str, "start", strlen("start")) == 0)
         return SECTOR_EXT2_DATA;
-    else if(strncmp(str, "superblock", strlen("superblock")) == 0)
+    else if(strncmp(str, "fs", strlen("fs")) == 0)
         return SECTOR_EXT2_SUPERBLOCK;
     else if(strncmp(str, "mbr", strlen("mbr")) == 0)
         return SECTOR_MBR;
     else if(strncmp(str, "lbgds", strlen("lbgds")) == 0)
         return SECTOR_EXT2_BLOCK_GROUP_DESCRIPTOR;
-    else if(strncmp(str, "linodes", strlen("linodes")) == 0)
+    else if(strncmp(str, "lfiles", strlen("lfiles")) == 0)
         return SECTOR_EXT2_INODE;
     else if(strncmp(str, "bgd", strlen("bgd")) == 0)
         return SECTOR_EXT2_BLOCK_GROUP_BLOCKMAP |
