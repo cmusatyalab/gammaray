@@ -125,22 +125,27 @@ int qemu_print_sector_type(enum SECTOR_TYPE type)
             fprintf_light_green(stdout, "Write to MBR detected.\n");
             return 0;
         case SECTOR_EXT2_SUPERBLOCK:
-            fprintf_light_green(stdout, "Write to ext4 superblock detected.\n");
+            fprintf_light_green(stdout, "Write to ext4 superblock "
+                                        "detected.\n");
             return 0;
         case SECTOR_EXT2_BLOCK_GROUP_DESCRIPTOR:
-            fprintf_light_green(stdout, "Write to ext4 block group descriptor detected.\n");
+            fprintf_light_green(stdout, "Write to ext4 block group descriptor"
+                                        " detected.\n");
             return 0;
         case SECTOR_EXT2_BLOCK_GROUP_BLOCKMAP:
-            fprintf_light_green(stdout, "Write to ext4 block group block map detected.\n");
+            fprintf_light_green(stdout, "Write to ext4 block group block map"
+                                        " detected.\n");
             return 0;
         case SECTOR_EXT2_BLOCK_GROUP_INODEMAP:
-            fprintf_light_green(stdout, "Write to ext4 block group inode map detected.\n");
+            fprintf_light_green(stdout, "Write to ext4 block group inode map"
+                                        " detected.\n");
             return 0;
         case SECTOR_EXT2_INODE:
             fprintf_light_green(stdout, "Write to ext4 inode detected.\n");
             return 0;
         case SECTOR_EXT2_DATA:
-            fprintf_light_green(stdout, "Write to ext4 data block detected.\n");
+            fprintf_light_green(stdout, "Write to ext4 data block "
+                                        "detected.\n");
             return 0;
         case SECTOR_EXT2_PARTITION:
             fprintf_light_green(stdout, "Write to ext4 partition detected.\n");
@@ -1055,7 +1060,7 @@ int __deserialize_partition(struct bson_info* bson, struct kv_store* store,
 }
 
 int __deserialize_fs(struct bson_info* bson, struct kv_store* store,
-                            uint64_t id)
+                     uint64_t id)
 {
     struct bson_kv value1, value2;
 
