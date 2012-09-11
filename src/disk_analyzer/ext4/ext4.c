@@ -2528,14 +2528,13 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
                 sector += partition_offset;
                 sector /= SECTOR_SIZE;
 
-                snprintf(count, 11, "%"PRIu32,
-                                       ((block_num + extent.ee_block) *
-                                         sectors_per_block));
+                snprintf(count, 11, "%"PRIu32, block_num + extent.ee_block);
                 value.data = &sector;
                 bson_serialize(sectors, &value);
 
                 if (save_data)
                 {
+                    snprintf(count, 11, "%"PRIu32, sector);
                     ext4_read_block(disk, partition_offset, superblock,
                                     (ext4_extent_start(extent) + block_num),
                                     (uint8_t*) buf);
