@@ -1232,11 +1232,9 @@ int __deserialize_file(struct bson_info* bson, struct kv_store* store,
         }
         else if (strcmp(value1.key, "data") == 0)
         {
-            fprintf_light_red(stderr, "data\n");
             bson2 = bson_init();
             free(bson2->buffer);
             bson2->buffer = malloc(value2.size);
-            fprintf_light_red(stderr, "size: %"PRIu32"\n", value2.size);
 
             if (bson2->buffer == NULL)
                 return EXIT_FAILURE;
@@ -1282,7 +1280,6 @@ int __deserialize_file(struct bson_info* bson, struct kv_store* store,
             bson2 = bson_init();
             free(bson2->buffer);
             bson2->buffer = malloc(value2.size);
-            fprintf_light_red(stderr, "size: %"PRIu32"\n", value2.size);
 
             if (bson2->buffer == NULL)
             {
@@ -1304,23 +1301,18 @@ int __deserialize_file(struct bson_info* bson, struct kv_store* store,
         }
         else if (strcmp(value1.key, "extents") == 0)
         {
-            fprintf_light_red(stderr, "extents\n");
             bson2 = bson_init();
             free(bson2->buffer);
             bson2->buffer = malloc(value2.size);
-            fprintf_light_red(stderr, "size: %"PRIu32"\n", value2.size);
 
             if (bson2->buffer == NULL)
                 return EXIT_FAILURE;
 
-            hexdump((uint8_t *) value2.data, value2.size);
             memcpy(bson2->buffer, (uint8_t *)value2.data, (size_t) value2.size);
             bson_make_readable(bson2);
-            fprintf_light_red(stderr, "made readable\n");
 
             while (bson_deserialize(bson2, &value1, &value2) == 1)
             {
-            fprintf_light_red(stderr, "looping\n");
                 sscanf((const char*) value1.data, "%"SCNu64, &sector);
 
                 if (redis_hash_field_set(store, REDIS_EXTENT_SECTOR_INSERT, sector,
@@ -1358,9 +1350,6 @@ int __deserialize_file(struct bson_info* bson, struct kv_store* store,
                 return EXIT_FAILURE;
         }
     }
-    redis_flush_pipeline(store);
-    redis_shutdown(store);
-    exit(0);
 
     return EXIT_SUCCESS;
 }
@@ -1386,8 +1375,6 @@ int qemu_load_index(FILE* index, struct kv_store* store)
 
         if (strcmp(value1.data, "file") == 0)
         {
-            //hexdump(bson->buffer, bson->size);
-            fprintf_light_red(stdout, "bson->size: %"PRIu32"\n", bson->size);
             __deserialize_file(bson, store, file_counter++);
         }
         else if (strcmp(value1.data, "bgd") == 0)
