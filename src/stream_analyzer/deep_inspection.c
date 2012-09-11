@@ -1367,14 +1367,10 @@ int qemu_load_index(FILE* index, struct kv_store* store)
 
         if (strcmp(value1.data, "file") == 0)
         {
-            fprintf_light_yellow(stdout, "-- Deserializing a file "
-                                         "record --\n");
             __deserialize_file(bson, store, file_counter++);
-            redis_flush_pipeline(store); exit(0);
         }
         else if (strcmp(value1.data, "bgd") == 0)
         {
-            fprintf_light_yellow(stdout, "-- Deserializing a bgd record --\n");
             __deserialize_bgd(bson, store, bgd_counter++);
         }
         else if (strcmp(value1.data, "fs") == 0)
