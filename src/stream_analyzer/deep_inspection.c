@@ -1487,7 +1487,7 @@ int __deserialize_file(struct bson_info* bson, struct kv_store* store,
 
             while (bson_deserialize(bson2, &value1, &value2) == 1)
             {
-                sscanf((const char*) value1.data, "%"SCNu64, &sector);
+                sscanf((const char*) value1.key, "%"SCNu64, &sector);
 
                 if (redis_hash_field_set(store, REDIS_DIR_SECTOR_INSERT, sector,
                                  "data", (const uint8_t*) value1.data,
