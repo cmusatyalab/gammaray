@@ -146,6 +146,8 @@ int deserialize_document(struct bson_info* bson_info, struct bson_kv* kv)
     bson_info->position += kv->size - 4;
     bson_info->size -= kv->size - 4;
 
+    kv->size -= 4;
+
     return EXIT_SUCCESS;
 }
 
