@@ -908,36 +908,63 @@ int ext2_compare_inodes(struct ext2_inode* old_inode,
     return EXIT_SUCCESS;
 }
 
-int qemu_deep_inspect(struct qemu_bdrv_write* write, struct kv_store* store,
-                      char* vmname, uint64_t block_size)
+int __qemu_dispatch_write(struct qemu_bdrv_write* write,
+                          struct kv_store* store, const char* vmname,
+                          const char* pointer)
 {
-    uint32_t i;
-    uint8_t lookup[1024];
-    size_t len;
+    if (strncmp(str, "start", strlen("start")) == 0)
+        __emit_file_bytes(write, store, vmname, pointer);
+    else if(strncmp(str, "fs", strlen("fs")) == 0)
+        __diff_superblock(write, store, vmname, pointer);
+    else if(strncmp(str, "mbr", strlen("mbr")) == 0)
+        __diff_mbr(write, store, vmname, pointer);
+    else if(strncmp(str, "lbgds", strlen("lbgds")) == 0)
+        __diff_bgds(write, store, vmname, pointer);
+    else if(strncmp(str, "lfiles", strlen("lfiles")) == 0)
+        __diff_inodes(write, store, vmname, pointer);
+    else if(strncmp(str, "bgd", strlen("bgd")) == 0)
+        /* currently not tracking at binary level */
+    else if(strncmp(str, "lextents", strlen("lextents")) == 0)
+        __diff_extent_tree(write, store, vmname, pointer);
+    else
+    {
+        fprintf_light_red(stderr, "Redis returned unknown sector type [%s]\n",
+                                                                        str);
+        exit(1);
+    }
+}
+
+int qemu_deep_inspect(struct qemu_bdrv_write* write, struct kv_store* store,
+                      const char* vmname)
+{
+    uint64_t i;
+    uint8_t result[1024];
+    size_t len = 1024;
 
     for (i = 0; i < write->header.nb_sectors; i += block_size / SECTOR_SIZE)
     {
-        len = 1024;
-        if (redis_sector_lookup(store, write->header.sector_num + i, lookup, &len))
+        if (redis_sector_lookup(store, write->header.sector_num + i,
+            result, &len))
         {
-            fprintf_light_red(stdout, "Unknown file path.\n");
+            fprintf_light_red(stderr, "Error doing sector lookup.\n");
+            redis_enqueue_pipelined(store, write->header.sector_num + i,
+                                               &(write->data[i*SECTOR_SIZE]),
+                                               SECTOR_SIZE);
             continue;
-        }
+        } 
 
         if (len)
         {
-            fprintf_light_green(stdout, "Write detected: '%s'\n", lookup);
+            result[len] = 0;
+            __qemu_dispatch_write(write, store, vmname, result);
         }
-        else /* handling unknown write, send to queue */
+        else
         {
-            for (i = 0; i < write->header.nb_sectors; i++)
-            {
-                redis_enqueue_pipelined(store, write->header.sector_num + i,
-                                               &(write->data[i*SECTOR_SIZE]),
-                                               SECTOR_SIZE);
-            }
+            fprintf_light_red(stderr, "Returned sector lookup empty.\n");
+            return EXIT_FAILURE;
         }
     }
+
     return EXIT_SUCCESS;
 }
 
