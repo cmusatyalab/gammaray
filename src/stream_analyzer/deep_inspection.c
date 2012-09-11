@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "color.h"
+#include "util.h"
 #include "deep_inspection.h"
 #include "ext4.h"
 #include "__bson.h"
@@ -908,41 +909,97 @@ int ext2_compare_inodes(struct ext2_inode* old_inode,
     return EXIT_SUCCESS;
 }
 
+int __emit_file_bytes(struct qemu_bdrv_write* write, struct kv_store* store, 
+                      const char* vmname, const char* pointer)
+{
+    fprintf_light_white(stdout, "__emit_file_bytes()\n");
+    return EXIT_SUCCESS;
+}
+
+int __diff_superblock(struct qemu_bdrv_write* write, struct kv_store* store, 
+                      const char* vmname, const char* pointer)
+{
+    fprintf_light_white(stdout, "__diff_superblock()\n");
+    return EXIT_SUCCESS;
+}
+
+int __diff_mbr(struct qemu_bdrv_write* write, struct kv_store* store,
+               const char* vmname, const char* pointer)
+{
+    fprintf_light_white(stdout, "__diff_mbr()\n");
+    return EXIT_SUCCESS;
+}
+
+int __diff_bgds(struct qemu_bdrv_write* write, struct kv_store* store,
+                const char* vmname, const char* pointer)
+{
+    fprintf_light_white(stdout, "__diff_bgds()\n");
+    return EXIT_SUCCESS;
+}
+
+int __diff_inodes(struct qemu_bdrv_write* write, struct kv_store* store,
+                  const char* vmname, const char* pointer)
+{
+    fprintf_light_white(stdout, "__diff_inodes()\n");
+    return EXIT_SUCCESS;
+}
+
+int __diff_bitmap(struct qemu_bdrv_write* write, struct kv_store* store,
+                  const char* vmname, const char* pointer)
+{
+    fprintf_light_white(stdout, "__diff_bitmap()\n");
+    return EXIT_SUCCESS;
+}
+
+int __diff_extent_tree(struct qemu_bdrv_write* write, struct kv_store* store,
+                       const char* vmname, const char* pointer)
+{
+    fprintf_light_white(stdout, "__diff_extent_tree()\n");
+    return EXIT_SUCCESS;
+}
+
 int __qemu_dispatch_write(struct qemu_bdrv_write* write,
                           struct kv_store* store, const char* vmname,
                           const char* pointer)
 {
-    if (strncmp(str, "start", strlen("start")) == 0)
+    if (strncmp(pointer, "start", strlen("start")) == 0)
         __emit_file_bytes(write, store, vmname, pointer);
-    else if(strncmp(str, "fs", strlen("fs")) == 0)
+    else if(strncmp(pointer, "fs", strlen("fs")) == 0)
         __diff_superblock(write, store, vmname, pointer);
-    else if(strncmp(str, "mbr", strlen("mbr")) == 0)
+    else if(strncmp(pointer, "mbr", strlen("mbr")) == 0)
         __diff_mbr(write, store, vmname, pointer);
-    else if(strncmp(str, "lbgds", strlen("lbgds")) == 0)
+    else if(strncmp(pointer, "lbgds", strlen("lbgds")) == 0)
         __diff_bgds(write, store, vmname, pointer);
-    else if(strncmp(str, "lfiles", strlen("lfiles")) == 0)
+    else if(strncmp(pointer, "lfiles", strlen("lfiles")) == 0)
         __diff_inodes(write, store, vmname, pointer);
-    else if(strncmp(str, "bgd", strlen("bgd")) == 0)
-        /* currently not tracking at binary level */
-    else if(strncmp(str, "lextents", strlen("lextents")) == 0)
+    else if(strncmp(pointer, "bgd", strlen("bgd")) == 0)
+        __diff_bitmap(write, store, vmname, pointer);
+    else if(strncmp(pointer, "lextents", strlen("lextents")) == 0)
         __diff_extent_tree(write, store, vmname, pointer);
     else
     {
         fprintf_light_red(stderr, "Redis returned unknown sector type [%s]\n",
-                                                                        str);
+                                                                      pointer);
         exit(1);
     }
+    return EXIT_SUCCESS;
 }
 
-int qemu_deep_inspect(struct qemu_bdrv_write* write, struct kv_store* store,
+int qemu_deep_inspect(struct ext4_superblock* superblock,
+                      struct qemu_bdrv_write* write, struct kv_store* store,
                       const char* vmname)
 {
     uint64_t i;
     uint8_t result[1024];
     size_t len = 1024;
+    uint64_t block_size = ext4_block_size(*superblock);
+
+    fprintf_light_cyan(stdout, "block_size: %"PRIu64"\n", block_size);
+    fprintf_light_cyan(stdout, "block_size / SECTOR_SIZE: %"PRIu64"\n", block_size / SECTOR_SIZE);
 
     for (i = 0; i < write->header.nb_sectors; i += block_size / SECTOR_SIZE)
     {
+        fprintf_light_yellow(stdout, "i: %"PRIu64"\n", i);
         if (redis_sector_lookup(store, write->header.sector_num + i,
             result, &len))
         {
@@ -956,13 +1013,30 @@ int qemu_deep_inspect(struct qemu_bdrv_write* write, struct kv_store* store,
         if (len)
         {
             result[len] = 0;
-            __qemu_dispatch_write(write, store, vmname, result);
+            __qemu_dispatch_write(write, store, vmname, (const char*) result);
         }
         else
         {
             fprintf_light_red(stderr, "Returned sector lookup empty.\n");
             return EXIT_FAILURE;
         }
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int qemu_get_superblock(struct kv_store* store,
+                        struct ext4_superblock* superblock,
+                        uint64_t fs_id)
+{
+    size_t len = sizeof(struct ext4_superblock);
+
+    if (redis_hash_field_get(store, REDIS_SUPERBLOCK_SECTOR_GET,
+                             fs_id, "superblock", (uint8_t*) superblock,
+                             &len))
+    {
+        fprintf_light_red(stderr, "Error retrieving superblock\n");
+        return EXIT_FAILURE;
     }
 
     return EXIT_SUCCESS;
@@ -1005,13 +1079,14 @@ enum SECTOR_TYPE __sector_type(const char* str)
     return SECTOR_UNKNOWN;
 }
 
-enum SECTOR_TYPE qemu_infer_sector_type(struct qemu_bdrv_write* write,
-                                        struct kv_store* store,
-                                        uint64_t block_size)
+enum SECTOR_TYPE qemu_infer_sector_type(struct ext4_superblock* super,
+                                        struct qemu_bdrv_write* write,
+                                        struct kv_store* store)
 {
     uint64_t i;
     uint8_t result[1024];
     size_t len = 1024;
+    uint64_t block_size = ext4_block_size(*super);
 
     for (i = 0; i < write->header.nb_sectors; i += block_size / SECTOR_SIZE)
     {
@@ -1157,9 +1232,11 @@ int __deserialize_file(struct bson_info* bson, struct kv_store* store,
         }
         else if (strcmp(value1.key, "data") == 0)
         {
+            fprintf_light_red(stderr, "data\n");
             bson2 = bson_init();
             free(bson2->buffer);
             bson2->buffer = malloc(value2.size);
+            fprintf_light_red(stderr, "size: %"PRIu32"\n", value2.size);
 
             if (bson2->buffer == NULL)
                 return EXIT_FAILURE;
@@ -1200,10 +1277,12 @@ int __deserialize_file(struct bson_info* bson, struct kv_store* store,
         }
         else if (strcmp(value1.key, "sectors") == 0)
         {
+            fprintf_light_red(stderr, "sectors\n");
             counter = 0;
             bson2 = bson_init();
             free(bson2->buffer);
             bson2->buffer = malloc(value2.size);
+            fprintf_light_red(stderr, "size: %"PRIu32"\n", value2.size);
 
             if (bson2->buffer == NULL)
             {
@@ -1211,7 +1290,7 @@ int __deserialize_file(struct bson_info* bson, struct kv_store* store,
                 return EXIT_FAILURE;
             }
             
-            memcpy(bson2->buffer, value2.data, value2.size);
+            memcpy(bson2->buffer, value2.data, (size_t) value2.size);
             bson_make_readable(bson2);
 
             while (bson_deserialize(bson2, &value1, &value2) == 1)
@@ -1225,18 +1304,23 @@ int __deserialize_file(struct bson_info* bson, struct kv_store* store,
         }
         else if (strcmp(value1.key, "extents") == 0)
         {
+            fprintf_light_red(stderr, "extents\n");
             bson2 = bson_init();
             free(bson2->buffer);
             bson2->buffer = malloc(value2.size);
+            fprintf_light_red(stderr, "size: %"PRIu32"\n", value2.size);
 
             if (bson2->buffer == NULL)
                 return EXIT_FAILURE;
-            
-            memcpy(bson2->buffer, value2.data, value2.size);
+
+            hexdump((uint8_t *) value2.data, value2.size);
+            memcpy(bson2->buffer, (uint8_t *)value2.data, (size_t) value2.size);
             bson_make_readable(bson2);
+            fprintf_light_red(stderr, "made readable\n");
 
             while (bson_deserialize(bson2, &value1, &value2) == 1)
             {
+            fprintf_light_red(stderr, "looping\n");
                 sscanf((const char*) value1.data, "%"SCNu64, &sector);
 
                 if (redis_hash_field_set(store, REDIS_EXTENT_SECTOR_INSERT, sector,
@@ -1274,6 +1358,9 @@ int __deserialize_file(struct bson_info* bson, struct kv_store* store,
                 return EXIT_FAILURE;
         }
     }
+    redis_flush_pipeline(store);
+    redis_shutdown(store);
+    exit(0);
 
     return EXIT_SUCCESS;
 }
@@ -1299,6 +1386,8 @@ int qemu_load_index(FILE* index, struct kv_store* store)
 
         if (strcmp(value1.data, "file") == 0)
         {
+            //hexdump(bson->buffer, bson->size);
+            fprintf_light_red(stdout, "bson->size: %"PRIu32"\n", bson->size);
             __deserialize_file(bson, store, file_counter++);
         }
         else if (strcmp(value1.data, "bgd") == 0)

@@ -23,13 +23,19 @@
 
 #define SECTOR_SIZE 512 
 
-int read_loop(int fd, struct kv_store* store, char* vmname,
-              uint64_t block_size)
+int read_loop(int fd, struct kv_store* store, char* vmname)
 {
     uint8_t buf[QEMU_HEADER_SIZE];
     int64_t total = 0, read_ret = 0;
     int sector_type = SECTOR_UNKNOWN;
     struct qemu_bdrv_write write;
+    struct ext4_superblock superblock;
+
+    if (qemu_get_superblock(store, &superblock, (uint64_t) 0))
+    {
+        fprintf_light_red(stderr, "Failed getting superblock.\n");
+        return EXIT_FAILURE;
+    }
 
     while (1)
     {
@@ -90,9 +96,9 @@ int read_loop(int fd, struct kv_store* store, char* vmname,
         }
 
         qemu_print_write(&write);
-        sector_type = qemu_infer_sector_type(&write, store, block_size);
+        sector_type = qemu_infer_sector_type(&superblock, &write, store);
         qemu_print_sector_type(sector_type);
-        //qemu_deep_inspect(&write, store, vmname, block_size);
+        qemu_deep_inspect(&superblock, &write, store, vmname);
         free((void*) write.data);
         fflush(stdout);
     }
@@ -104,7 +110,7 @@ int read_loop(int fd, struct kv_store* store, char* vmname,
 int main(int argc, char* args[])
 {
     int fd, ret = EXIT_SUCCESS;
-    uint64_t block_size, load_time;
+    uint64_t time;
     char* index, *db, *stream, *vmname;
     FILE* indexf;
     struct timeval start, end;
@@ -154,7 +160,7 @@ int main(int argc, char* args[])
         return EXIT_FAILURE;
     }
     gettimeofday(&end, NULL);
-    load_time = diff_time(start, end);
+    time = diff_time(start, end);
 
     fprintf_cyan(stdout, "%s: attaching to stream: %s\n\n", vmname, stream);
 
@@ -175,12 +181,11 @@ int main(int argc, char* args[])
     }
 
     fclose(indexf);
-    block_size = qemu_get_block_size(handle, 0);
     gettimeofday(&start, NULL);
-    ret = read_loop(fd, handle, vmname, block_size);
+    ret = read_loop(fd, handle, vmname);
     gettimeofday(&end, NULL);
 
-    pretty_print_microseconds(load_time, pretty_micros, 32);
+    pretty_print_microseconds(time, pretty_micros, 32);
     fprintf_light_red(stderr, "load_index time: %s.\n", pretty_micros);
 
     pretty_print_microseconds(diff_time(start, end), pretty_micros, 32);
