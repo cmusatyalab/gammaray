@@ -43,7 +43,6 @@
 #define REDIS_ASYNC_QUEUE_PUSH "LPUSH writequeue %b"
 #define REDIS_ASYNC_QUEUE_POP "BRPOP writequeue"
 
-
 struct kv_store;
 struct thread_job;
 

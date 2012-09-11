@@ -23,7 +23,7 @@
 
 #define SECTOR_SIZE 512 
 
-int read_loop(int fd, struct mbr* mbr, struct kv_store* store, char* vmname,
+int read_loop(int fd, struct kv_store* store, char* vmname,
               uint64_t block_size)
 {
     uint8_t buf[QEMU_HEADER_SIZE];
@@ -91,9 +91,7 @@ int read_loop(int fd, struct mbr* mbr, struct kv_store* store, char* vmname,
         qemu_print_write(&write);
         sector_type = qemu_infer_sector_type(&write, store, block_size);
         qemu_print_sector_type(sector_type);
-        if (sector_type == SECTOR_EXT2_INODE ||
-            sector_type == SECTOR_EXT2_DATA)
-            qemu_deep_inspect(&write, store, vmname, block_size);
+        qemu_deep_inspect(&write, store, vmname, block_size);
         free((void*) write.data);
         fflush(stdout);
     }
@@ -104,10 +102,9 @@ int read_loop(int fd, struct mbr* mbr, struct kv_store* store, char* vmname,
 /* main thread of execution */
 int main(int argc, char* args[])
 {
-    int fd, ret;
+    int fd, ret = EXIT_SUCCESS;
     uint64_t block_size, load_time;
     char* index, *db, *stream, *vmname;
-    struct mbr mbr;
     FILE* indexf;
     struct timeval start, end;
 
@@ -155,7 +152,6 @@ int main(int argc, char* args[])
         return EXIT_FAILURE;
     }
     gettimeofday(&end, NULL);
-    exit(0);
     load_time = diff_time(start, end);
 
     fprintf_cyan(stdout, "%s: attaching to stream: %s\n\n", vmname, stream);
@@ -179,7 +175,7 @@ int main(int argc, char* args[])
     fclose(indexf);
     block_size = qemu_get_block_size(handle, 0);
     gettimeofday(&start, NULL);
-    ret = read_loop(fd, &mbr, handle, vmname, block_size);
+    ret = read_loop(fd, handle, vmname, block_size);
     gettimeofday(&end, NULL);
     fprintf_light_red(stderr, "load_index time: %"PRIu64" microseconds\n",
                               load_time);
@@ -187,7 +183,7 @@ int main(int argc, char* args[])
                               diff_time(start, end));
     close(fd);
     redis_flush_pipeline(handle);
-    redis_shutdown(handle);
+    //redis_shutdown(handle);
 
-    return EXIT_SUCCESS;
+    return ret;
 }
