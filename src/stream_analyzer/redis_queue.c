@@ -490,7 +490,7 @@ int redis_async_write_dequeue(struct kv_store* handle, uint8_t* data,
 void redis_shutdown(struct kv_store* handle)
 {
     int outstanding = 0;
-
+    redisReply* reply;
 
     if (handle)
     {
@@ -504,7 +504,9 @@ void redis_shutdown(struct kv_store* handle)
         }
 
         redis_flush_pipeline(handle);
-        redisCommand(handle->connection, "FLUSHALL");
+        reply = redisCommand(handle->connection, "FLUSHALL");
+        check_redis_return(handle, reply);
+
         if (handle->connection)
         {
             redisFree(handle->connection);

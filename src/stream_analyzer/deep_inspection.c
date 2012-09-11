@@ -1131,6 +1131,7 @@ int __deserialize_file(struct bson_info* bson, struct kv_store* store,
         else if (strcmp(value1.key, "data") == 0)
         {
             bson2 = bson_init();
+            free(bson2->buffer);
             bson2->buffer = malloc(value2.size);
 
             if (bson2->buffer == NULL)
@@ -1146,17 +1147,26 @@ int __deserialize_file(struct bson_info* bson, struct kv_store* store,
                 if (redis_hash_field_set(store, REDIS_DIR_SECTOR_INSERT, sector,
                                  "data", (const uint8_t*) value1.data,
                                  (size_t) value1.size))
+                {
+                    free(bson2->buffer);
                     return EXIT_FAILURE;
+                }
 
                 if (redis_reverse_pointer_set(store, REDIS_DIRS_INSERT,
                                       id,
                                       sector))
-                return EXIT_FAILURE;
+                {
+                    free(bson2->buffer);
+                    return EXIT_FAILURE;
+                }
 
                 if (redis_reverse_pointer_set(store, REDIS_DIRS_SECTOR_INSERT,
                                       sector,
                                       id))
-                return EXIT_FAILURE;
+                {
+                    free(bson2->buffer);
+                    return EXIT_FAILURE;
+                }
             }
 
             bson_cleanup(bson2);
@@ -1165,10 +1175,14 @@ int __deserialize_file(struct bson_info* bson, struct kv_store* store,
         {
             counter = 0;
             bson2 = bson_init();
+            free(bson2->buffer);
             bson2->buffer = malloc(value2.size);
 
             if (bson2->buffer == NULL)
+            {
+                free(bson2->buffer);
                 return EXIT_FAILURE;
+            }
             
             memcpy(bson2->buffer, value2.data, value2.size);
             bson_make_readable(bson2);
@@ -1185,6 +1199,7 @@ int __deserialize_file(struct bson_info* bson, struct kv_store* store,
         else if (strcmp(value1.key, "extents") == 0)
         {
             bson2 = bson_init();
+            free(bson2->buffer);
             bson2->buffer = malloc(value2.size);
 
             if (bson2->buffer == NULL)
@@ -1200,17 +1215,26 @@ int __deserialize_file(struct bson_info* bson, struct kv_store* store,
                 if (redis_hash_field_set(store, REDIS_EXTENT_SECTOR_INSERT, sector,
                                  "data", (const uint8_t*) value1.data,
                                  (size_t) value1.size))
+                {
+                    bson_cleanup(bson2);
                     return EXIT_FAILURE;
+                }
 
                 if (redis_reverse_pointer_set(store, REDIS_EXTENTS_INSERT,
                                       id,
                                       sector))
-                return EXIT_FAILURE;
+                {
+                    bson_cleanup(bson2);
+                    return EXIT_FAILURE;
+                }
 
                 if (redis_reverse_pointer_set(store, REDIS_EXTENTS_SECTOR_INSERT,
                                       sector,
                                       id))
-                return EXIT_FAILURE;
+                {
+                    bson_cleanup(bson2);
+                    return EXIT_FAILURE;
+                }
             }
 
             bson_cleanup(bson2);
