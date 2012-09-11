@@ -136,14 +136,14 @@ void test_encoding()
 
     char* val4str = "testerrrrrstring";
     int32_t len4 = strlen(val4str);
-    uint8_t buf4[strlen(val4str)+4];
-    memcpy(&buf4, &len4, 4);
-    memmove(&buf4[4], val4str, strlen(val4str));
+    uint8_t buf4[strlen(val4str)];
+    memmove(buf4, val4str, strlen(val4str));
     struct bson_kv val4 = {
                                 .type = BSON_STRING,
                                 .subtype = BSON_BINARY_GENERIC,
                                 .key = "test4str",
-                                .data = &buf4
+                                .data = buf4,
+                                .size = len4
                              };
 
     test_bson_serialize(bson, &val4);
@@ -153,14 +153,14 @@ void test_encoding()
 
     int32_t len5 = 6;
     char val5bin[6] = {0xff,0xde,0xad,0xbe,0xef,0xff};
-    uint8_t buf5[10];
-    memcpy(&buf5, &len5, 4);
+    uint8_t buf5[6];
     memcpy(&buf5[4], val5bin, len5);
     struct bson_kv val5 = {
                                 .type = BSON_BINARY,
                                 .subtype = BSON_BINARY_GENERIC,
                                 .key = "test5bin",
-                                .data = &buf5
+                                .data = buf5,
+                                .size = len5
                               };
     test_bson_serialize(bson, &val5);
     hexdump(bson->buffer, bson->position);
@@ -270,14 +270,14 @@ void test_decoding()
 
     char* val4str = "testerrrrrstring";
     int32_t len4 = strlen(val4str);
-    uint8_t buf4[strlen(val4str)+4];
-    memmove(&buf4[4], val4str, strlen(val4str));
-    memcpy(&buf4, &len4, 4);
+    uint8_t buf4[strlen(val4str)];
+    memmove(buf4, val4str, strlen(val4str));
     struct bson_kv val4 = {
                                 .type = BSON_STRING,
                                 .subtype = BSON_BINARY_GENERIC,
                                 .key = "test4str",
-                                .data = &buf4
+                                .data = buf4,
+                                .size = len4
                              };
 
     test_bson_serialize(bson, &val4);
@@ -287,14 +287,14 @@ void test_decoding()
 
     int32_t len5 = 6;
     char val5bin[6] = {0xff,0xde,0xad,0xbe,0xef,0xff};
-    uint8_t buf5[10];
-    memcpy(&buf5[4], val5bin, len5);
-    memcpy(&buf5, &len5, 4);
+    uint8_t buf5[6];
+    memcpy(buf5, val5bin, len5);
     struct bson_kv val5 = {
                                 .type = BSON_BINARY,
                                 .subtype = BSON_BINARY_GENERIC,
                                 .key = "test5bin",
-                                .data = &buf5
+                                .data = &buf5,
+                                .size = len5
                               };
     test_bson_serialize(bson, &val5);
     hexdump(bson->buffer, bson->position);
@@ -424,7 +424,7 @@ void test_decoding()
     parsed = 1 + strlen("test6true") + 1 + 1; 
 
     assert(val_d_1.type == BSON_BOOLEAN);
-    assert(val_d_1.size == 6);
+    assert(val_d_1.size == 1);
     assert(strcmp(val_d_1.key, "test6true") == 0);
     assert(*((uint8_t *)val_d_1.data) == 1);
     assert(bson->position == old_position + parsed);
@@ -438,7 +438,7 @@ void test_decoding()
     parsed = 1 + strlen("test7false") + 1 + 1; 
 
     assert(val_d_1.type == BSON_BOOLEAN);
-    assert(val_d_1.size == 6);
+    assert(val_d_1.size == 1);
     assert(strcmp(val_d_1.key, "test7false") == 0);
     assert(*((uint8_t *)val_d_1.data) == 0);
     assert(bson->position == old_position + parsed);
@@ -452,7 +452,7 @@ void test_decoding()
     parsed = 1 + strlen("test8NULL") + 1; 
 
     assert(val_d_1.type == BSON_NULL);
-    assert(val_d_1.size == 6);
+    assert(val_d_1.size == 0);
     assert(strcmp(val_d_1.key, "test8NULL") == 0);
     assert(bson->position == old_position + parsed);
     assert(bson->size == old_size - parsed);
