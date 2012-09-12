@@ -907,8 +907,59 @@ int ext2_compare_inodes(struct ext2_inode* old_inode,
     return EXIT_SUCCESS;
 }
 
-int __emit_file_bytes(struct qemu_bdrv_write* write, struct kv_store* store, 
-                      const char* vmname, const char* pointer)
+int __emit_field_update(struct kv_store* store, char* field, char* type,
+                        char* channel, enum BSON_TYPE bson_type, void* oldv,
+                        void* newv, uint64_t oldv_size, uint64_t newv_size, 
+                        uint64_t transaction_id)
+{
+    struct bson_info* bson = bson_init();
+    struct bson_kv val;
+
+    if (bson == NULL)
+    {
+        fprintf_light_red(stderr, "Failed creating BSON handle. OOM?\n");
+        return EXIT_FAILURE;
+    }
+
+    val.type = BSON_STRING;
+    val.size = strlen(type);
+    val.key = "type";
+    val.data = type;
+
+    bson_serialize(bson, &val);
+
+    val.type = BSON_INT64;
+    val.key = "transaction";
+    val.data = &(transaction_id);
+
+    bson_serialize(bson, &val);
+
+    val.type = bson_type;
+    val.key = "old";
+    val.data = &(oldv);
+    val.size = oldv_size;
+
+    bson_serialize(bson, &val);
+
+    val.type = bson_type;
+    val.key = "new";
+    val.data = &(newv);
+    val.size = newv_size;
+
+    bson_serialize(bson, &val);
+
+    bson_finalize(bson);
+
+    if (redis_publish(store, channel, bson->buffer, bson->position))
+    {
+        fprintf_light_red(stderr, "Failure publishing "
+                                  "Redis message.\n");
+        return EXIT_FAILURE;
+    }
+
+    bson_cleanup(bson);
+    return EXIT_SUCCESS;
+}
 {
     fprintf_light_white(stdout, "__emit_file_bytes()\n");
     return EXIT_SUCCESS;
