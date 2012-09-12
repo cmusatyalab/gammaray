@@ -961,6 +961,41 @@ int __emit_field_update(struct kv_store* store, char* field, char* type,
     return EXIT_SUCCESS;
 }
 
+int __diff_dir(uint8_t* write, struct kv_store* store, 
+               char* vmname, uint64_t write_counter,
+               char* pointer, size_t write_len)
+{
+    uint64_t dir = 0;
+    uint8_t old_dir[write_len];
+    fprintf_light_white(stdout, "__diff_dir(), write_len == %zu\n", write_len);
+    fprintf_light_white(stdout, "operating on: %s\n", pointer);
+
+    strtok(pointer, ":");
+    pointer = strtok(NULL, ":");
+
+    if (pointer == NULL)
+    {
+        fprintf_light_red(stderr, "Failed parsing dir pointer.\n");
+        return EXIT_FAILURE;
+    }
+
+    sscanf(pointer, "%"PRIu64, &dir);
+    fprintf_light_white(stdout, "Loading data for dir %"PRIu64"\n", dir);
+
+    if (redis_hash_field_get(store, REDIS_DIR_SECTOR_GET, dir, "data",
+                             old_dir, &write_len))
+    {
+        fprintf_light_red(stderr, "Failed retrieving data for dirdata:%"
+                                  PRIu64"\n", dir);
+        return EXIT_FAILURE;
+    }
+
+    fprintf_light_white(stdout, "loaded: %zu bytes.\n", write_len);
+
+    exit(0);
+    return EXIT_SUCCESS;
+}
+
 int __emit_file_bytes(uint8_t* write, struct kv_store* store, 
                       char* vmname, uint64_t write_counter,
                       char* pointer, size_t write_len)
@@ -1096,42 +1131,42 @@ int __emit_file_bytes(uint8_t* write, struct kv_store* store,
     return EXIT_SUCCESS;
 }
 
-int __diff_superblock(struct qemu_bdrv_write* write, struct kv_store* store, 
+int __diff_superblock(uint8_t* write, struct kv_store* store, 
                       const char* vmname, const char* pointer)
 {
     fprintf_light_white(stdout, "__diff_superblock()\n");
     return EXIT_SUCCESS;
 }
 
-int __diff_mbr(struct qemu_bdrv_write* write, struct kv_store* store,
+int __diff_mbr(uint8_t* write, struct kv_store* store,
                const char* vmname, const char* pointer)
 {
     fprintf_light_white(stdout, "__diff_mbr()\n");
     return EXIT_SUCCESS;
 }
 
-int __diff_bgds(struct qemu_bdrv_write* write, struct kv_store* store,
+int __diff_bgds(uint8_t* write, struct kv_store* store,
                 const char* vmname, const char* pointer)
 {
     fprintf_light_white(stdout, "__diff_bgds()\n");
     return EXIT_SUCCESS;
 }
 
-int __diff_inodes(struct qemu_bdrv_write* write, struct kv_store* store,
+int __diff_inodes(uint8_t* write, struct kv_store* store,
                   const char* vmname, const char* pointer)
 {
     fprintf_light_white(stdout, "__diff_inodes()\n");
     return EXIT_SUCCESS;
 }
 
-int __diff_bitmap(struct qemu_bdrv_write* write, struct kv_store* store,
+int __diff_bitmap(uint8_t* write, struct kv_store* store,
                   const char* vmname, const char* pointer)
 {
     fprintf_light_white(stdout, "__diff_bitmap()\n");
     return EXIT_SUCCESS;
 }
 
-int __diff_extent_tree(struct qemu_bdrv_write* write, struct kv_store* store,
+int __diff_extent_tree(uint8_t* write, struct kv_store* store,
                        const char* vmname, const char* pointer)
 {
     fprintf_light_white(stdout, "__diff_extent_tree()\n");
