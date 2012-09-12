@@ -28,6 +28,7 @@ int read_loop(int fd, struct kv_store* store, char* vmname)
     uint8_t buf[QEMU_HEADER_SIZE];
     int64_t total = 0, read_ret = 0;
     int sector_type = SECTOR_UNKNOWN;
+    uint64_t write_counter = 0;
     struct qemu_bdrv_write write;
     struct ext4_superblock superblock;
 
@@ -98,9 +99,8 @@ int read_loop(int fd, struct kv_store* store, char* vmname)
         qemu_print_write(&write);
         sector_type = qemu_infer_sector_type(&superblock, &write, store);
         qemu_print_sector_type(sector_type);
-        qemu_deep_inspect(&superblock, &write, store, vmname);
+        qemu_deep_inspect(&superblock, &write, store, write_counter++, vmname);
         free((void*) write.data);
-        fflush(stdout);
     }
 
     return EXIT_SUCCESS;
