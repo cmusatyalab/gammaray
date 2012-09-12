@@ -69,5 +69,5 @@ int qemu_get_superblock(struct kv_store* store,
 int qemu_print_sector_type(enum SECTOR_TYPE type);
 int qemu_deep_inspect(struct ext4_superblock* superblock,
                       struct qemu_bdrv_write* write, struct kv_store* store,
-                      const char* vmname);
+                      uint64_t write_counter, char* vmname);
 #endif

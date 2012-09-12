@@ -31,6 +31,8 @@ int read_loop(int fd, struct kv_store* store, char* vmname)
     uint64_t write_counter = 0;
     struct qemu_bdrv_write write;
     struct ext4_superblock superblock;
+    uint8_t* databuf = (uint8_t*) malloc(SECTOR_SIZE * 8);
+    write.data = databuf;
 
     if (qemu_get_superblock(store, &superblock, (uint64_t) 0))
     {
@@ -55,6 +57,7 @@ int read_loop(int fd, struct kv_store* store, char* vmname)
             fprintf_light_red(stderr, "Total read: %"PRId64".\n", total);
             fprintf_light_red(stderr, "Reading from stream failed, assuming "
                                       "teardown.\n");
+            free((void*) write.data);
             return EXIT_SUCCESS;
         }
 
@@ -62,16 +65,17 @@ int read_loop(int fd, struct kv_store* store, char* vmname)
         {
             fprintf_light_red(stderr, "Unknown fatal error occurred, 0 bytes"
                                        "read from stream.\n");
+            free((void*) write.data);
             return EXIT_FAILURE;
         }
 
         qemu_parse_header(buf, &write);
         write.data = (uint8_t*)
-                     malloc(write.header.nb_sectors*SECTOR_SIZE);
+                     realloc(write.data, write.header.nb_sectors*SECTOR_SIZE);
 
         if (write.data == NULL)
         {
-            fprintf_light_red(stderr, "malloc() failed, assuming OOM.\n");
+            fprintf_light_red(stderr, "realloc() failed, assuming OOM.\n");
             fprintf_light_red(stderr, "tried allocating: %d bytes\n",
                                       write.header.nb_sectors*SECTOR_SIZE);
             return EXIT_FAILURE;
@@ -100,8 +104,8 @@ int read_loop(int fd, struct kv_store* store, char* vmname)
         sector_type = qemu_infer_sector_type(&superblock, &write, store);
         qemu_print_sector_type(sector_type);
         qemu_deep_inspect(&superblock, &write, store, write_counter++, vmname);
-        free((void*) write.data);
     }
+    free((void*) write.data);
 
     return EXIT_SUCCESS;
 }
