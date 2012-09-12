@@ -32,13 +32,11 @@
 #define REDIS_EXTENT_SECTOR_GET "HGET extent:%"PRIu64" %s"
 #define REDIS_EXTENTS_INSERT "RPUSH extents:%"PRIu64" extent:%"PRIu64
 #define REDIS_EXTENTS_LGET "LRANGE extents:%"PRIu64" 0 -1"
-#define REDIS_EXTENTS_SECTOR_INSERT "SET sector:%"PRIu64"' lextents:%"PRIu64
+#define REDIS_EXTENTS_SECTOR_INSERT "SET sector:%"PRIu64" lextents:%"PRIu64
 
 #define REDIS_DIR_SECTOR_INSERT "HSET dirdata:%"PRIu64" %s %b"
 #define REDIS_DIR_SECTOR_GET "HGET dirdata:%"PRIu64" %s"
-#define REDIS_DIRS_INSERT "RPUSH dirdatas:%"PRIu64" dirdata:%"PRIu64
-#define REDIS_DIRS_LGET "LRANGE dirdatas:%"PRIu64" 0 -1"
-#define REDIS_DIRS_SECTOR_INSERT "SET sector:%"PRIu64"' ldirdatas:%"PRIu64
+#define REDIS_DIR_INSERT "SET sector:%"PRIu64" dirdata:%"PRIu64
 
 #define REDIS_ASYNC_QUEUE_PUSH "LPUSH writequeue %b"
 #define REDIS_ASYNC_QUEUE_POP "BRPOP writequeue"
