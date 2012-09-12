@@ -1217,60 +1217,6 @@ int ext4_list_root_fs(FILE* disk, int64_t partition_offset,
     return 0;
 }
 
-int ext4_reconstruct_file_sectors(FILE* disk, int64_t partition_offset,
-                                  struct ext4_superblock superblock, 
-                                  struct ext4_inode inode, char* copy_path)
-{
-    uint64_t block_size = ext4_block_size(superblock),
-             file_size = ext4_file_size(inode);
-    uint8_t buf[block_size];
-    uint64_t num_blocks;
-    uint64_t i;
-    int ret_check;
-
-    if (inode.i_mode & 0x4000) /* dir entry, not a file */
-    {
-        fprintf_light_red(stderr, "Refusing to reconstruct dir inode, dir != "
-                                  "file.\n");
-        return -1;
-    }
-
-    if (file_size == 0)
-    {
-        num_blocks = 0;
-    }
-    else
-    {
-        num_blocks = file_size / block_size;
-        if (file_size % block_size != 0)
-            num_blocks += 1;
-    }
-
-    fprintf(stderr, "    .sectors = { ");
-
-    /* go through each valid block of the inode */
-    for (i = 0; i < num_blocks; i++)
-    {
-        ret_check = ext4_read_file_block_sectors(disk, partition_offset, superblock, i,
-                                                 inode, (uint32_t*) buf);
-        
-        if (ret_check < 0) /* error reading */
-        {
-            fprintf_light_red(stderr, "Error reading file block.\n");
-            return -1;
-        }
-        else if (ret_check > 0) /* no more blocks? */
-        {
-            fprintf_light_red(stderr, "Premature ending of file blocks.\n");
-            return -1;
-        }
-    }
-
-    fprintf(stderr, " }\n");
-
-   return 0;
-}
-
 int ext4_reconstruct_file(FILE* disk, int64_t partition_offset,
                           struct ext4_superblock superblock, 
                           struct ext4_inode inode, char* copy_path)
@@ -1651,137 +1597,6 @@ int ext4_print_file_sectors(FILE* disk, int64_t partition_offset,
     fclose(copy);
 
    return 0;
-}
-
-/* recursive function listing a tree rooted at some directory.
- * recursion ends at leaf files.
- * depth-first
- */
-int ext4_print_tree_sectors(FILE* disk, int64_t partition_offset, 
-                            struct ext4_superblock superblock,
-                            struct ext4_inode root_inode,
-                            char* prefix,
-                            char* copy_prefix)
-{
-    struct ext4_inode child_inode;
-    struct ext4_dir_entry dir;
-    uint64_t block_size = ext4_block_size(superblock), position = 0;
-    uint8_t buf[block_size];
-    uint64_t num_blocks;
-    uint64_t i;
-    int ret_check;
-    char path[8192], copy[8192];
-
-    if (root_inode.i_mode & 0x8000) /* file, no dir entries more */
-    {
-        ext4_reconstruct_file_sectors(disk, partition_offset, superblock, root_inode,
-                                      copy);
-        return 0;
-    }
-    else if (root_inode.i_mode & 0x4000)
-    {
-    }
-
-    if (ext4_file_size(root_inode) == 0)
-    {
-        num_blocks = 0;
-    }
-    else
-    {
-        num_blocks = ext4_file_size(root_inode) / block_size;
-        if (ext4_file_size(root_inode) % block_size != 0)
-            num_blocks += 1;
-    }
-
-    /* go through each valid block of the inode */
-    for (i = 0; i < num_blocks; i++)
-    {
-        ret_check = ext4_read_file_block_sectors(disk, partition_offset, superblock, i, root_inode, (uint32_t*) buf);
-        
-        if (ret_check < 0) /* error reading */
-        {
-            fprintf_light_red(stderr, "Error reading inode dir block.\n");
-            return -1;
-        }
-        else if (ret_check > 0) /* no more blocks? */
-        {
-            return 0;
-        }
-
-        position = 0;
-
-        while (position < block_size)
-        {
-            strcpy(path, prefix);
-
-            if (ext4_read_dir_entry(&buf[position], &dir))
-            {
-                fprintf_light_red(stderr, "Error reading dir entry from block.\n");
-                return -1;
-            }
-
-            if (dir.inode == 0)
-                return 0;
-
-            if (ext4_read_inode(disk, partition_offset, superblock, dir.inode, &child_inode))
-            {
-               fprintf_light_red(stderr, "Error reading child inode.\n");
-               return -1;
-            } 
-
-            dir.name[dir.name_len] = 0;
-            strcat(path, (char*) dir.name);
-            
-            if (strcmp((const char *) dir.name, ".") != 0 &&
-                strcmp((const char *) dir.name, "..") != 0)
-            {
-                fprintf(stderr, "struct file_sector_map %s = {\n ", path);
-                if (child_inode.i_mode & 0x4000)
-                {
-                    //fprintf_light_blue(stdout, "inode %"PRIu32" dir %s\n", dir.inode, path);
-                    fprintf_light_blue(stderr, "    .path = \"%s\",\n", path);
-                }
-                else if (child_inode.i_mode & 0x8000)
-                {
-                    fprintf_light_yellow(stderr, "    .path = \"%s\",\n", path);
-                }
-                else
-                {
-                    fprintf_red(stderr, "%s\n", path);
-                }
-                ext4_print_tree_sectors(disk, partition_offset, superblock,
-                                      child_inode, strcat(path, "/"), copy_prefix); /* recursive call */
-                fprintf_yellow(stderr, "};\n");
-            }
-
-            position += dir.rec_len;
-        }
-    }
-
-    return 0;
-}
-
-int ext4_print_root_fs_sectors(FILE* disk, int64_t partition_offset,
-                               struct ext4_superblock superblock, char* prefix,
-                               char* copy_prefix)
-{
-    struct ext4_inode root;
-    if (ext4_read_inode(disk, partition_offset, superblock, 2, &root))
-    {
-        fprintf(stderr, "Failed getting root fs inode.\n");
-        return -1;
-    }
-
-    fprintf_light_blue(stdout, "inode %"PRIu32" dir %s\n", (uint32_t) 2, prefix);
-
-    if (ext4_print_tree_sectors(disk, partition_offset, superblock, root,
-                                prefix, copy_prefix))
-    {
-        fprintf(stdout, "Error listing fs tree from root inode.\n");
-        return -1;
-    }
-
-    return 0;
 }
 
 int ext4_print_inode_mode(uint16_t i_mode)
@@ -2235,32 +2050,6 @@ int ext4_serialize_bgd_sectors(struct bson_info* serialized,
     return EXIT_SUCCESS;
 }
 
-int ext4_print_sectormap(FILE* disk, int64_t partition_offset,
-                         struct ext4_superblock superblock)
-{
-    uint32_t sector, offset;
-    /* print superblock sector */
-    fprintf_yellow(stdout, "Superblock sector %"PRId64"\n",
-                    (partition_offset + EXT4_SUPERBLOCK_OFFSET) / SECTOR_SIZE);
-
-    /* walk block group descriptor table */
-    struct ext4_block_group_descriptor bgd;
-
-    while (ext4_next_block_group_descriptor(disk, partition_offset, superblock,
-                                            &bgd, &sector, &offset) > 0)
-    {
-       if (print_sectors_ext4_block_group_descriptor(partition_offset, bgd, superblock))
-       {
-           fprintf_light_red(stderr, "Failed printing block group descriptor.\n");
-           return -1;
-       }
-    }
-
-    /* walk inode table */
-    ext4_print_root_fs_sectors(disk, partition_offset, superblock, "/", ""); 
-    return 0;
-}
-
 char* ext4_last_mount_point(struct ext4_superblock* superblock)
 {
     return (char *) (superblock->s_last_mounted);
@@ -2425,9 +2214,9 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
     uint8_t buf[ext4_block_size(superblock)];
 
     struct bson_kv value, data_value, extent_value;
-    uint32_t sector;
-    uint32_t sectors_per_block = ext4_block_size(superblock) / SECTOR_SIZE;
-    char count[11];
+    uint64_t sector;
+    uint64_t sectors_per_block = ext4_block_size(superblock) / SECTOR_SIZE;
+    char count[32];
     value.type = BSON_INT32;
     value.key = count;
 
@@ -2468,7 +2257,7 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
                     sector = ext4_extent_index_leaf(idx2) * sectors_per_block +
                              partition_offset / SECTOR_SIZE;
                     
-                    snprintf(count, 11, "%"PRIu32, sector);
+                    snprintf(count, 32, "%"PRIu64, sector);
                     bson_serialize(extents, &extent_value);
                 }
                 
@@ -2489,7 +2278,7 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
                     sector = ext4_extent_index_leaf(idx) * sectors_per_block +
                              partition_offset / SECTOR_SIZE;
                     
-                    snprintf(count, 11, "%"PRIu32, sector);
+                    snprintf(count, 32, "%"PRIu64, sector);
                     bson_serialize(extents, &extent_value);
                 }
 
@@ -2514,13 +2303,13 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
                 sector += partition_offset;
                 sector /= SECTOR_SIZE;
 
-                snprintf(count, 11, "%"PRIu32, block_num + extent.ee_block);
+                snprintf(count, 32, "%"PRIu32, block_num + extent.ee_block);
                 value.data = &sector;
                 bson_serialize(sectors, &value);
 
                 if (save_data)
                 {
-                    snprintf(count, 11, "%"PRIu32, sector);
+                    snprintf(count, 32, "%"PRIu64, sector);
                     ext4_read_block(disk, partition_offset, superblock,
                                     (ext4_extent_start(extent) + block_num),
                                     (uint8_t*) buf);
@@ -2915,7 +2704,7 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
     struct ext4_dir_entry dir;
     uint64_t block_size = ext4_block_size(superblock), position = 0;
     uint8_t buf[block_size];
-    uint64_t num_blocks;
+    uint64_t num_blocks, fsize = ext4_file_size(root_inode);
     uint64_t i;
     int ret_check;
     char path[8192];
@@ -2935,6 +2724,12 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
         value.type = BSON_BOOLEAN;
         value.key = "is_dir";
         value.data = &is_dir;
+
+        bson_serialize(bson, &value);
+
+        value.type = BSON_INT64;
+        value.key = "size";
+        value.data = &(fsize);
 
         bson_serialize(bson, &value);
 
@@ -2969,6 +2764,12 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
 
         bson_serialize(bson, &value);
 
+        value.type = BSON_INT64;
+        value.key = "size";
+        value.data = &(fsize);
+
+        bson_serialize(bson, &value);
+
         value.type = BSON_BINARY;
         value.subtype = BSON_BINARY_GENERIC;
         value.size = sizeof(struct ext4_inode);
@@ -2997,6 +2798,12 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
         value.type = BSON_BOOLEAN;
         value.key = "is_dir";
         value.data = &is_dir;
+
+        bson_serialize(bson, &value);
+
+        value.type = BSON_INT64;
+        value.key = "size";
+        value.data = &(fsize);
 
         bson_serialize(bson, &value);
 
