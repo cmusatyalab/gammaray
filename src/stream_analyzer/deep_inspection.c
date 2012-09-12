@@ -960,8 +960,139 @@ int __emit_field_update(struct kv_store* store, char* field, char* type,
     bson_cleanup(bson);
     return EXIT_SUCCESS;
 }
+
+int __emit_file_bytes(uint8_t* write, struct kv_store* store, 
+                      char* vmname, uint64_t write_counter,
+                      char* pointer, size_t write_len)
 {
+    struct bson_info* bson = bson_init();
+    struct bson_kv val;
+    uint64_t start, end, file;
+    uint64_t fsize;
+    size_t len = 4096;
+    char path[len];
+    char* token, *channel_name;
+
     fprintf_light_white(stdout, "__emit_file_bytes()\n");
+
+    strtok(pointer, ":");
+    token = strtok(NULL, ":");
+    if (token)
+    {
+        sscanf(token, "%"SCNu64, &start);
+    }
+    else
+    {
+        fprintf_light_red(stderr, "Failed tokenizing start.\n");
+        return EXIT_FAILURE;
+    }
+
+    strtok(NULL, ":");
+    token = strtok(NULL, ":");
+    if (token)
+    {
+        sscanf(token, "%"SCNu64, &end);
+    }
+    else
+    {
+        fprintf_light_red(stderr, "Failed tokenizing end.\n");
+        return EXIT_FAILURE;
+    }
+
+    strtok(NULL, ":");
+    token = strtok(NULL, ":");
+    if (token)
+    {
+        sscanf(token, "%"SCNu64, &file);
+    }
+    else
+    {
+        fprintf_light_red(stderr, "Failed tokenizing end.\n");
+        return EXIT_FAILURE;
+    }
+
+    fprintf_light_white(stdout, "start: %"PRIu64
+                                " end: %"PRIu64
+                                " file: %"PRIu64"\n", start, end, file);
+
+    if (redis_hash_field_get(store, REDIS_INODE_SECTOR_GET, file, "path",
+                             (uint8_t*) path, &len))
+    {
+        fprintf_light_red(stderr, "Failed retrieving path for file:%"
+                                  PRIu64"\n", file);
+        return EXIT_FAILURE;
+    }
+
+    path[len] = '\0';
+    fprintf_light_white(stdout, "path: %s\n", path);
+
+    len = sizeof(fsize);
+    if (redis_hash_field_get(store, REDIS_INODE_SECTOR_GET, file, "size",
+                             (uint8_t*) &fsize, &len))
+    {
+        fprintf_light_red(stderr, "Failed retrieving size for file:%"
+                                  PRIu64"\n", fsize);
+        return EXIT_FAILURE;
+    }
+
+    channel_name = construct_channel_name(vmname, path);
+
+    fprintf_light_white(stdout, "fsize: %"PRIu64"\n", fsize);
+    fprintf_light_white(stdout, "channel_name: %s\n", channel_name);
+
+    /* get path, emit on chan */
+
+    val.type = BSON_STRING;
+    val.size = strlen("data");
+    val.key = "type";
+    val.data = "data";
+
+    bson_serialize(bson, &val);
+
+    val.type = BSON_INT64;
+    val.key = "transaction";
+    val.data = &(write_counter);
+
+    bson_serialize(bson, &val);
+
+    val.type = BSON_INT64;
+    val.key = "start";
+    val.data = &(start);
+
+    bson_serialize(bson, &val);
+
+    if (write_len > fsize - start)
+        write_len = fsize - start;
+
+    if (end > fsize)
+        end = fsize;
+    
+    val.type = BSON_INT64;
+    val.key = "end";
+    val.data = &(end);
+
+    bson_serialize(bson, &val);
+
+    val.type = BSON_BINARY;
+    val.key = "write";
+    val.data = write;
+    val.size = write_len;
+
+    bson_serialize(bson, &val);
+
+    bson_finalize(bson);
+        
+    if (redis_publish(store, channel_name, bson->buffer,
+                      (size_t) bson->position))
+    {
+        fprintf_light_red(stderr, "Failure publishing "
+                                  "Redis message.\n");
+        return -1;
+    }
+
+    free(channel_name);
+    bson_cleanup(bson);
+
     return EXIT_SUCCESS;
 }
 
@@ -1007,24 +1138,27 @@ int __diff_extent_tree(struct qemu_bdrv_write* write, struct kv_store* store,
     return EXIT_SUCCESS;
 }
 
-int __qemu_dispatch_write(struct qemu_bdrv_write* write,
-                          struct kv_store* store, const char* vmname,
-                          const char* pointer)
+int __qemu_dispatch_write(uint8_t* data,
+                          struct kv_store* store, char* vmname,
+                          uint64_t write_counter,
+                          char* pointer, size_t len)
 {
     if (strncmp(pointer, "start", strlen("start")) == 0)
-        __emit_file_bytes(write, store, vmname, pointer);
+        __emit_file_bytes(data, store, vmname, write_counter, pointer, len);
     else if(strncmp(pointer, "fs", strlen("fs")) == 0)
-        __diff_superblock(write, store, vmname, pointer);
+        __diff_superblock(data, store, vmname, pointer);
     else if(strncmp(pointer, "mbr", strlen("mbr")) == 0)
-        __diff_mbr(write, store, vmname, pointer);
+        __diff_mbr(data, store, vmname, pointer);
     else if(strncmp(pointer, "lbgds", strlen("lbgds")) == 0)
-        __diff_bgds(write, store, vmname, pointer);
+        __diff_bgds(data, store, vmname, pointer);
     else if(strncmp(pointer, "lfiles", strlen("lfiles")) == 0)
-        __diff_inodes(write, store, vmname, pointer);
+        __diff_inodes(data, store, vmname, pointer);
     else if(strncmp(pointer, "bgd", strlen("bgd")) == 0)
-        __diff_bitmap(write, store, vmname, pointer);
+        __diff_bitmap(data, store, vmname, pointer);
     else if(strncmp(pointer, "lextents", strlen("lextents")) == 0)
-        __diff_extent_tree(write, store, vmname, pointer);
+        __diff_extent_tree(data, store, vmname, pointer);
+    else if(strncmp(pointer, "dirdata", strlen("dirdata")) == 0)
+        __diff_dir(data, store, vmname, write_counter, pointer, len);
     else
     {
         fprintf_light_red(stderr, "Redis returned unknown sector type [%s]\n",
@@ -1036,33 +1170,52 @@ int __qemu_dispatch_write(struct qemu_bdrv_write* write,
 
 int qemu_deep_inspect(struct ext4_superblock* superblock,
                       struct qemu_bdrv_write* write, struct kv_store* store,
-                      const char* vmname)
+                      uint64_t write_counter, char* vmname)
 {
     uint64_t i;
     uint8_t result[1024];
     size_t len = 1024;
     uint64_t block_size = ext4_block_size(*superblock);
-
-    fprintf_light_cyan(stdout, "block_size: %"PRIu64"\n", block_size);
-    fprintf_light_cyan(stdout, "block_size / SECTOR_SIZE: %"PRIu64"\n", block_size / SECTOR_SIZE);
+    uint64_t size = 0;
+    uint8_t* data;
 
     for (i = 0; i < write->header.nb_sectors; i += block_size / SECTOR_SIZE)
     {
-        fprintf_light_yellow(stdout, "i: %"PRIu64"\n", i);
         if (redis_sector_lookup(store, write->header.sector_num + i,
             result, &len))
         {
             fprintf_light_red(stderr, "Error doing sector lookup.\n");
+            if ((write->header.nb_sectors - i) * SECTOR_SIZE < block_size)
+            {
+                size = (write->header.nb_sectors - i) * SECTOR_SIZE;
+            }
+            else
+            {
+                size = block_size;
+            }
+
             redis_enqueue_pipelined(store, write->header.sector_num + i,
                                                &(write->data[i*SECTOR_SIZE]),
-                                               SECTOR_SIZE);
+                                               size);
             continue;
         } 
 
         if (len)
         {
             result[len] = 0;
-            __qemu_dispatch_write(write, store, vmname, (const char*) result);
+            data = &(write->data[i*SECTOR_SIZE]);
+
+            if ((write->header.nb_sectors - i) * SECTOR_SIZE < block_size)
+            {
+                size = (write->header.nb_sectors - i)* SECTOR_SIZE;
+            }
+            else
+            {
+                size = block_size;
+            }
+
+            __qemu_dispatch_write(data, store, vmname, write_counter,
+                                  (char *) result, (size_t) size);
         }
         else
         {
@@ -1091,24 +1244,10 @@ int qemu_get_superblock(struct kv_store* store,
     return EXIT_SUCCESS;
 }
 
-uint64_t qemu_get_block_size(struct kv_store* store, uint64_t fs_id)
-{
-    struct ext4_superblock super;
-    size_t len = sizeof(super);
-
-    if (redis_hash_field_get(store, REDIS_SUPERBLOCK_SECTOR_GET,
-                             fs_id, "superblock", (uint8_t*) &super, &len))
-    {
-        fprintf_light_red(stderr, "Error retrieving superblock\n");
-        return 0;
-    }
-
-    return ext4_block_size(super);
-}
-
 enum SECTOR_TYPE __sector_type(const char* str)
 {
-    if (strncmp(str, "start", strlen("start")) == 0)
+    if (strncmp(str, "start", strlen("start")) == 0 ||
+        strncmp(str, "dirdata", strlen("dirdata")) == 0)
         return SECTOR_EXT2_DATA;
     else if(strncmp(str, "fs", strlen("fs")) == 0)
         return SECTOR_EXT2_SUPERBLOCK;
@@ -1211,12 +1350,17 @@ int __deserialize_partition(struct bson_info* bson, struct kv_store* store,
 }
 
 int __deserialize_fs(struct bson_info* bson, struct kv_store* store,
-                     uint64_t id)
+                     uint64_t id, struct ext4_superblock* super)
 {
     struct bson_kv value1, value2;
 
     while (bson_deserialize(bson, &value1, &value2))
     {
+        if (strcmp(value1.key, "superblock") == 0)
+        { 
+            memcpy(super, value1.data, sizeof(struct ext4_superblock));
+        }            
+
         if (redis_hash_field_set(store, REDIS_SUPERBLOCK_SECTOR_INSERT, id,
                                  value1.key, (const uint8_t*) value1.data,
                                  (size_t) value1.size))
@@ -1257,11 +1401,13 @@ int __deserialize_bgd(struct bson_info* bson, struct kv_store* store,
     return EXIT_SUCCESS;
 }
 
-int __deserialize_file(struct bson_info* bson, struct kv_store* store,
+int __deserialize_file(struct ext4_superblock* superblock,
+                       struct bson_info* bson, struct kv_store* store,
                        uint64_t id)
 {
     struct bson_info* bson2;
     struct bson_kv value1, value2;
+    uint64_t block_size = ext4_block_size(*superblock);
 
     uint64_t counter = 0, sector = 0;
 
@@ -1295,27 +1441,27 @@ int __deserialize_file(struct bson_info* bson, struct kv_store* store,
             {
                 sscanf((const char*) value1.key, "%"SCNu64, &sector);
 
+                if (redis_hash_field_set(store, REDIS_DIR_SECTOR_INSERT,
+                                         sector, "file", (uint8_t*) &id, sizeof(id)))
+                {
+                    bson_cleanup(bson2);
+                    return EXIT_FAILURE;
+                }
+
                 if (redis_hash_field_set(store, REDIS_DIR_SECTOR_INSERT, sector,
                                  "data", (const uint8_t*) value1.data,
                                  (size_t) value1.size))
                 {
-                    free(bson2->buffer);
+                    bson_cleanup(bson2);
                     return EXIT_FAILURE;
                 }
 
-                if (redis_reverse_pointer_set(store, REDIS_DIRS_INSERT,
-                                      id,
+
+                if (redis_reverse_pointer_set(store, REDIS_DIR_INSERT,
+                                      sector,
                                       sector))
                 {
-                    free(bson2->buffer);
-                    return EXIT_FAILURE;
-                }
-
-                if (redis_reverse_pointer_set(store, REDIS_DIRS_SECTOR_INSERT,
-                                      sector,
-                                      id))
-                {
-                    free(bson2->buffer);
+                    bson_cleanup(bson2);
                     return EXIT_FAILURE;
                 }
             }
@@ -1324,7 +1470,6 @@ int __deserialize_file(struct bson_info* bson, struct kv_store* store,
         }
         else if (strcmp(value1.key, "sectors") == 0)
         {
-            fprintf_light_red(stderr, "sectors\n");
             counter = 0;
             bson2 = bson_init();
             free(bson2->buffer);
@@ -1342,8 +1487,8 @@ int __deserialize_file(struct bson_info* bson, struct kv_store* store,
             while (bson_deserialize(bson2, &value1, &value2) == 1)
             {
                 redis_reverse_file_data_pointer_set(store, (uint64_t) *((uint32_t*)value1.data),
-                                                    counter, counter + SECTOR_SIZE, id);
-                counter += SECTOR_SIZE;
+                                                    counter, counter + block_size, id);
+                counter += block_size; 
             }
 
             bson_cleanup(bson2);
@@ -1410,6 +1555,7 @@ int qemu_load_index(FILE* index, struct kv_store* store)
     uint64_t fs_id = 0;
     uint64_t bgd_counter = 0;
     uint64_t file_counter = 0;
+    struct ext4_superblock super;
 
     while (bson_readf(bson, index) == 1)
     {
@@ -1424,7 +1570,7 @@ int qemu_load_index(FILE* index, struct kv_store* store)
 
         if (strcmp(value1.data, "file") == 0)
         {
-            __deserialize_file(bson, store, file_counter++);
+            __deserialize_file(&super, bson, store, file_counter++);
         }
         else if (strcmp(value1.data, "bgd") == 0)
         {
@@ -1445,7 +1591,7 @@ int qemu_load_index(FILE* index, struct kv_store* store)
             }
 
             fs_id = (uint64_t) *((uint32_t*) value1.data);
-            __deserialize_fs(bson, store, fs_id);
+            __deserialize_fs(bson, store, fs_id, &super);
         }
         else if (strcmp(value1.data, "partition") == 0)
         {
@@ -1463,7 +1609,6 @@ int qemu_load_index(FILE* index, struct kv_store* store)
 
             fs_id = (uint64_t) *((uint32_t*) value1.data);
             __deserialize_partition(bson, store, fs_id);
-
         }
         else if (strcmp(value1.data, "mbr") == 0)
         {
