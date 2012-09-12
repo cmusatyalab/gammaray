@@ -156,6 +156,15 @@ struct ext4_inode
     uint32_t i_version_hi;
 } __attribute__((packed));
 
+struct ext4_dir_entry
+{
+    uint32_t inode;     /* 4 bytes */
+    uint16_t rec_len;   /* 6 bytes */
+    uint8_t name_len;   /* 7 bytes */
+    uint8_t file_type;  /* 8 bytes */
+    uint8_t name[255];  /* 263 bytes */
+} __attribute__((packed));
+
 int ext4_print_superblock(struct ext4_superblock superblock);
 int ext4_print_features(struct ext4_superblock* superblock);
 int ext4_print_block_group_descriptor(struct ext4_block_group_descriptor);

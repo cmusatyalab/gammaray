@@ -55,14 +55,6 @@
 #define EXT3_FEATURE_INCOMPAT_UNSUPPORTED ~EXT3_FEATURE_INCOMPAT_SUPP
 #define EXT3_FEATURE_RO_COMPAT_UNSUPPORTED      ~EXT3_FEATURE_RO_COMPAT_SUPP
 
-struct ext4_dir_entry
-{
-    uint32_t inode;     /* 4 bytes */
-    uint16_t rec_len;   /* 6 bytes */
-    uint8_t name_len;   /* 7 bytes */
-    uint8_t file_type;  /* 8 bytes */
-    uint8_t name[255];  /* 263 bytes */
-} __attribute__((packed));
 
 struct ext4_extent_header
 {
@@ -1789,7 +1781,6 @@ int ext4_print_inode(struct ext4_inode inode)
     print_ext4_inode_osd2(inode.i_osd2);
     return ret;
 }
-
 
 int print_ext4_block_group_descriptor(struct ext4_block_group_descriptor bgd)
 {
