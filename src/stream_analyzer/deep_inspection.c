@@ -63,8 +63,6 @@ int qemu_print_write(struct qemu_bdrv_write* write)
                            write->header.sector_num);
     fprintf_yellow(stdout, "\tnb_sectors: %d\n",
                            write->header.nb_sectors);
-    fprintf_yellow(stdout, "\tdata buffer pointer (malloc()'d): %p\n",
-                           write->data);
     return 0;
 }
 
