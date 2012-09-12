@@ -23,6 +23,12 @@
 #define VM_NAME_MAX 512
 #define PATH_MAX 4096
 
+#define FIELD_COMPARE(field, fname, type, btype) {\
+    if (old->field != new->field) \
+        __emit_field_update(store, fname, type, channel, btype, \
+                            &(old->field), &(new->field), sizeof(old->field), \
+                            sizeof(new->field), write_counter); }
+
 char* construct_channel_name(char* vmname, char* path)
 {
     char* buf = malloc(HOST_NAME_MAX + VM_NAME_MAX + PATH_MAX + 3);
@@ -915,6 +921,8 @@ int __emit_field_update(struct kv_store* store, char* field, char* type,
     struct bson_info* bson = bson_init();
     struct bson_kv val;
 
+    fprintf_light_red(stdout, "Field '%s' differs.\n", field);
+
     if (bson == NULL)
     {
         fprintf_light_red(stderr, "Failed creating BSON handle. OOM?\n");
@@ -934,7 +942,15 @@ int __emit_field_update(struct kv_store* store, char* field, char* type,
 
     bson_serialize(bson, &val);
 
+    val.type = BSON_STRING;
+    val.size = strlen(field);
+    val.key = "field";
+    val.data = field;
+
+    bson_serialize(bson, &val);
+
     val.type = bson_type;
+    val.subtype = BSON_BINARY_GENERIC;
     val.key = "old";
     val.data = &(oldv);
     val.size = oldv_size;
@@ -942,6 +958,7 @@ int __emit_field_update(struct kv_store* store, char* field, char* type,
     bson_serialize(bson, &val);
 
     val.type = bson_type;
+    val.subtype = BSON_BINARY_GENERIC;
     val.key = "new";
     val.data = &(newv);
     val.size = newv_size;
@@ -965,8 +982,19 @@ int __diff_dir(uint8_t* write, struct kv_store* store,
                char* vmname, uint64_t write_counter,
                char* pointer, size_t write_len)
 {
-    uint64_t dir = 0;
+    uint64_t dir = 0, old_pos = 0, new_pos = 0, file = 0;
+    struct ext4_dir_entry* old, *new;
+    struct ext4_dir_entry cleared = {   .inode = 0,
+                                        .rec_len = 0,
+                                        .name_len = 0,
+                                        .file_type = 0,
+                                        .name = {0}
+                                    };
     uint8_t old_dir[write_len];
+    char path[4096];
+    size_t len;
+    char* channel = NULL;
+
     fprintf_light_white(stdout, "__diff_dir(), write_len == %zu\n", write_len);
     fprintf_light_white(stdout, "operating on: %s\n", pointer);
 
@@ -992,7 +1020,68 @@ int __diff_dir(uint8_t* write, struct kv_store* store,
 
     fprintf_light_white(stdout, "loaded: %zu bytes.\n", write_len);
 
+    len = sizeof(file);
+    if (redis_hash_field_get(store, REDIS_DIR_SECTOR_GET, dir, "file",
+                             (uint8_t*) &file, &len))
+    {
+        fprintf_light_red(stderr, "Failed retrieving file for dirdata:%"
+                                  PRIu64"\n", dir);
+        return EXIT_FAILURE;
+    }
+
+    fprintf_light_white(stdout, "Loading path for file %"PRIu64"\n", file);
+
+    len = 4096;
+    if (redis_hash_field_get(store, REDIS_INODE_SECTOR_GET, file, "path",
+                             (uint8_t*) path, &len))
+    {
+        fprintf_light_red(stderr, "Failed retrieving path for file:%"
+                                  PRIu64"\n", file);
+        return EXIT_FAILURE;
+    }
+
+    path[len] = '\0';
+    fprintf_light_white(stdout, "Got path ['%s'] for file %"PRIu64"\n", path, file);
+
+    channel = construct_channel_name(vmname, path);
+
+    fprintf_green(stdout, "Constructed channel name: '%s'\n", channel);
+
+    while (old_pos < write_len || new_pos < write_len)
+    {
+        if (old_pos < write_len)
+            old = (struct ext4_dir_entry *) &(old_dir[old_pos]);
+        else
+            old = &cleared; 
+
+        if (new_pos < write_len)
+            new = (struct ext4_dir_entry *) &(write[new_pos]);
+        else
+            new = &cleared;
+
+        FIELD_COMPARE(inode, "dir.inode", "metadata", BSON_INT32); 
+        FIELD_COMPARE(inode, "dir.rec_len", "metadata", BSON_BINARY); 
+        FIELD_COMPARE(inode, "dir.name_len", "metadata", BSON_BINARY); 
+        FIELD_COMPARE(inode, "dir.file_type", "metadata", BSON_BINARY); 
+
+        if (strncmp((const char*) old->name, (const char*)new->name,
+                    (size_t) new->name_len) != 0)
+        {
+            fprintf_light_red(stdout, "New path: %s\n", strncat(strcat(path,"/"),
+                                                                (const char *)new->name,
+                                                                new->name_len));
+            __emit_field_update(store, "dir.name", "metadata", channel,
+                                BSON_STRING, (void*) old->name,
+                                (void*) new->name, old->name_len,
+                                new->name_len, write_counter);
+        }
+        old_pos += old->rec_len;
+        new_pos += new->rec_len;
+    }
+
+    free(channel);
     exit(0);
+
     return EXIT_SUCCESS;
 }
 
