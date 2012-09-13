@@ -22,9 +22,9 @@ if __name__ == '__main__':
     pubsub.psubscribe(filter_string)
 
     for m in pubsub.listen():
-        print "Message on Channel: %s" % (m['channel'])
+        print "\n\n-------------------\nMessage on Channel: %s" % (m['channel'])
         m = bson.loads(m['data'])
-        for k,v in m.items():
+        for k,v in sorted(m.items()):
             print '\t%.6s\t\t:\t' % k,
             try:
                 print int(v)
