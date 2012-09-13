@@ -1013,12 +1013,17 @@ int __emit_created_file(struct kv_store* store,  char* channel,
 int __emit_field_update(struct kv_store* store, char* field, char* type,
                         char* channel, enum BSON_TYPE bson_type, void* oldv,
                         void* newv, uint64_t oldv_size, uint64_t newv_size, 
-                        uint64_t transaction_id)
+                        uint64_t transaction_id, bool emit)
 {
     struct bson_info* bson = bson_init();
     struct bson_kv val;
 
     fprintf_light_red(stdout, "Field '%s' differs.\n", field);
+
+    fprintf_light_magenta(stdout, "old:\t");
+    hexdump(oldv, oldv_size);
+    fprintf_light_magenta(stdout, "new:\t");
+    hexdump(newv, newv_size);
 
     if (bson == NULL)
     {
@@ -1026,49 +1031,52 @@ int __emit_field_update(struct kv_store* store, char* field, char* type,
         return EXIT_FAILURE;
     }
 
-    val.type = BSON_STRING;
-    val.size = strlen(type);
-    val.key = "type";
-    val.data = type;
-
-    bson_serialize(bson, &val);
-
-    val.type = BSON_INT64;
-    val.key = "transaction";
-    val.data = &(transaction_id);
-
-    bson_serialize(bson, &val);
-
-    val.type = BSON_STRING;
-    val.size = strlen(field);
-    val.key = "field";
-    val.data = field;
-
-    bson_serialize(bson, &val);
-
-    val.type = bson_type;
-    val.subtype = BSON_BINARY_GENERIC;
-    val.key = "old";
-    val.data = oldv;
-    val.size = oldv_size;
-
-    bson_serialize(bson, &val);
-
-    val.type = bson_type;
-    val.subtype = BSON_BINARY_GENERIC;
-    val.key = "new";
-    val.data = newv;
-    val.size = newv_size;
-
-    bson_serialize(bson, &val);
-
-    bson_finalize(bson);
-
-    if (redis_publish(store, channel, bson->buffer, bson->position))
+    if (emit)
     {
-        fprintf_light_red(stderr, "Failure publishing "
-                                  "Redis message.\n");
-        return EXIT_FAILURE;
+        val.type = BSON_STRING;
+        val.size = strlen(type);
+        val.key = "type";
+        val.data = type;
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_INT64;
+        val.key = "transaction";
+        val.data = &(transaction_id);
+
+        bson_serialize(bson, &val);
+
+        val.type = BSON_STRING;
+        val.size = strlen(field);
+        val.key = "field";
+        val.data = field;
+
+        bson_serialize(bson, &val);
+
+        val.type = bson_type;
+        val.subtype = BSON_BINARY_GENERIC;
+        val.key = "old";
+        val.data = oldv;
+        val.size = oldv_size;
+
+        bson_serialize(bson, &val);
+
+        val.type = bson_type;
+        val.subtype = BSON_BINARY_GENERIC;
+        val.key = "new";
+        val.data = newv;
+        val.size = newv_size;
+
+        bson_serialize(bson, &val);
+
+        bson_finalize(bson);
+
+        if (redis_publish(store, channel, bson->buffer, bson->position))
+        {
+            fprintf_light_red(stderr, "Failure publishing "
+                                      "Redis message.\n");
+            return EXIT_FAILURE;
+        }
     }
 
     bson_cleanup(bson);
