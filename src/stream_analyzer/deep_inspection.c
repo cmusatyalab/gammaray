@@ -1386,9 +1386,29 @@ int __diff_mbr(uint8_t* write, struct kv_store* store,
 }
 
 int __diff_bgds(uint8_t* write, struct kv_store* store,
-                const char* vmname, const char* pointer)
+                const char* vmname, const char* pointer, size_t write_len)
 {
+    /* TODO: (0) Pull list of bgds
+     *       (1) Pull bgd one by one
+     *       (2) Walk block to end
+     *       (3) emit differences */
+    uint64_t bgd = 0, old_pos = 0, new_pos = 0, lbgds = 0;
+    struct ext4_block_group_descriptor* old, *new;
     fprintf_light_white(stdout, "__diff_bgds()\n");
+    fprintf_light_white(stdout, "pointer: %s\n", pointer);
+
+    // pull list
+    lbgds = 0xff;
+
+    while (old_pos < write_len)
+    {
+        bgd = 1;
+        old = NULL;
+        new = NULL;
+        old_pos += sizeof(struct ext4_block_group_descriptor);
+        new_pos += sizeof(struct ext4_block_group_descriptor);
+    }
+    exit(0);
     return EXIT_SUCCESS;
 }
 
@@ -1425,7 +1445,7 @@ int __qemu_dispatch_write(uint8_t* data,
     else if(strncmp(pointer, "mbr", strlen("mbr")) == 0)
         __diff_mbr(data, store, vmname, pointer);
     else if(strncmp(pointer, "lbgds", strlen("lbgds")) == 0)
-        __diff_bgds(data, store, vmname, pointer);
+        __diff_bgds(data, store, vmname, pointer, len);
     else if(strncmp(pointer, "lfiles", strlen("lfiles")) == 0)
         __diff_inodes(data, store, vmname, pointer);
     else if(strncmp(pointer, "bgd", strlen("bgd")) == 0)
