@@ -25,9 +25,7 @@ if __name__ == '__main__':
         print "Message on Channel: %s" % (m['channel'])
         m = bson.loads(m['data'])
         for k,v in m.items():
-            print '\t',
-            print k,
-            print ' : ',
+            print '\t%.6s\t\t:\t' % k,
             try:
                 print int(v)
             except:
