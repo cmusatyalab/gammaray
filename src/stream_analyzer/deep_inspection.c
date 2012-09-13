@@ -913,6 +913,102 @@ int ext2_compare_inodes(struct ext2_inode* old_inode,
     return EXIT_SUCCESS;
 }
 
+int __emit_deleted_file(struct kv_store* store,  char* channel,
+                        char* file, size_t flen, uint64_t transaction_id)
+{
+    struct bson_info* bson = bson_init();
+    struct bson_kv val;
+
+    fprintf_light_blue(stdout, "DELETE in channel %s.\n", channel);
+
+    if (bson == NULL)
+    {
+        fprintf_light_red(stderr, "Failed creating BSON handle. OOM?\n");
+        return EXIT_FAILURE;
+    }
+
+    val.type = BSON_STRING;
+    val.size = strlen("mutation");
+    val.key = "type";
+    val.data = "mutation";
+
+    bson_serialize(bson, &val);
+
+    val.type = BSON_INT64;
+    val.key = "transaction";
+    val.data = &(transaction_id);
+
+    bson_serialize(bson, &val);
+
+    val.type = BSON_STRING;
+    val.size = flen;
+    val.key = "delete";
+    val.data = file;
+
+    bson_serialize(bson, &val);
+    
+    bson_finalize(bson);
+
+    if (redis_publish(store, channel, bson->buffer, bson->position))
+    {
+        fprintf_light_red(stderr, "Failure publishing "
+                                  "Redis message.\n");
+        return EXIT_FAILURE;
+    }
+
+    bson_cleanup(bson);
+
+    return EXIT_SUCCESS;
+}
+
+int __emit_created_file(struct kv_store* store,  char* channel,
+                        char* file, size_t flen, uint64_t transaction_id)
+{
+    struct bson_info* bson = bson_init();
+    struct bson_kv val;
+
+    fprintf_light_blue(stdout, "CREATE in channel %s.\n", channel);
+
+    if (bson == NULL)
+    {
+        fprintf_light_red(stderr, "Failed creating BSON handle. OOM?\n");
+        return EXIT_FAILURE;
+    }
+
+    val.type = BSON_STRING;
+    val.size = strlen("mutation");
+    val.key = "type";
+    val.data = "mutation";
+
+    bson_serialize(bson, &val);
+
+    val.type = BSON_INT64;
+    val.key = "transaction";
+    val.data = &(transaction_id);
+
+    bson_serialize(bson, &val);
+
+    val.type = BSON_STRING;
+    val.size = flen;
+    val.key = "create";
+    val.data = file;
+
+    bson_serialize(bson, &val);
+
+    bson_finalize(bson);
+
+    if (redis_publish(store, channel, bson->buffer, bson->position))
+    {
+        fprintf_light_red(stderr, "Failure publishing "
+                                  "Redis message.\n");
+        return EXIT_FAILURE;
+    }
+
+    bson_cleanup(bson);
+    
+    return EXIT_SUCCESS;
+}
+
 int __emit_field_update(struct kv_store* store, char* field, char* type,
                         char* channel, enum BSON_TYPE bson_type, void* oldv,
                         void* newv, uint64_t oldv_size, uint64_t newv_size, 
@@ -996,6 +1092,8 @@ int __diff_dir(uint8_t* write, struct kv_store* store,
                                     };
     uint8_t old_dir[write_len];
     char path[4096];
+    char created_copy[4096];
+    char deleted_copy[4096];
     size_t len;
     char* channel = NULL;
 
@@ -1047,12 +1145,12 @@ int __diff_dir(uint8_t* write, struct kv_store* store,
     path[len] = '\0';
     fprintf_light_white(stdout, "Got path ['%s'] for file %"PRIu64"\n", path, file);
 
-    channel = construct_channel_name(vmname, path);
 
     fprintf_green(stdout, "Constructed channel name: '%s'\n", channel);
 
     while (old_pos < write_len || new_pos < write_len)
     {
+        channel = construct_channel_name(vmname, path);
         if (old_pos < write_len)
             old = (struct ext4_dir_entry *) &(old_dir[old_pos]);
         else
@@ -1063,28 +1161,69 @@ int __diff_dir(uint8_t* write, struct kv_store* store,
         else
             new = &cleared;
 
+        /* NOT emitting for now...
         FIELD_COMPARE(inode, "dir.inode", "metadata", BSON_INT32); 
         FIELD_COMPARE(rec_len, "dir.rec_len", "metadata", BSON_BINARY); 
         FIELD_COMPARE(name_len, "dir.name_len", "metadata", BSON_BINARY); 
         FIELD_COMPARE(file_type, "dir.file_type", "metadata", BSON_BINARY); 
+        */
 
         if (strncmp((const char*) old->name, (const char*)new->name,
                     (size_t) new->name_len) != 0)
         {
-            fprintf_light_red(stdout, "New path: %s\n", strncat(strcat(path,"/"),
-                                                                (const char *)new->name,
-                                                                new->name_len));
-            __emit_field_update(store, "dir.name", "metadata", channel,
-                                BSON_STRING, (void*) old->name,
-                                (void*) new->name, old->name_len,
-                                new->name_len, write_counter);
+            memcpy(created_copy, path, strlen(path) + 1);
+            memcpy(deleted_copy, path, strlen(path) + 1);
+            fprintf_light_red(stdout, "New path: %s\n",
+                                                 strncat(
+                                                     strcat(created_copy,"/"),
+                                                       (const char *)new->name,
+                                                          new->name_len));
+            //__emit_field_update(store, "dir.name", "metadata", channel,
+            //                    BSON_STRING, (void*) old->name,
+            //                    (void*) new->name, old->name_len,
+            //                    new->name_len, write_counter);
+
+            if (new->name_len)
+                __emit_created_file(store, channel, (char*) new->name,
+                                    new->name_len, write_counter);
+
+            if (old->name_len)
+                __emit_deleted_file(store, channel, (char*) old->name,
+                                    old->name_len, write_counter);
+
+            if (old->name_len)
+            {
+                free(channel);
+                channel = construct_channel_name(vmname,
+                                                 strncat(strcat(deleted_copy, "/"),
+                                                        (char*) old->name,
+                                                           old->name_len));
+
+                __emit_deleted_file(store, channel, (char*) old->name,
+                                    old->name_len, write_counter);
+            }
+
+            if (new->name_len)
+            {
+                free(channel);
+                channel = construct_channel_name(vmname, created_copy);
+                __emit_created_file(store, channel, (char*) new->name,
+                                    new->name_len, write_counter);
+            }
+
         }
         old_pos += old->rec_len;
         new_pos += new->rec_len;
+        free(channel);
     }
 
-    free(channel);
-    exit(0);
+    if (redis_hash_field_set(store, REDIS_DIR_SECTOR_INSERT, dir, "data",
+                             (uint8_t*) write, write_len))
+    {
+        fprintf_light_red(stderr, "Failed setting data for dirdata:%"
+                                  PRIu64"\n", dir);
+        return EXIT_FAILURE;
+    }
 
     return EXIT_SUCCESS;
 }
