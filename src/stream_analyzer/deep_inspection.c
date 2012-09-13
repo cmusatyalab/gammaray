@@ -919,7 +919,8 @@ int __emit_deleted_file(struct kv_store* store,  char* channel,
     struct bson_info* bson = bson_init();
     struct bson_kv val;
 
-    fprintf_light_blue(stdout, "DELETE in channel %s.\n", channel);
+    fprintf_light_blue(stdout, "DELETE[%.*s] in channel %s.\n", flen, file, 
+                                                                channel);
 
     if (bson == NULL)
     {
@@ -967,7 +968,7 @@ int __emit_created_file(struct kv_store* store,  char* channel,
     struct bson_info* bson = bson_init();
     struct bson_kv val;
 
-    fprintf_light_blue(stdout, "CREATE in channel %s.\n", channel);
+    fprintf_light_blue(stdout, "CREATE[%.*s] in channel %s.\n", flen, file, channel);
 
     if (bson == NULL)
     {
