@@ -334,8 +334,11 @@ uint32_t ext4_next_block_group_descriptor(FILE* disk,
         i++;
         *sector = (partition_offset + offset +
                    i*sizeof(struct ext4_block_group_descriptor)) / SECTOR_SIZE;
+        *sector /= (ext4_block_size(superblock) / SECTOR_SIZE);
+        *sector *= (ext4_block_size(superblock) / SECTOR_SIZE);
         *s_offset = (partition_offset + offset +
-                   i*sizeof(struct ext4_block_group_descriptor)) % SECTOR_SIZE;
+                   i*sizeof(struct ext4_block_group_descriptor)) %
+                            ext4_block_size(superblock);
         return *sector;
     }
 
