@@ -952,7 +952,7 @@ int __emit_field_update(struct kv_store* store, char* field, char* type,
     val.type = bson_type;
     val.subtype = BSON_BINARY_GENERIC;
     val.key = "old";
-    val.data = &(oldv);
+    val.data = oldv;
     val.size = oldv_size;
 
     bson_serialize(bson, &val);
@@ -960,7 +960,7 @@ int __emit_field_update(struct kv_store* store, char* field, char* type,
     val.type = bson_type;
     val.subtype = BSON_BINARY_GENERIC;
     val.key = "new";
-    val.data = &(newv);
+    val.data = newv;
     val.size = newv_size;
 
     bson_serialize(bson, &val);
@@ -982,6 +982,10 @@ int __diff_dir(uint8_t* write, struct kv_store* store,
                char* vmname, uint64_t write_counter,
                char* pointer, size_t write_len)
 {
+    /* TODO: (0) need index of inode:y to file:x; need list of sectors for file
+     *       (1) delete file:old if lost
+     *       (2) add file:new if gained
+     *       (3) update file:old sectors to point to any remaining path refs */
     uint64_t dir = 0, old_pos = 0, new_pos = 0, file = 0;
     struct ext4_dir_entry* old, *new;
     struct ext4_dir_entry cleared = {   .inode = 0,
@@ -1060,9 +1064,9 @@ int __diff_dir(uint8_t* write, struct kv_store* store,
             new = &cleared;
 
         FIELD_COMPARE(inode, "dir.inode", "metadata", BSON_INT32); 
-        FIELD_COMPARE(inode, "dir.rec_len", "metadata", BSON_BINARY); 
-        FIELD_COMPARE(inode, "dir.name_len", "metadata", BSON_BINARY); 
-        FIELD_COMPARE(inode, "dir.file_type", "metadata", BSON_BINARY); 
+        FIELD_COMPARE(rec_len, "dir.rec_len", "metadata", BSON_BINARY); 
+        FIELD_COMPARE(name_len, "dir.name_len", "metadata", BSON_BINARY); 
+        FIELD_COMPARE(file_type, "dir.file_type", "metadata", BSON_BINARY); 
 
         if (strncmp((const char*) old->name, (const char*)new->name,
                     (size_t) new->name_len) != 0)
