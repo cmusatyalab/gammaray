@@ -1154,11 +1154,12 @@ int __diff_dir(uint8_t* write, struct kv_store* store,
     path[len] = '\0';
     fprintf_light_white(stdout, "Got path ['%s'] for file %"PRIu64"\n", path, file);
 
-
+    channel = construct_channel_name(vmname, path);
     fprintf_green(stdout, "Constructed channel name: '%s'\n", channel);
 
     while (old_pos < write_len || new_pos < write_len)
     {
+        free(channel);
         channel = construct_channel_name(vmname, path);
         if (old_pos < write_len)
             old = (struct ext4_dir_entry *) &(old_dir[old_pos]);
@@ -1170,12 +1171,10 @@ int __diff_dir(uint8_t* write, struct kv_store* store,
         else
             new = &cleared;
 
-        /* NOT emitting for now...
         FIELD_COMPARE(inode, "dir.inode", "metadata", BSON_INT32); 
         FIELD_COMPARE(rec_len, "dir.rec_len", "metadata", BSON_BINARY); 
         FIELD_COMPARE(name_len, "dir.name_len", "metadata", BSON_BINARY); 
         FIELD_COMPARE(file_type, "dir.file_type", "metadata", BSON_BINARY); 
-        */
 
         if (strncmp((const char*) old->name, (const char*)new->name,
                     (size_t) new->name_len) != 0)
@@ -1223,8 +1222,8 @@ int __diff_dir(uint8_t* write, struct kv_store* store,
         }
         old_pos += old->rec_len;
         new_pos += new->rec_len;
-        free(channel);
     }
+    free(channel);
 
     if (redis_hash_field_set(store, REDIS_DIR_SECTOR_INSERT, dir, "data",
                              (uint8_t*) write, write_len))
