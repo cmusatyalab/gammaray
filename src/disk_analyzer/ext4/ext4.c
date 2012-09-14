@@ -643,6 +643,12 @@ int ext4_read_inode_serialized(FILE* disk, int64_t partition_offset,
 
     bson_serialize(bson, &val);
 
+    val.type = BSON_INT32;
+    val.key = "inode_num";
+    val.data = &inode_num;
+
+    bson_serialize(bson, &val);
+
     return 0;
 }
 
