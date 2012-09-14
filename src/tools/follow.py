@@ -19,7 +19,10 @@ if __name__ == '__main__':
     r = redis.Redis(host='localhost', port=6379, db=4)
     pubsub = r.pubsub()
 
-    pubsub.psubscribe(filter_string)
+    if '*' in filter_string:
+        pubsub.psubscribe(filter_string)
+    else:
+        pubsub.subscribe(filter_string)
 
     for m in pubsub.listen():
         print "\n\n-------------------\nMessage on Channel: %s" % (m['channel'])
