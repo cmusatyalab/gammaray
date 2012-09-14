@@ -27,7 +27,7 @@
     if (old->field != new->field) \
         __emit_field_update(store, fname, type, channel, btype, \
                             &(old->field), &(new->field), sizeof(old->field), \
-                            sizeof(new->field), write_counter, false); }
+                            sizeof(new->field), write_counter, true); }
 
 char* construct_channel_name(char* vmname, char* path)
 {
