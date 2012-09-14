@@ -27,7 +27,7 @@
     if (old->field != new->field) \
         __emit_field_update(store, fname, type, channel, btype, \
                             &(old->field), &(new->field), sizeof(old->field), \
-                            sizeof(new->field), write_counter, true, false); }
+                            sizeof(new->field), write_counter, true, true); }
 
 /*** Pre-Definitions ***/
 int __qemu_dispatch_write(uint8_t* data,
@@ -653,9 +653,143 @@ int __emit_file_bytes(uint8_t* write, struct kv_store* store,
 }
 
 int __diff_superblock(uint8_t* write, struct kv_store* store, 
-                      const char* vmname, const char* pointer)
+                      char* vmname, uint64_t write_counter, 
+                      char* pointer, size_t write_len)
 {
+    uint64_t fs = 0, superblock_offset = 0;
+    size_t len = sizeof(struct ext4_superblock);
+    struct ext4_superblock* new, oldd, *old = &oldd;
+    char* channel = NULL;
     fprintf_light_white(stdout, "__diff_superblock()\n");
+
+    fprintf_light_white(stdout, "working on: %s\n", pointer);
+
+    strtok(pointer, ":");
+    sscanf(strtok(NULL, ":"), "%"SCNu64, &fs);
+
+    fprintf_light_white(stdout, "pulling superblock: %"PRIu64"\n", fs);
+
+    if (redis_hash_field_get(store, REDIS_SUPERBLOCK_SECTOR_GET, fs,
+                             "superblock", (uint8_t*) old, &len))
+    {
+        fprintf_light_red(stderr, "Error getting superblock fs:%"
+                                  PRIu64"\n", fs);
+        return EXIT_FAILURE;
+    }
+
+    len = sizeof(superblock_offset);
+    if (redis_hash_field_get(store, REDIS_SUPERBLOCK_SECTOR_GET, fs,
+                             "superblock_offset", 
+                             (uint8_t*) &superblock_offset, &len))
+    {
+        fprintf_light_red(stderr, "Failed getting superblock_offset fs:%"
+                                  PRIu64"\n", fs);
+        return EXIT_FAILURE;
+    }
+
+    fprintf_light_white(stdout, "superblock_offset: %"PRIu64"\n",
+                                superblock_offset);
+
+    new = (struct ext4_superblock *) &(write[superblock_offset]);
+    channel = construct_channel_name(vmname, "");
+
+    FIELD_COMPARE(s_inodes_count, "s_inodes_count", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_blocks_count_lo, "s_blocks_count_lo", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_r_blocks_count_lo, "s_r_blocks_count_lo", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_free_blocks_count_lo, "s_free_blocks_count_lo", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_free_inodes_count, "s_free_inodes_count", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_first_data_block, "s_first_data_block", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_log_block_size, "s_log_block_size", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_log_cluster_size, "s_log_cluster_size", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_blocks_per_group, "s_blocks_per_group", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_clusters_per_group, "s_clusters_per_group", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_inodes_per_group, "s_inodes_per_group", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_mtime, "s_mtime", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_wtime, "s_wtime", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_mnt_count, "s_mnt_count", "metadata", BSON_BINARY)
+    FIELD_COMPARE(s_max_mnt_count, "s_max_mnt_count", "metadata", BSON_BINARY)
+    FIELD_COMPARE(s_magic, "s_magic", "metadata", BSON_BINARY)
+    FIELD_COMPARE(s_state, "s_state", "metadata", BSON_BINARY)
+    FIELD_COMPARE(s_errors, "s_errors", "metadata", BSON_BINARY)
+    FIELD_COMPARE(s_minor_rev_level, "s_minor_rev_level", "metadata", BSON_BINARY)
+    FIELD_COMPARE(s_lastcheck, "s_lastcheck", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_checkinterval, "s_checkinterval", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_creator_os, "s_creator_os", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_rev_level, "s_rev_level", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_def_resuid, "s_def_resuid", "metadata", BSON_BINARY)
+    FIELD_COMPARE(s_def_resgid, "s_def_resgid", "metadata", BSON_BINARY)
+    FIELD_COMPARE(s_first_ino, "s_first_ino", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_inode_size, "s_inode_size", "metadata", BSON_BINARY)
+    FIELD_COMPARE(s_block_group_nr, "s_block_group_nr", "metadata", BSON_BINARY)
+    FIELD_COMPARE(s_feature_compat, "s_feature_compat", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_feature_incompat, "s_feature_incompat", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_feature_ro_compat, "s_feature_ro_compat", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_uuid[15], "s_uuid[15]", "metadata", BSON_BINARY)
+    FIELD_COMPARE(s_volume_name[15], "s_volume_name[15]", "metadata", BSON_BINARY)
+    FIELD_COMPARE(s_last_mounted[63], "s_last_mounted[63]", "metadata", BSON_BINARY)
+    FIELD_COMPARE(s_algorithm_usage_bitmap, "s_algorithm_usage_bitmap", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_prealloc_blocks, "s_prealloc_blocks", "metadata", BSON_BINARY)
+    FIELD_COMPARE(s_prealloc_dir_blocks, "s_prealloc_dir_blocks", "metadata", BSON_BINARY)
+    FIELD_COMPARE(s_reserved_gdt_blocks, "s_reserved_gdt_blocks", "metadata", BSON_BINARY)
+    FIELD_COMPARE(s_journal_uuid[15], "s_journal_uuid[15]", "metadata", BSON_BINARY)
+    FIELD_COMPARE(s_journal_inum, "s_journal_inum", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_journal_dev, "s_journal_dev", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_last_orphan, "s_last_orphan", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_hash_seed[3], "s_hash_seed[3]", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_def_hash_version, "s_def_hash_version", "metadata", BSON_BINARY)
+    FIELD_COMPARE(s_jnl_backup_type, "s_jnl_backup_type", "metadata", BSON_BINARY)
+    FIELD_COMPARE(s_desc_size, "s_desc_size", "metadata", BSON_BINARY)
+    FIELD_COMPARE(s_default_mount_opts, "s_default_mount_opts", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_first_meta_bg, "s_first_meta_bg", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_mkfs_time, "s_mkfs_time", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_jnl_blocks[16], "s_jnl_blocks[16]", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_blocks_count_hi, "s_blocks_count_hi", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_r_blocks_count_hi, "s_r_blocks_count_hi", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_free_blocks_count_hi, "s_free_blocks_count_hi", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_min_extra_isize, "s_min_extra_isize", "metadata", BSON_BINARY)
+    FIELD_COMPARE(s_want_extra_isize, "s_want_extra_isize", "metadata", BSON_BINARY)
+    FIELD_COMPARE(s_flags, "s_flags", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_raid_stride, "s_raid_stride", "metadata", BSON_BINARY)
+    FIELD_COMPARE(s_mmp_update_interval, "s_mmp_update_interval", "metadata", BSON_BINARY)
+    FIELD_COMPARE(s_mmp_block, "s_mmp_block", "metadata", BSON_INT64)
+    FIELD_COMPARE(s_raid_stripe_width, "s_raid_stripe_width", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_log_groups_per_flex, "s_log_groups_per_flex", "metadata", BSON_BINARY)
+    FIELD_COMPARE(s_checksum_type, "s_checksum_type", "metadata", BSON_BINARY)
+    FIELD_COMPARE(s_reserved_pad, "s_reserved_pad", "metadata", BSON_BINARY)
+    FIELD_COMPARE(s_kbytes_written, "s_kbytes_written", "metadata", BSON_INT64)
+    FIELD_COMPARE(s_snapshot_inum, "s_snapshot_inum", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_snapshot_id, "s_snapshot_id", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_snapshot_r_blocks_count, "s_snapshot_r_blocks_count", "metadata", BSON_INT64)
+    FIELD_COMPARE(s_snapshot_list, "s_snapshot_list", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_error_count, "s_error_count", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_first_error_time, "s_first_error_time", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_first_error_ino, "s_first_error_ino", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_first_error_block, "s_first_error_block", "metadata", BSON_INT64)
+    FIELD_COMPARE(s_first_error_func[31], "s_first_error_func[31]", "metadata", BSON_BINARY)
+    FIELD_COMPARE(s_first_error_line, "s_first_error_line", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_last_error_time, "s_last_error_time", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_last_error_ino, "s_last_error_ino", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_last_error_line, "s_last_error_line", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_last_error_block, "s_last_error_block", "metadata", BSON_INT64)
+    FIELD_COMPARE(s_last_error_func[31], "s_last_error_func[31]", "metadata", BSON_BINARY)
+    FIELD_COMPARE(s_mount_opts[63], "s_mount_opts[63]", "metadata", BSON_BINARY)
+    FIELD_COMPARE(s_usr_quota_inum, "s_usr_quota_inum", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_grp_quota_inum, "s_grp_quota_inum", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_overhead_clusters, "s_overhead_clusters", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_reserved[107], "s_reserved[107]", "metadata", BSON_INT32)
+    FIELD_COMPARE(s_checksum, "s_checksum", "metadata", BSON_INT32)
+    
+    free(channel);
+
+    len = sizeof(*new);
+    if (redis_hash_field_set(store, REDIS_SUPERBLOCK_SECTOR_INSERT, fs,
+                             "superblock", (uint8_t*) new, len))
+    {
+        fprintf_light_red(stderr, "Error writing new superblock back: %"
+                                  PRIu64"\n", fs);
+        return EXIT_FAILURE;
+    }
+
     return EXIT_SUCCESS;
 }
 
@@ -891,7 +1025,7 @@ int __qemu_dispatch_write(uint8_t* data,
     if (strncmp(pointer, "start", strlen("start")) == 0)
         __emit_file_bytes(data, store, vmname, write_counter, pointer, len);
     else if(strncmp(pointer, "fs", strlen("fs")) == 0)
-        __diff_superblock(data, store, vmname, pointer);
+        __diff_superblock(data, store, vmname, write_counter, pointer, len);
     else if(strncmp(pointer, "mbr", strlen("mbr")) == 0)
         __diff_mbr(data, store, vmname, pointer);
     else if(strncmp(pointer, "lbgds", strlen("lbgds")) == 0)
@@ -1104,7 +1238,14 @@ int __deserialize_fs(struct bson_info* bson, struct kv_store* store,
         if (strcmp(value1.key, "superblock") == 0)
         { 
             memcpy(super, value1.data, sizeof(struct ext4_superblock));
-        }            
+        }
+
+        if (strcmp(value1.key, "superblock_sector") == 0)
+        { 
+            if (redis_reverse_pointer_set(store, REDIS_SUPERBLOCK_INSERT,
+                                          *((uint64_t*) value1.data), id))
+                return EXIT_FAILURE;
+        }             
 
         if (redis_hash_field_set(store, REDIS_SUPERBLOCK_SECTOR_INSERT, id,
                                  value1.key, (const uint8_t*) value1.data,
