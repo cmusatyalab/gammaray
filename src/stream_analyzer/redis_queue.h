@@ -50,7 +50,7 @@ struct thread_job;
 void redis_print_version();
 
 struct kv_store* redis_init(char* db, bool background_flush);
-void redis_shutdown(struct kv_store* store);
+void redis_shutdown(int clear, struct kv_store* store);
 
 int redis_get_fcounter(struct kv_store* handle, uint64_t* counter);
 int redis_set_fcounter(struct kv_store* handle, uint64_t counter);

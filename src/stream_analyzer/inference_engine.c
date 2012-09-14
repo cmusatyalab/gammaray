@@ -156,6 +156,8 @@ int main(int argc, char* args[])
                                   "(connection failure?).\n");
         return EXIT_FAILURE;
     }
+    
+    on_exit((void (*) (int, void *)) redis_shutdown, handle);
 
     gettimeofday(&start, NULL);
     if (qemu_load_index(indexf, handle))
@@ -197,7 +199,6 @@ int main(int argc, char* args[])
 
     close(fd);
     redis_flush_pipeline(handle);
-    redis_shutdown(handle);
 
     return ret;
 }

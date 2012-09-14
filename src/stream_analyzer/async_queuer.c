@@ -138,6 +138,8 @@ int main(int argc, char* args[])
 
     fprintf_cyan(stdout, "Attaching to stream: %s\n\n", stream);
 
+    on_exit((void (*) (int, void *)) redis_shutdown, handle);
+
     if (strcmp(stream, "-") != 0)
     {
         fd = open(stream, O_RDONLY);
@@ -157,7 +159,6 @@ int main(int argc, char* args[])
 
     read_loop(fd, handle);
     close(fd);
-    redis_shutdown(handle);
 
     return EXIT_SUCCESS;
 }
