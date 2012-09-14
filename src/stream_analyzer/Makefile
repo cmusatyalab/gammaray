@@ -73,7 +73,15 @@ test_async: clean default
 	    4
 
 test_ext4: clean default
-	@time ./inference_engine \
+	@./inference_engine \
+		/home/wolf/Dropbox/Projects/xray/sample/ext4_index.bson \
+		/home/wolf/Dropbox/Projects/xray/sample/ext4_trace.bin \
+	    4 \
+		/home/wolf/VM/vm_ext4_test/vm_ext4_test.raw \
+		ext4_test_vm
+
+test_ext4_mem: clean default
+	@valgrind --leak-check=full --show-reachable=yes ./inference_engine \
 		/home/wolf/Dropbox/Projects/xray/sample/ext4_index.bson \
 		/home/wolf/Dropbox/Projects/xray/sample/ext4_trace.bin \
 	    4 \
