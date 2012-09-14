@@ -1146,7 +1146,7 @@ int __diff_dir(uint8_t* write, struct kv_store* store,
     fprintf_light_white(stdout, "Loading path for file %"PRIu64"\n", file);
 
     len = 4096;
-    if (redis_hash_field_get(store, REDIS_INODE_SECTOR_GET, file, "path",
+    if (redis_hash_field_get(store, REDIS_FILE_SECTOR_GET, file, "path",
                              (uint8_t*) path, &len))
     {
         fprintf_light_red(stderr, "Failed retrieving path for file:%"
@@ -1189,11 +1189,6 @@ int __diff_dir(uint8_t* write, struct kv_store* store,
                                                      strcat(created_copy,"/"),
                                                        (const char *)new->name,
                                                           new->name_len));
-            //__emit_field_update(store, "dir.name", "metadata", channel,
-            //                    BSON_STRING, (void*) old->name,
-            //                    (void*) new->name, old->name_len,
-            //                    new->name_len, write_counter);
-
             if (new->name_len)
                 __emit_created_file(store, channel, (char*) new->name,
                                     new->name_len, write_counter);
@@ -1293,7 +1288,7 @@ int __emit_file_bytes(uint8_t* write, struct kv_store* store,
                                 " end: %"PRIu64
                                 " file: %"PRIu64"\n", start, end, file);
 
-    if (redis_hash_field_get(store, REDIS_INODE_SECTOR_GET, file, "path",
+    if (redis_hash_field_get(store, REDIS_FILE_SECTOR_GET, file, "path",
                              (uint8_t*) path, &len))
     {
         fprintf_light_red(stderr, "Failed retrieving path for file:%"
@@ -1305,7 +1300,7 @@ int __emit_file_bytes(uint8_t* write, struct kv_store* store,
     fprintf_light_white(stdout, "path: %s\n", path);
 
     len = sizeof(fsize);
-    if (redis_hash_field_get(store, REDIS_INODE_SECTOR_GET, file, "size",
+    if (redis_hash_field_get(store, REDIS_FILE_SECTOR_GET, file, "size",
                              (uint8_t*) &fsize, &len))
     {
         fprintf_light_red(stderr, "Failed retrieving size for file:%"
@@ -1456,9 +1451,133 @@ int __diff_bgds(uint8_t* write, struct kv_store* store,
 }
 
 int __diff_inodes(uint8_t* write, struct kv_store* store,
-                  const char* vmname, const char* pointer)
+                  char* vmname, uint64_t write_counter, char* pointer,
+                  size_t write_len)
 {
+    uint64_t file = 0, lfiles = 0, i, offset;
+    uint8_t** list;
+    size_t len = 0, len2 = 4096;
+    struct ext4_inode oldd, *old = &oldd, *new;
+    char* channel = NULL, path[len2];
+    
     fprintf_light_white(stdout, "__diff_inodes()\n");
+    fprintf_light_white(stdout, "pointer: %s\n", pointer);
+
+    strtok(pointer, ":");
+    sscanf(strtok(NULL, ":"), "%"SCNu64, &lfiles);
+
+    if (redis_list_get(store, REDIS_FILES_LGET, lfiles, &list, &len))
+    {
+        fprintf_light_red(stdout, "Error getting list of bgds from Redis.\n");
+        return EXIT_FAILURE;
+    }
+
+    for (i = 0; i < len; i++)
+    {
+        strtok((char*) (list)[i], ":");
+        sscanf(strtok(NULL, ":"), "%"SCNu64, &file);
+
+        if (redis_hash_field_get(store, REDIS_FILE_SECTOR_GET, file, "path",
+                                 (uint8_t*) path, &len2))
+        {
+            fprintf_light_red(stdout, "Error getting path for file %"PRIu64
+                                      "from Redis.\n", file);
+            return EXIT_FAILURE;
+        }
+
+        path[len2] = '\0';
+
+        len2 = sizeof(offset);
+        if (redis_hash_field_get(store, REDIS_FILE_SECTOR_GET, file, "inode_offset",
+                                 (uint8_t*) &offset, &len2))
+        {
+            fprintf_light_red(stdout, "Error getting offset for file %"PRIu64
+                                      "from Redis.\n", file);
+            return EXIT_FAILURE;
+        }
+
+        len2 = sizeof(struct ext4_inode);
+        if (redis_hash_field_get(store, REDIS_FILE_SECTOR_GET, file, "inode",
+                                 (uint8_t*) old, &len2))
+        {
+            fprintf_light_red(stdout, "Error getting offset for file %"PRIu64
+                                      "from Redis.\n", file);
+            return EXIT_FAILURE;
+        }
+
+        new = (struct ext4_inode*) &(write[offset]);
+
+        fprintf_light_white(stdout, "Checking inode for file '%s', offset %"
+                                    PRIu64"\n", path, offset);
+        channel = construct_channel_name(vmname, path);
+        fprintf_light_cyan(stdout, "channel: %s\n", channel);
+
+        FIELD_COMPARE(i_mode, "i_mode", "metadata", BSON_BINARY)
+        FIELD_COMPARE(i_uid, "i_uid", "metadata", BSON_BINARY)
+        FIELD_COMPARE(i_size_lo, "i_size_lo", "metadata", BSON_INT32)
+        FIELD_COMPARE(i_atime, "i_atime", "metadata", BSON_INT32)
+        FIELD_COMPARE(i_ctime, "i_ctime", "metadata", BSON_INT32)
+        FIELD_COMPARE(i_mtime, "i_mtime", "metadata", BSON_INT32)
+        FIELD_COMPARE(i_dtime, "i_dtime", "metadata", BSON_INT32)
+        FIELD_COMPARE(i_gid, "i_gid", "metadata", BSON_BINARY)
+        FIELD_COMPARE(i_links_count, "i_links_count", "metadata", BSON_BINARY)
+        FIELD_COMPARE(i_blocks_lo, "i_blocks_lo", "metadata", BSON_INT32)
+        FIELD_COMPARE(i_flags, "i_flags", "metadata", BSON_INT32)
+        FIELD_COMPARE(i_osd1[0], "i_osd1[0]", "metadata", BSON_BINARY)
+        FIELD_COMPARE(i_osd1[1], "i_osd1[1]", "metadata", BSON_BINARY)
+        FIELD_COMPARE(i_osd1[2], "i_osd1[2]", "metadata", BSON_BINARY)
+        FIELD_COMPARE(i_osd1[3], "i_osd1[3]", "metadata", BSON_BINARY)
+        FIELD_COMPARE(i_block[0], "i_block[0]", "metadata", BSON_INT32)
+        FIELD_COMPARE(i_block[1], "i_block[1]", "metadata", BSON_INT32)
+        FIELD_COMPARE(i_block[2], "i_block[2]", "metadata", BSON_INT32)
+        FIELD_COMPARE(i_block[3], "i_block[3]", "metadata", BSON_INT32)
+        FIELD_COMPARE(i_block[4], "i_block[4]", "metadata", BSON_INT32)
+        FIELD_COMPARE(i_block[5], "i_block[5]", "metadata", BSON_INT32)
+        FIELD_COMPARE(i_block[6], "i_block[6]", "metadata", BSON_INT32)
+        FIELD_COMPARE(i_block[7], "i_block[7]", "metadata", BSON_INT32)
+        FIELD_COMPARE(i_block[8], "i_block[8]", "metadata", BSON_INT32)
+        FIELD_COMPARE(i_block[9], "i_block[9]", "metadata", BSON_INT32)
+        FIELD_COMPARE(i_block[10], "i_block[10]", "metadata", BSON_INT32)
+        FIELD_COMPARE(i_block[11], "i_block[11]", "metadata", BSON_INT32)
+        FIELD_COMPARE(i_block[12], "i_block[12]", "metadata", BSON_INT32)
+        FIELD_COMPARE(i_block[13], "i_block[13]", "metadata", BSON_INT32)
+        FIELD_COMPARE(i_block[14], "i_block[14]", "metadata", BSON_INT32)
+        FIELD_COMPARE(i_generation, "i_generation", "metadata", BSON_INT32)
+        FIELD_COMPARE(i_file_acl_lo, "i_file_acl_lo", "metadata", BSON_INT32)
+        FIELD_COMPARE(i_size_high, "i_size_high", "metadata", BSON_INT32)
+        FIELD_COMPARE(i_obso_faddr, "i_obso_faddr", "metadata", BSON_INT32)
+        FIELD_COMPARE(i_osd2[0], "i_osd2[0]", "metadata", BSON_BINARY)
+        FIELD_COMPARE(i_osd2[1], "i_osd2[1]", "metadata", BSON_BINARY)
+        FIELD_COMPARE(i_osd2[2], "i_osd2[2]", "metadata", BSON_BINARY)
+        FIELD_COMPARE(i_osd2[3], "i_osd2[3]", "metadata", BSON_BINARY)
+        FIELD_COMPARE(i_osd2[4], "i_osd2[4]", "metadata", BSON_BINARY)
+        FIELD_COMPARE(i_osd2[5], "i_osd2[5]", "metadata", BSON_BINARY)
+        FIELD_COMPARE(i_osd2[6], "i_osd2[6]", "metadata", BSON_BINARY)
+        FIELD_COMPARE(i_osd2[7], "i_osd2[7]", "metadata", BSON_BINARY)
+        FIELD_COMPARE(i_osd2[8], "i_osd2[8]", "metadata", BSON_BINARY)
+        FIELD_COMPARE(i_osd2[9], "i_osd2[9]", "metadata", BSON_BINARY)
+        FIELD_COMPARE(i_osd2[10], "i_osd2[10]", "metadata", BSON_BINARY)
+        FIELD_COMPARE(i_extra_isize, "i_extra_isize", "metadata", BSON_BINARY)
+        FIELD_COMPARE(i_checksum_hi, "i_checksum_hi", "metadata", BSON_BINARY)
+        FIELD_COMPARE(i_ctime_extra, "i_ctime_extra", "metadata", BSON_INT32)
+        FIELD_COMPARE(i_mtime_extra, "i_mtime_extra", "metadata", BSON_INT32)
+        FIELD_COMPARE(i_atime_extra, "i_atime_extra", "metadata", BSON_INT32)
+        FIELD_COMPARE(i_crtime, "i_crtime", "metadata", BSON_INT32)
+        FIELD_COMPARE(i_crtime_extra, "i_crtime_extra", "metadata", BSON_INT32)
+        FIELD_COMPARE(i_version_hi, "i_version_hi", "metadata", BSON_INT32)
+
+        len2 = sizeof(struct ext4_inode);
+        if (redis_hash_field_set(store, REDIS_FILE_SECTOR_INSERT, file, "inode",
+                                 (uint8_t*) new, len2))
+        {
+            fprintf_light_red(stdout, "Error getting offset for file %"PRIu64
+                                      "from Redis.\n", file);
+            return EXIT_FAILURE;
+        }
+        free(channel);
+    }
+
+    fprintf_light_cyan(stdout, "loaded: %zu elements\n", len);
     return EXIT_SUCCESS;
 }
 
@@ -1490,7 +1609,7 @@ int __qemu_dispatch_write(uint8_t* data,
     else if(strncmp(pointer, "lbgds", strlen("lbgds")) == 0)
         __diff_bgds(data, store, vmname, write_counter, pointer, len);
     else if(strncmp(pointer, "lfiles", strlen("lfiles")) == 0)
-        __diff_inodes(data, store, vmname, pointer);
+        __diff_inodes(data, store, vmname, write_counter, pointer, len);
     else if(strncmp(pointer, "bgd", strlen("bgd")) == 0)
         __diff_bitmap(data, store, vmname, pointer);
     else if(strncmp(pointer, "lextents", strlen("lextents")) == 0)
@@ -1753,14 +1872,26 @@ int __deserialize_file(struct ext4_superblock* superblock,
     {
         if (strcmp(value1.key, "inode_sector") == 0)
         {
-            if (redis_reverse_pointer_set(store, REDIS_INODES_INSERT,
+            if (redis_reverse_pointer_set(store, REDIS_FILES_INSERT,
                                       (uint64_t) *((uint32_t *) value1.data),
                                       id))
                 return EXIT_FAILURE;
 
-            if (redis_reverse_pointer_set(store, REDIS_INODES_SECTOR_INSERT,
+            if (redis_reverse_pointer_set(store, REDIS_FILES_SECTOR_INSERT,
                                       (uint64_t) *((uint32_t *) value1.data),
                                       (uint64_t) *((uint32_t *) value1.data)))
+                return EXIT_FAILURE;
+        }
+        else if (strcmp(value1.key, "inode_num") == 0)
+        {
+            if (redis_reverse_pointer_set(store, REDIS_INODE_INSERT,
+                                      (uint64_t) *((uint32_t *) value1.data),
+                                      id))
+                return EXIT_FAILURE;
+
+            if (redis_hash_field_set(store, REDIS_FILE_SECTOR_INSERT, id,
+                                 value1.key, (const uint8_t*) value1.data,
+                                 (size_t) value1.size))
                 return EXIT_FAILURE;
         }
         else if (strcmp(value1.key, "data") == 0)
@@ -1876,7 +2007,7 @@ int __deserialize_file(struct ext4_superblock* superblock,
         }
         else
         {
-            if (redis_hash_field_set(store, REDIS_INODE_SECTOR_INSERT, id,
+            if (redis_hash_field_set(store, REDIS_FILE_SECTOR_INSERT, id,
                                  value1.key, (const uint8_t*) value1.data,
                                  (size_t) value1.size))
                 return EXIT_FAILURE;
