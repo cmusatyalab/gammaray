@@ -2118,8 +2118,14 @@ int ext4_serialize_fs(struct ext4_superblock* superblock,
 
     value.type = BSON_INT64;
     value.key = "superblock_sector";
-    offset += 1024;
     offset /= SECTOR_SIZE;
+    value.data = &(offset);
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT64;
+    value.key = "superblock_offset";
+    offset = SECTOR_SIZE*2;
     value.data = &(offset);
 
     bson_serialize(serialized, &value);
