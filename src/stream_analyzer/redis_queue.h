@@ -22,9 +22,6 @@
 #define REDIS_BLOCKDMAP_INSERT "SET sector:%"PRIu64" bgd:%"PRIu64
 #define REDIS_BLOCKIMAP_INSERT "SET sector:%"PRIu64" bgd:%"PRIu64
 
-#define REDIS_INODE_SECTOR_INSERT "HSET file:%"PRIu64" %s %b"
-#define REDIS_INODE_SECTOR_GET "HGET file:%"PRIu64" %s"
-#define REDIS_INODES_INSERT "RPUSH files:%"PRIu64" file:%"PRIu64
 #define REDIS_INODE_INSERT "RPUSH inode:%"PRIu64" file:"PRIu64
 #define REDIS_INODE_LGET "LRANGE inode:%"PRIu64" 0 -1"
 
