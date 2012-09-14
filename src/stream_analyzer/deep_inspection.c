@@ -1386,29 +1386,69 @@ int __diff_mbr(uint8_t* write, struct kv_store* store,
 }
 
 int __diff_bgds(uint8_t* write, struct kv_store* store,
-                const char* vmname, const char* pointer, size_t write_len)
+                char* vmname, uint64_t write_counter, char* pointer,
+                size_t write_len)
 {
-    /* TODO: (0) Pull list of bgds
-     *       (1) Pull bgd one by one
-     *       (2) Walk block to end
-     *       (3) emit differences */
-    uint64_t bgd = 0, old_pos = 0, new_pos = 0, lbgds = 0;
-    struct ext4_block_group_descriptor* old, *new;
+    uint64_t bgd = 0, lbgds = 0, i;
+    uint8_t** list;
+    size_t len = 0, bgdlen = sizeof(struct ext4_block_group_descriptor);
+    struct ext4_block_group_descriptor oldd, *old = &oldd, *new;
+    char* channel, *path = "";
     fprintf_light_white(stdout, "__diff_bgds()\n");
     fprintf_light_white(stdout, "pointer: %s\n", pointer);
 
     // pull list
-    lbgds = 0xff;
+    strtok(pointer, ":");
+    sscanf(strtok(NULL, ":"), "%"SCNu64, &lbgds);
 
-    while (old_pos < write_len)
+    if (redis_list_get(store, REDIS_BGDS_LGET, lbgds, &list, &len))
     {
-        bgd = 1;
-        old = NULL;
-        new = NULL;
-        old_pos += sizeof(struct ext4_block_group_descriptor);
-        new_pos += sizeof(struct ext4_block_group_descriptor);
+        fprintf_light_red(stdout, "Error getting list of bgds from Redis.\n");
+        return EXIT_FAILURE;
     }
-    exit(0);
+
+    fprintf_light_cyan(stdout, "loaded: %zu elements\n", len);
+    channel = construct_channel_name(vmname, path);
+    fprintf_light_cyan(stdout, "channel: %s\n", channel);
+
+    for (i = 0; i < len; i++)
+    {
+        strtok((char*) (list)[i], ":");
+        sscanf(strtok(NULL, ":"), "%"SCNu64, &bgd);
+
+        if (redis_hash_field_get(store, REDIS_BGD_SECTOR_GET, bgd,
+                                 "bgd", (uint8_t*) old, &bgdlen))
+        {
+            fprintf_light_red(stderr, "Could not load BGD %"PRIu64"\n", bgd);
+            return EXIT_FAILURE;
+        }
+
+        new = (struct ext4_block_group_descriptor *)
+            &(write[i*sizeof(struct ext4_block_group_descriptor)]);
+
+        FIELD_COMPARE(bg_block_bitmap_lo, "bgd.bg_block_bitmap_lo", "metadata", BSON_INT32);
+        FIELD_COMPARE(bg_inode_bitmap_lo, "bgd.bg_inode_bitmap_lo", "metadata", BSON_INT32);
+        FIELD_COMPARE(bg_inode_table_lo, "bgd.bg_inode_table_lo,", "metadata", BSON_INT32);
+        FIELD_COMPARE(bg_free_blocks_count_lo, "bgd.bg_free_blocks_count_lo", "metadata", BSON_BINARY);
+        FIELD_COMPARE(bg_free_inodes_count_lo, "bgd.bg_free_inodes_count_lo", "metadata", BSON_BINARY);
+        FIELD_COMPARE(bg_used_dirs_count_lo, "bgd.bg_used_dirs_count_lo", "metadata", BSON_BINARY);
+        FIELD_COMPARE(bg_flags, "bgd.bg_flags", "metadata", BSON_BINARY);
+        FIELD_COMPARE(bg_exclude_bitmap_lo, "bgd.bg_exclude_bitmap_lo", "metadata", BSON_INT32);
+        FIELD_COMPARE(bg_block_bitmap_csum_lo, "bgd.bg_block_bitmap_csum_lo", "metadata", BSON_BINARY);
+        FIELD_COMPARE(bg_inode_bitmap_csum_lo, "bgd.bg_inode_bitmap_csum_lo", "metadata", BSON_BINARY);
+        FIELD_COMPARE(bg_itable_unused_lo, "bgd.bg_itable_unused_lo", "metadata", BSON_BINARY);
+        FIELD_COMPARE(bg_checksum, "bgd.bg_checksum", "metadata", BSON_BINARY);
+
+        if (redis_hash_field_set(store, REDIS_BGD_SECTOR_INSERT, bgd, "bgd",
+                                 (uint8_t*) new, sizeof(*new)))
+        {
+            fprintf_light_red(stderr, "Error setting bgd %"PRIu64"\n", bgd);
+            return EXIT_FAILURE;
+        }
+    } 
+
+    redis_free_list(list, len);
+    free(channel);
     return EXIT_SUCCESS;
 }
 
@@ -1445,7 +1485,7 @@ int __qemu_dispatch_write(uint8_t* data,
     else if(strncmp(pointer, "mbr", strlen("mbr")) == 0)
         __diff_mbr(data, store, vmname, pointer);
     else if(strncmp(pointer, "lbgds", strlen("lbgds")) == 0)
-        __diff_bgds(data, store, vmname, pointer, len);
+        __diff_bgds(data, store, vmname, write_counter, pointer, len);
     else if(strncmp(pointer, "lfiles", strlen("lfiles")) == 0)
         __diff_inodes(data, store, vmname, pointer);
     else if(strncmp(pointer, "bgd", strlen("bgd")) == 0)
