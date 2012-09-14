@@ -27,9 +27,12 @@
 
 #define REDIS_FILE_SECTOR_INSERT "HSET file:%"PRIu64" %s %b"
 #define REDIS_FILE_SECTOR_GET "HGET file:%"PRIu64" %s"
+#define REDIS_FILE_SECTORS_INSERT "RPUSH filesectors:%"PRIu64" sector:%"PRIu64
+#define REDIS_FILE_SECTORS_LGET "LRANGE filesectors:%"PRIu64" 0 -1"
 #define REDIS_FILES_INSERT "RPUSH files:%"PRIu64" file:%"PRIu64
 #define REDIS_FILES_LGET "LRANGE files:%"PRIu64" 0 -1"
 #define REDIS_FILES_SECTOR_INSERT "SET sector:%"PRIu64" lfiles:%"PRIu64
+#define REDIS_FILES_SECTOR_DELETE "DEL sector:%"PRIu64
 
 #define REDIS_EXTENT_SECTOR_INSERT "HSET extent:%"PRIu64" %s %b"
 #define REDIS_EXTENT_SECTOR_GET "HGET extent:%"PRIu64" %s"
@@ -43,6 +46,15 @@
 
 #define REDIS_ASYNC_QUEUE_PUSH "LPUSH writequeue %b"
 #define REDIS_ASYNC_QUEUE_POP "BRPOP writequeue"
+
+#define REDIS_RESET_CREATED "DEL createset"
+#define REDIS_RESET_DELETED "DEL deleteset"
+#define REDIS_CREATED_SET_ADD "SADD createset %"PRIu64
+#define REDIS_CREATED_SET_REMOVE "SREM createset %"PRIu64
+#define REDIS_DELETED_SET_ADD "SADD deleteset %"PRIu64
+#define REDIS_DELETED_SET_REMOVE "SREM deleteset %"PRIu64
+#define REDIS_LIST_DELETED "SDIFF deleteset createset"
+#define REDIS_LIST_CREATED "SDIFF createset deleteset"
 
 struct kv_store;
 struct thread_job;
@@ -79,6 +91,11 @@ int redis_sector_lookup(struct kv_store* store, uint64_t sector, uint8_t* data,
 int redis_list_get(struct kv_store* handle, char* fmt, uint64_t src,
                    uint8_t** result[], size_t* len);
 void redis_free_list(uint8_t* list[], size_t len);
+
+int redis_set_reset(struct kv_store* handle);
+int redis_set_add(struct kv_store* handle, char* fmt, uint64_t id);
+int redis_set_remove(struct kv_store* handle, char* fmt, uint64_t id,
+                     uint64_t* result);
 
 int redis_async_write_enqueue(struct kv_store* handle, uint8_t* data,
                                                        size_t len);

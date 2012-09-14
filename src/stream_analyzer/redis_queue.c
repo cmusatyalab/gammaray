@@ -470,7 +470,7 @@ int redis_async_write_enqueue(struct kv_store* handle, uint8_t* data,
 }
 
 int redis_async_write_dequeue(struct kv_store* handle, uint8_t* data,
-                                                       size_t* len)
+                              size_t* len)
 {
     redisReply* reply;
     redis_flush_pipeline(handle);
@@ -490,7 +490,47 @@ int redis_async_write_dequeue(struct kv_store* handle, uint8_t* data,
     return check_redis_return(handle, reply);
 }
 
-void redis_shutdown(int clear, struct kv_store* handle)
+int redis_set_add(struct kv_store* handle, char* fmt, uint64_t id)
+{
+    redisReply* reply;
+    redis_flush_pipeline(handle);
+    reply = redisCommand(handle->connection, fmt, id);
+
+    return check_redis_return(handle, reply);
+}
+
+int redis_set_remove(struct kv_store* handle, char* fmt, uint64_t id,
+                     uint64_t* result)
+{
+    redisReply* reply;
+    redis_flush_pipeline(handle);
+    reply = redisCommand(handle->connection, fmt, id);
+
+    if (reply->type == REDIS_REPLY_INTEGER)
+    {
+        *result = (uint64_t) reply->integer;
+    }
+    else
+    {
+        *result = 0;
+    }
+
+    return check_redis_return(handle, reply);
+}
+
+int redis_set_reset(struct kv_store* handle)
+{
+    redisReply* reply;
+    redisReply* reply2;
+    redis_flush_pipeline(handle);
+    reply = redisCommand(handle->connection, REDIS_RESET_CREATED);
+    reply2 = redisCommand(handle->connection, REDIS_RESET_DELETED);
+
+    return check_redis_return(handle, reply) ||
+           check_redis_return(handle, reply2);
+}
+
+void redis_shutdown(int not_clear, struct kv_store* handle)
 {
     int outstanding = 0;
     redisReply* reply;
@@ -508,7 +548,7 @@ void redis_shutdown(int clear, struct kv_store* handle)
 
         redis_flush_pipeline(handle);
 
-        if (clear)
+        if (not_clear == 0)
         {
             reply = redisCommand(handle->connection, "FLUSHALL");
             check_redis_return(handle, reply);

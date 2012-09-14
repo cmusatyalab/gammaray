@@ -27,7 +27,7 @@
     if (old->field != new->field) \
         __emit_field_update(store, fname, type, channel, btype, \
                             &(old->field), &(new->field), sizeof(old->field), \
-                            sizeof(new->field), write_counter, true, true); }
+                            sizeof(new->field), write_counter, true, false); }
 
 /*** Pre-Definitions ***/
 int __qemu_dispatch_write(uint8_t* data,
@@ -373,9 +373,10 @@ int __diff_dir(uint8_t* write, struct kv_store* store,
                char* vmname, uint64_t write_counter,
                char* pointer, size_t write_len)
 {
-    /* TODO: (0) need index of inode:y to file:x; need list of sectors for file
-     *       (1) delete file:old if lost
+    /* TODO:
+     *       (1) deletedfset file:old if lost
      *       (2) add file:new if gained
+     *       (2.5) remove from deletequeue if in it
      *       (3) update file:old sectors to point to any remaining path refs */
     uint64_t dir = 0, old_pos = 0, new_pos = 0, file = 0;
     struct ext4_dir_entry* old, *new;
@@ -473,32 +474,37 @@ int __diff_dir(uint8_t* write, struct kv_store* store,
                                                        (const char *)new->name,
                                                           new->name_len));
             if (new->name_len)
-                __emit_created_file(store, channel, (char*) new->name,
-                                    new->name_len, write_counter);
-
-            if (old->name_len)
-                __emit_deleted_file(store, channel, (char*) old->name,
-                                    old->name_len, write_counter);
+            {
+                redis_set_add(store, REDIS_CREATED_SET_ADD,
+                                     (uint64_t) new->inode);
+                //__emit_created_file(store, channel, (char*) new->name,
+                //                    new->name_len, write_counter);
+            }
 
             if (old->name_len)
             {
-                free(channel);
-                channel = construct_channel_name(vmname,
-                                                 strncat(strcat(deleted_copy, "/"),
-                                                        (char*) old->name,
-                                                           old->name_len));
+                redis_set_add(store, REDIS_DELETED_SET_ADD,
+                              (uint64_t) old->inode);
+                //__emit_deleted_file(store, channel, (char*) old->name,
+                //                    old->name_len, write_counter);
 
-                __emit_deleted_file(store, channel, (char*) old->name,
-                                    old->name_len, write_counter);
+                //free(channel);
+                //channel = construct_channel_name(vmname,
+                //                                 strncat(strcat(deleted_copy, "/"),
+                //                                        (char*) old->name,
+                //                                           old->name_len));
+
+                //__emit_deleted_file(store, channel, (char*) old->name,
+                //                    old->name_len, write_counter);
             }
 
-            if (new->name_len)
-            {
-                free(channel);
-                channel = construct_channel_name(vmname, created_copy);
-                __emit_created_file(store, channel, (char*) new->name,
-                                    new->name_len, write_counter);
-            }
+            //if (new->name_len)
+            //{
+                //free(channel);
+                //channel = construct_channel_name(vmname, created_copy);
+                //__emit_created_file(store, channel, (char*) new->name,
+                //                    new->name_len, write_counter);
+            //}
 
         }
         old_pos += old->rec_len;
@@ -1384,8 +1390,12 @@ int __deserialize_file(struct ext4_superblock* superblock,
 
             while (bson_deserialize(bson2, &value1, &value2) == 1)
             {
-                redis_reverse_file_data_pointer_set(store, (uint64_t) *((uint32_t*)value1.data),
-                                                    counter, counter + block_size, id);
+                redis_reverse_pointer_set(store, REDIS_FILE_SECTORS_INSERT,
+                                       id, 
+                                       (uint64_t) *((uint32_t *) value1.data));
+                redis_reverse_file_data_pointer_set(store, 
+                        (uint64_t) *((uint32_t*)value1.data),
+                        counter, counter + block_size, id);
                 counter += block_size; 
             }
 
@@ -1442,7 +1452,6 @@ int __deserialize_file(struct ext4_superblock* superblock,
                 return EXIT_FAILURE;
         }
     }
-
     return EXIT_SUCCESS;
 }
 
