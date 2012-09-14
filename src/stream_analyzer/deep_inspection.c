@@ -27,7 +27,7 @@
     if (old->field != new->field) \
         __emit_field_update(store, fname, type, channel, btype, \
                             &(old->field), &(new->field), sizeof(old->field), \
-                            sizeof(new->field), write_counter, true); }
+                            sizeof(new->field), write_counter, true, false); }
 
 char* construct_channel_name(char* vmname, char* path)
 {
@@ -1013,17 +1013,20 @@ int __emit_created_file(struct kv_store* store,  char* channel,
 int __emit_field_update(struct kv_store* store, char* field, char* type,
                         char* channel, enum BSON_TYPE bson_type, void* oldv,
                         void* newv, uint64_t oldv_size, uint64_t newv_size, 
-                        uint64_t transaction_id, bool emit)
+                        uint64_t transaction_id, bool emit, bool print)
 {
     struct bson_info* bson = bson_init();
     struct bson_kv val;
 
-    fprintf_light_red(stdout, "Field '%s' differs.\n", field);
+    if (print)
+    {
+        fprintf_light_red(stdout, "Field '%s' differs.\n", field);
 
-    fprintf_light_magenta(stdout, "old:\t");
-    hexdump(oldv, oldv_size);
-    fprintf_light_magenta(stdout, "new:\t");
-    hexdump(newv, newv_size);
+        fprintf_light_magenta(stdout, "old:\t");
+        hexdump(oldv, oldv_size);
+        fprintf_light_magenta(stdout, "new:\t");
+        hexdump(newv, newv_size);
+    }
 
     if (bson == NULL)
     {
