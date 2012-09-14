@@ -25,8 +25,14 @@
 #define REDIS_INODE_SECTOR_INSERT "HSET file:%"PRIu64" %s %b"
 #define REDIS_INODE_SECTOR_GET "HGET file:%"PRIu64" %s"
 #define REDIS_INODES_INSERT "RPUSH files:%"PRIu64" file:%"PRIu64
-#define REDIS_INODES_LGET "LRANGE files:%"PRIu64" 0 -1"
-#define REDIS_INODES_SECTOR_INSERT "SET sector:%"PRIu64" lfiles:%"PRIu64
+#define REDIS_INODE_INSERT "RPUSH inode:%"PRIu64" file:"PRIu64
+#define REDIS_INODE_LGET "LRANGE inode:%"PRIu64" 0 -1"
+
+#define REDIS_FILE_SECTOR_INSERT "HSET file:%"PRIu64" %s %b"
+#define REDIS_FILE_SECTOR_GET "HGET file:%"PRIu64" %s"
+#define REDIS_FILES_INSERT "RPUSH files:%"PRIu64" file:%"PRIu64
+#define REDIS_FILES_LGET "LRANGE files:%"PRIu64" 0 -1"
+#define REDIS_FILES_SECTOR_INSERT "SET sector:%"PRIu64" lfiles:%"PRIu64
 
 #define REDIS_EXTENT_SECTOR_INSERT "HSET extent:%"PRIu64" %s %b"
 #define REDIS_EXTENT_SECTOR_GET "HGET extent:%"PRIu64" %s"
