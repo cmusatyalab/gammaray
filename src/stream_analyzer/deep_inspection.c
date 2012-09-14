@@ -29,6 +29,12 @@
                             &(old->field), &(new->field), sizeof(old->field), \
                             sizeof(new->field), write_counter, true, false); }
 
+/*** Pre-Definitions ***/
+int __qemu_dispatch_write(uint8_t* data,
+                          struct kv_store* store, char* vmname,
+                          uint64_t write_counter,
+                          char* pointer, size_t len);
+
 char* construct_channel_name(char* vmname, char* path)
 {
     char* buf = malloc(HOST_NAME_MAX + VM_NAME_MAX + PATH_MAX + 3);
@@ -163,7 +169,6 @@ int qemu_print_sector_type(enum SECTOR_TYPE type)
 
     return -1;
 }
-
 
 int ext2_compare_inodes(struct ext2_inode* old_inode,
                         struct ext2_inode* new_inode, struct kv_store* store,
@@ -1086,6 +1091,32 @@ int __emit_field_update(struct kv_store* store, char* field, char* type,
     return EXIT_SUCCESS;
 }
 
+int __reinspect_write(struct ext4_superblock* super, struct kv_store* store,
+                      int64_t partition_offset, uint64_t block_num,
+                      uint64_t write_counter, char* pointer, char* vmname)
+{
+    uint8_t buf[ext4_block_size(*super)];
+    size_t len = ext4_block_size(*super);
+    uint64_t sector = block_num * ext4_block_size(*super) + partition_offset;
+    sector /= SECTOR_SIZE;
+
+    if (redis_dequeue(store, sector, buf, &len))
+    {
+        fprintf_light_red(stderr, "Failed retrieving queued write [%"
+                                  PRIu64"]\n", sector);
+        return EXIT_FAILURE;
+    }
+
+    if (len == 0)
+    {
+        fprintf_light_red(stderr, "Empty write returned for [%"PRIu64"\n",
+                                  sector);
+        return EXIT_FAILURE;
+    }
+
+    return __qemu_dispatch_write(buf, store, vmname, write_counter, pointer, len);
+}
+
 int __diff_dir(uint8_t* write, struct kv_store* store, 
                char* vmname, uint64_t write_counter,
                char* pointer, size_t write_len)
@@ -1454,6 +1485,11 @@ int __diff_inodes(uint8_t* write, struct kv_store* store,
                   char* vmname, uint64_t write_counter, char* pointer,
                   size_t write_len)
 {
+    /* TODO (0) walk extent or blocks
+     *      (1) if new with depth, enter new extents into Redis
+     *      (2) if new with no depth, enter new data block map into Redis
+     *      (3) reinspect each block
+     */
     uint64_t file = 0, lfiles = 0, i, offset;
     uint8_t** list;
     size_t len = 0, len2 = 4096;
