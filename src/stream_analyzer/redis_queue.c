@@ -391,6 +391,9 @@ int redis_list_get(struct kv_store* handle, char* fmt, uint64_t src,
         *len = reply->elements;
         *result = malloc(sizeof(uint8_t*) * (*len));
 
+        if (*result == NULL)
+            return EXIT_FAILURE;
+
         for (i = 0; i < *len; i++)
         {
             if (reply->element[i]->type != REDIS_REPLY_STRING)
