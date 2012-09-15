@@ -267,6 +267,54 @@ int __emit_created_file(struct kv_store* store,  char* channel,
     return EXIT_SUCCESS;
 }
 
+int __emit_rename_file(struct kv_store* store,  char* channel,
+                       char* file, size_t flen, uint64_t transaction_id)
+{
+    struct bson_info* bson = bson_init();
+    struct bson_kv val;
+
+    fprintf_light_blue(stdout, "CREATE[%.*s] in channel %s.\n", flen, file, channel);
+
+    if (bson == NULL)
+    {
+        fprintf_light_red(stderr, "Failed creating BSON handle. OOM?\n");
+        return EXIT_FAILURE;
+    }
+
+    val.type = BSON_STRING;
+    val.size = strlen("mutation");
+    val.key = "type";
+    val.data = "mutation";
+
+    bson_serialize(bson, &val);
+
+    val.type = BSON_INT64;
+    val.key = "transaction";
+    val.data = &(transaction_id);
+
+    bson_serialize(bson, &val);
+
+    val.type = BSON_STRING;
+    val.size = flen;
+    val.key = "rename";
+    val.data = file;
+
+    bson_serialize(bson, &val);
+
+    bson_finalize(bson);
+
+    if (redis_publish(store, channel, bson->buffer, bson->position))
+    {
+        fprintf_light_red(stderr, "Failure publishing "
+                                  "Redis message.\n");
+        return EXIT_FAILURE;
+    }
+
+    bson_cleanup(bson);
+    
+    return EXIT_SUCCESS;
+}
+
 int __emit_field_update(struct kv_store* store, char* field, char* type,
                         char* channel, enum BSON_TYPE bson_type, void* oldv,
                         void* newv, uint64_t oldv_size, uint64_t newv_size, 
@@ -369,6 +417,16 @@ int __reinspect_write(struct ext4_superblock* super, struct kv_store* store,
     return __qemu_dispatch_write(buf, store, vmname, write_counter, pointer, len);
 }
 
+uint64_t __inode_sector(struct ext4_superblock super)
+{
+    return 0;
+}
+
+uint64_t __inode_offset(struct ext4_superblock super)
+{
+    return 0;
+}
+
 int __diff_dir(uint8_t* write, struct kv_store* store, 
                char* vmname, uint64_t write_counter,
                char* pointer, size_t write_len)
@@ -378,7 +436,7 @@ int __diff_dir(uint8_t* write, struct kv_store* store,
      *       (2) add file:new if gained
      *       (2.5) remove from deletequeue if in it
      *       (3) update file:old sectors to point to any remaining path refs */
-    uint64_t dir = 0, old_pos = 0, new_pos = 0, file = 0;
+    uint64_t dir = 0, old_pos = 0, new_pos = 0, file = 0, i;
     struct ext4_dir_entry* old, *new;
     struct ext4_dir_entry cleared = {   .inode = 0,
                                         .rec_len = 0,
@@ -387,11 +445,13 @@ int __diff_dir(uint8_t* write, struct kv_store* store,
                                         .name = {0}
                                     };
     uint8_t old_dir[write_len];
-    char path[4096];
+    char path[4096], stored_path[4096];
     char created_copy[4096];
     char deleted_copy[4096];
-    size_t len;
+    size_t len, len2;
     char* channel = NULL;
+    uint8_t** files;
+    bool found;
 
     fprintf_light_white(stdout, "__diff_dir(), write_len == %zu\n", write_len);
     fprintf_light_white(stdout, "operating on: %s\n", pointer);
@@ -443,11 +503,10 @@ int __diff_dir(uint8_t* write, struct kv_store* store,
 
     channel = construct_channel_name(vmname, path);
     fprintf_green(stdout, "Constructed channel name: '%s'\n", channel);
+    free(channel);
 
     while (old_pos < write_len || new_pos < write_len)
     {
-        free(channel);
-        channel = construct_channel_name(vmname, path);
         if (old_pos < write_len)
             old = (struct ext4_dir_entry *) &(old_dir[old_pos]);
         else
@@ -468,49 +527,115 @@ int __diff_dir(uint8_t* write, struct kv_store* store,
         {
             memcpy(created_copy, path, strlen(path) + 1);
             memcpy(deleted_copy, path, strlen(path) + 1);
-            fprintf_light_red(stdout, "New path: %s\n",
-                                                 strncat(
-                                                     strcat(created_copy,"/"),
-                                                       (const char *)new->name,
-                                                          new->name_len));
-            if (new->name_len)
+            strncat(strcat(created_copy, "/"), (const char *)new->name,
+                                                             new->name_len);
+            strncat(strcat(deleted_copy, "/"), (const char *)old->name,
+                                                             old->name_len);
+
+            fprintf_light_red(stdout, "New path: %s\n", created_copy);
+
+            if (old->inode != new->inode)
             {
-                redis_set_add(store, REDIS_CREATED_SET_ADD,
-                                     (uint64_t) new->inode);
-                //__emit_created_file(store, channel, (char*) new->name,
-                //                    new->name_len, write_counter);
-            }
+                if (new->name_len)
+                {
+                    redis_set_add(store, REDIS_CREATED_SET_ADD,
+                                  (uint64_t) new->inode);
+                    redis_list_get(store, REDIS_INODE_LGET, (uint64_t) new->inode,
+                                   &files, &len);
+                    found = false;
+                    for (i = 0; i < len; i++)
+                    {
+                        fprintf_light_blue(stdout, "%s\n", (char*) files[i]);
 
-            if (old->name_len)
+                        strtok((char*) files[i], ":");
+                        sscanf(strtok(NULL, ":"), "%"SCNu64, &file);
+                        
+                        len2 = 4096;
+                        redis_hash_field_get(store, REDIS_FILE_SECTOR_GET, file,
+                                             "path", (uint8_t*) stored_path, &len2);
+
+                        if (len2)
+                        {
+                            stored_path[len2] = 0;
+                            fprintf(stdout, "stored_path: %s\n", (char *) stored_path);
+                            if (strncmp(stored_path, created_copy,
+                                        strlen(created_copy)) == 0)
+                                found = true;
+                        }
+                    }
+                    redis_free_list(files, len);
+
+                    if (!found)
+                    {
+                        redis_get_fcounter(store, &file);
+                        fprintf_light_white(stdout, "Creating new file:%"
+                                                    PRIu64"\n", file);
+                        redis_hash_field_set(store, REDIS_FILE_SECTOR_INSERT,
+                                             file, "inode_num",
+                                             (uint8_t*) &(new->inode), sizeof(new->inode));
+                        redis_hash_field_set(store, REDIS_FILE_SECTOR_INSERT,
+                                             file, "inode_offset",
+                                             (uint8_t*) &(new->inode), sizeof(new->inode));
+                        redis hash_field_set(store, REDIS_FILE_SECTOR_INSTER, file, "is_dir",
+                                             new->type & 0x1);
+                        /* TODO: (0) set inode offset
+                         *       (1) set inode sector to inode list
+                         *       (2) add inode to list
+                         *       (3) add file to inode list
+                         *       (4) */
+                    }
+                    //__emit_created_file(store, channel, (char*) new->name,
+                    //                    new->name_len, write_counter);
+                }
+
+                if (old->name_len)
+                {
+                    redis_set_add(store, REDIS_DELETED_SET_ADD,
+                                  (uint64_t) old->inode);
+                    //__emit_deleted_file(store, channel, (char*) old->name,
+                    //                    old->name_len, write_counter);
+
+                    //free(channel);
+                    //channel = construct_channel_name(vmname,
+                    //                                 strncat(strcat(deleted_copy, "/"),
+                    //                                        (char*) old->name,
+                    //                                           old->name_len));
+
+                    //__emit_deleted_file(store, channel, (char*) old->name,
+                    //                    old->name_len, write_counter);
+                }
+
+                //if (new->name_len)
+                //{
+                    //free(channel);
+                    //channel = construct_channel_name(vmname, created_copy);
+                    //__emit_created_file(store, channel, (char*) new->name,
+                    //                    new->name_len, write_counter);
+                //}
+                
+                /* handle true deleted files */
+            }
+            else
             {
-                redis_set_add(store, REDIS_DELETED_SET_ADD,
-                              (uint64_t) old->inode);
-                //__emit_deleted_file(store, channel, (char*) old->name,
-                //                    old->name_len, write_counter);
+                fprintf_light_cyan(stdout, "Rename: %.*s -> %.*s\n",
+                                   old->name, old->name_len,
+                                   new->name, new->name_len);
 
-                //free(channel);
-                //channel = construct_channel_name(vmname,
-                //                                 strncat(strcat(deleted_copy, "/"),
-                //                                        (char*) old->name,
-                //                                           old->name_len));
+                channel = construct_channel_name(vmname, deleted_copy);
+                __emit_rename_file(store, channel, (char*) new->name,
+                                   new->name_len, write_counter);
+                free(channel);
 
-                //__emit_deleted_file(store, channel, (char*) old->name,
-                //                    old->name_len, write_counter);
+                channel = construct_channel_name(vmname, created_copy);
+                __emit_created_file(store, channel, (char*) new->name,
+                                   new->name_len, write_counter);
+                free(channel);
             }
-
-            //if (new->name_len)
-            //{
-                //free(channel);
-                //channel = construct_channel_name(vmname, created_copy);
-                //__emit_created_file(store, channel, (char*) new->name,
-                //                    new->name_len, write_counter);
-            //}
 
         }
         old_pos += old->rec_len;
         new_pos += new->rec_len;
     }
-    free(channel);
 
     if (redis_hash_field_set(store, REDIS_DIR_SECTOR_INSERT, dir, "data",
                              (uint8_t*) write, write_len))

@@ -54,7 +54,8 @@ int read_loop(int fd, struct kv_store* store, char* vmname)
         /* check for EOF */
         if (read_ret == 0)
         {
-            fprintf_light_red(stderr, "Total read: %"PRId64".\n", total);
+            fprintf_light_red(stderr, "Processed: %"PRId64" writes.\n",
+                                      write_counter);
             fprintf_light_red(stderr, "Reading from stream failed, assuming "
                                       "teardown.\n");
             free((void*) write.data);
