@@ -92,7 +92,8 @@ int read_loop(int fd, struct kv_store* handle)
         }
 
         /* the mountain of things i still regret ! */
-        redis_async_write_enqueue(handle, write.data, len);
+        redis_async_write_enqueue(handle, write.header.sector_num, write.data,
+                                  len);
 
         free(write.data);
 
@@ -159,5 +160,6 @@ int main(int argc, char* args[])
 
     read_loop(fd, handle);
     close(fd);
+    exit(1);
     return EXIT_SUCCESS;
 }

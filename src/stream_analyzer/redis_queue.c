@@ -53,6 +53,7 @@ struct kv_store
     pthread_mutex_t flush_lock;
     pthread_mutex_t conn_lock;
     pthread_mutex_t cmd_lock;
+    bool shutdown;
     sem_t thread_counter;
 };
 
@@ -139,10 +140,10 @@ void* redis_flush_thread_pipeline(void* data)
 void * redis_periodic_flusher(void* data)
 {
     struct thread_job* job = NULL;
-    fprintf(stderr, "PERIODIC FLUSHER RUNNING.\n");
 
-    while (1)
+    while (!(((struct kv_store *) data)->shutdown))
     {
+        fprintf(stderr, "PERIODIC FLUSHER RUNNING.\n");
         sleep(REDIS_DEFAULT_FLUSH_TICK);
         job = (struct thread_job*) malloc(sizeof(struct thread_job));
         job->handle = (struct kv_store*) data;
@@ -194,6 +195,7 @@ struct kv_store* redis_init(char* db, bool background_flush)
        }
 
         handle->outstanding_pipelined_cmds = 0;
+        handle->shutdown = false;
         pthread_mutex_init(&(handle->flush_lock), NULL);
         pthread_mutex_init(&(handle->conn_lock), NULL);
         pthread_mutex_init(&(handle->cmd_lock), NULL);
@@ -435,12 +437,16 @@ void redis_free_list(uint8_t* list[], size_t len)
     }
 }
 
-int redis_async_write_enqueue(struct kv_store* handle, uint8_t* data,
+int redis_async_write_enqueue(struct kv_store* handle, int64_t sector,
+                                                       uint8_t* data,
                                                        size_t len)
 {
     struct thread_job* job;
     pthread_t thread;
     pthread_mutex_lock(&(handle->conn_lock));
+    redisAppendCommand(handle->connection, REDIS_ASYNC_QUEUE_PUSH,
+                                           &sector,
+                                           sizeof(sector));
     redisAppendCommand(handle->connection, REDIS_ASYNC_QUEUE_PUSH,
                                            data,
                                            len);
@@ -541,6 +547,7 @@ void redis_shutdown(int not_clear, struct kv_store* handle)
     if (handle)
     {
         /* wait for all threads */
+        handle->shutdown = true;
         sem_getvalue(&(handle->thread_counter), &outstanding);
         while (outstanding != 0)
         {

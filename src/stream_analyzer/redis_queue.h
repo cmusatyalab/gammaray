@@ -45,7 +45,7 @@
 #define REDIS_DIR_INSERT "SET sector:%"PRIu64" dirdata:%"PRIu64
 
 #define REDIS_ASYNC_QUEUE_PUSH "LPUSH writequeue %b"
-#define REDIS_ASYNC_QUEUE_POP "BRPOP writequeue"
+#define REDIS_ASYNC_QUEUE_POP "BRPOP writequeue 0"
 
 #define REDIS_RESET_CREATED "DEL createset"
 #define REDIS_RESET_DELETED "DEL deleteset"
@@ -97,7 +97,8 @@ int redis_set_add(struct kv_store* handle, char* fmt, uint64_t id);
 int redis_set_remove(struct kv_store* handle, char* fmt, uint64_t id,
                      uint64_t* result);
 
-int redis_async_write_enqueue(struct kv_store* handle, uint8_t* data,
+int redis_async_write_enqueue(struct kv_store* handle, int64_t sector,
+                                                       uint8_t* data,
                                                        size_t len);
 int redis_async_write_dequeue(struct kv_store* handle, uint8_t* data,
                                                        size_t* len);
