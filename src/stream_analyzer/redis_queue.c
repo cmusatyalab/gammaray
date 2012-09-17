@@ -32,7 +32,7 @@
 
 #define REDIS_PUBLISH "PUBLISH %s %b"
 
-#define REDIS_FCOUNTER "HINCR fcounter"
+#define REDIS_FCOUNTER "INCR fcounter"
 #define REDIS_FCOUNTER_SET "SET fcounter %"PRIu64
 
 /***** Helper Functions, not exposed *****/
