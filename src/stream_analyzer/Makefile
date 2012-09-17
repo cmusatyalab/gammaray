@@ -72,6 +72,11 @@ test_async: clean default
 		/home/wolf/Dropbox/Projects/xray/sample/ext4_trace.bin \
 	    4
 
+test_async_mem: clean default
+	@valgrind --leak-check=full --show-reachable=yes time ./async_queuer \
+		/home/wolf/Dropbox/Projects/xray/sample/ext4_trace.bin \
+	    4
+
 test_ext4: clean default
 	@./inference_engine \
 		/home/wolf/Dropbox/Projects/xray/sample/ext4_index.bson \
