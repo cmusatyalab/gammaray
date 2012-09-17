@@ -28,7 +28,7 @@ int read_loop(int fd, struct kv_store* store, char* vmname)
     uint8_t buf[QEMU_HEADER_SIZE];
     int64_t total = 0, read_ret = 0;
     int sector_type = SECTOR_UNKNOWN;
-    uint64_t write_counter = 0;
+    uint64_t write_counter = 0, partition_offset;
     struct qemu_bdrv_write write;
     struct ext4_superblock superblock;
     uint8_t* databuf = (uint8_t*) malloc(SECTOR_SIZE * 8);
@@ -37,6 +37,12 @@ int read_loop(int fd, struct kv_store* store, char* vmname)
     if (qemu_get_superblock(store, &superblock, (uint64_t) 0))
     {
         fprintf_light_red(stderr, "Failed getting superblock.\n");
+        return EXIT_FAILURE;
+    }
+
+    if (qemu_get_pt_offset(store, &partition_offset, (uint64_t) 0))
+    {
+        fprintf_light_red(stderr, "Failed getting partition offset.\n");
         return EXIT_FAILURE;
     }
 
@@ -104,7 +110,8 @@ int read_loop(int fd, struct kv_store* store, char* vmname)
         qemu_print_write(&write);
         sector_type = qemu_infer_sector_type(&superblock, &write, store);
         qemu_print_sector_type(sector_type);
-        qemu_deep_inspect(&superblock, &write, store, write_counter++, vmname);
+        qemu_deep_inspect(&superblock, &write, store, write_counter++, vmname,
+                          partition_offset);
     }
     free((void*) write.data);
 

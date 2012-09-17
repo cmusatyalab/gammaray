@@ -29,11 +29,19 @@
                             &(old->field), &(new->field), sizeof(old->field), \
                             sizeof(new->field), write_counter, true, false); }
 
+#define STRINGIFY2(x) #x
+#define STRINGIFY(x) STRINGIFY2(x)
+
+#define D_PRINT64(val) { fprintf_light_yellow(stdout, "" \
+                         STRINGIFY(val)" : %"PRIu64"\n", val); }
+
 /*** Pre-Definitions ***/
 int __qemu_dispatch_write(uint8_t* data,
                           struct kv_store* store, char* vmname,
                           uint64_t write_counter,
-                          char* pointer, size_t len);
+                          char* pointer, size_t len,
+                          struct ext4_superblock* super,
+                          uint64_t partition_offset);
 
 char* construct_channel_name(char* vmname, char* path)
 {
@@ -414,29 +422,92 @@ int __reinspect_write(struct ext4_superblock* super, struct kv_store* store,
         return EXIT_FAILURE;
     }
 
-    return __qemu_dispatch_write(buf, store, vmname, write_counter, pointer, len);
+    return __qemu_dispatch_write(buf, store, vmname, write_counter, pointer,
+                                 len, super, partition_offset);
 }
 
-uint64_t __inode_sector(struct ext4_superblock super)
+uint64_t __inode_sector(struct kv_store* store, struct ext4_superblock* super,
+                        uint64_t inode)
 {
-    return 0;
+    uint64_t block_group = (inode - 1) / super->s_inodes_per_group;
+    uint64_t inode_table_sector;
+    uint64_t inode_sector;
+    uint64_t inode_offset = (inode - 1) % super->s_inodes_per_group;
+    D_PRINT64(inode_offset);
+    inode_offset *= super->s_inode_size;
+    D_PRINT64(inode_offset);
+    size_t len = sizeof(inode_table_sector);
+    fprintf_light_red(stdout, "__inode_sector\n");
+
+    if (redis_hash_field_get(store, REDIS_BGD_SECTOR_GET, block_group,
+                             "inode_table_sector_start",
+                             (uint8_t*) &inode_table_sector,
+                             &len))
+    {
+        fprintf_light_red(stderr, "Failed loading inode_table_sector_start"
+                                  " for BGD:%"PRIu64"\n", block_group);
+        return EXIT_FAILURE;
+    }
+
+    D_PRINT64(super->s_inodes_per_group);
+    D_PRINT64(inode);
+    D_PRINT64(block_group);
+    D_PRINT64(inode_offset);
+    D_PRINT64(inode_table_sector);
+    
+    inode_sector = (inode_table_sector * SECTOR_SIZE +
+                    inode_offset) / SECTOR_SIZE;
+
+    fprintf_light_white(stdout, "inode_sector: %"PRIu64"\n", inode_sector);
+  
+    return inode_sector;
 }
 
-uint64_t __inode_offset(struct ext4_superblock super)
+uint64_t __inode_offset(struct kv_store* store, struct ext4_superblock* super,
+                        uint64_t inode)
 {
-    return 0;
+    uint64_t block_group = (inode - 1) / super->s_inodes_per_group;
+    uint64_t inode_table_sector;
+    uint64_t inode_offset = (inode - 1) % super->s_inodes_per_group;
+    D_PRINT64(inode_offset);
+    inode_offset *= super->s_inode_size;
+    D_PRINT64(inode_offset);
+    size_t len = sizeof(inode_table_sector);
+    fprintf_light_red(stdout, "__inode_offset\n");
+
+    if (redis_hash_field_get(store, REDIS_BGD_SECTOR_GET, block_group,
+                             "inode_table_sector_start",
+                             (uint8_t*) &inode_table_sector,
+                             &len))
+    {
+        fprintf_light_red(stderr, "Failed loading inode_table_sector_start"
+                                  " for BGD:%"PRIu64"\n", block_group);
+        return EXIT_FAILURE;
+    }
+
+    inode_offset += inode_table_sector * SECTOR_SIZE;
+    inode_offset %= SECTOR_SIZE;
+
+    D_PRINT64(super->s_inodes_per_group);
+    D_PRINT64(inode);
+    D_PRINT64(block_group);
+    D_PRINT64(inode_offset);
+    D_PRINT64(inode_table_sector);
+
+    return inode_offset;
 }
 
 int __diff_dir(uint8_t* write, struct kv_store* store, 
                char* vmname, uint64_t write_counter,
-               char* pointer, size_t write_len)
+               char* pointer, size_t write_len, struct ext4_superblock* super,
+               uint64_t partition_offset)
 {
     /* TODO:
      *       (1) deletedfset file:old if lost
      *       (2) add file:new if gained
      *       (2.5) remove from deletequeue if in it
      *       (3) update file:old sectors to point to any remaining path refs */
-    uint64_t dir = 0, old_pos = 0, new_pos = 0, file = 0, i;
+    uint64_t dir = 0, old_pos = 0, new_pos = 0, file = 0, i, inode_sector, inode_offset;
     struct ext4_dir_entry* old, *new;
     struct ext4_dir_entry cleared = {   .inode = 0,
                                         .rec_len = 0,
@@ -501,12 +572,12 @@ int __diff_dir(uint8_t* write, struct kv_store* store,
     path[len] = '\0';
     fprintf_light_white(stdout, "Got path ['%s'] for file %"PRIu64"\n", path, file);
 
-    channel = construct_channel_name(vmname, path);
-    fprintf_green(stdout, "Constructed channel name: '%s'\n", channel);
-    free(channel);
 
     while (old_pos < write_len || new_pos < write_len)
     {
+        if (channel == NULL)
+        channel = construct_channel_name(vmname, path);
+
         if (old_pos < write_len)
             old = (struct ext4_dir_entry *) &(old_dir[old_pos]);
         else
@@ -570,19 +641,37 @@ int __diff_dir(uint8_t* write, struct kv_store* store,
                         redis_get_fcounter(store, &file);
                         fprintf_light_white(stdout, "Creating new file:%"
                                                     PRIu64"\n", file);
+
                         redis_hash_field_set(store, REDIS_FILE_SECTOR_INSERT,
                                              file, "inode_num",
                                              (uint8_t*) &(new->inode), sizeof(new->inode));
+                        fprintf(stdout, "set inode_num\n");
+
+                        inode_offset = __inode_offset(store, super, new->inode);
                         redis_hash_field_set(store, REDIS_FILE_SECTOR_INSERT,
                                              file, "inode_offset",
-                                             (uint8_t*) &(new->inode), sizeof(new->inode));
-                        redis hash_field_set(store, REDIS_FILE_SECTOR_INSTER, file, "is_dir",
-                                             new->type & 0x1);
-                        /* TODO: (0) set inode offset
-                         *       (1) set inode sector to inode list
-                         *       (2) add inode to list
-                         *       (3) add file to inode list
-                         *       (4) */
+                                             (uint8_t*) &(inode_offset), sizeof(inode_offset));
+                        fprintf(stdout, "set inode_offset\n");
+
+                        inode_sector = __inode_sector(store, super, new->inode);
+                        redis_reverse_pointer_set(store, REDIS_FILES_INSERT,
+                                      inode_sector,
+                                      file);
+                        redis_reverse_pointer_set(store, REDIS_FILES_SECTOR_INSERT,
+                                      inode_sector,
+                                      inode_sector);
+                        fprintf(stdout, "set inode_sector\n");
+
+                        new->file_type = ((new->file_type & 0x2) == 0x2);
+                        fprintf(stdout, "new->file_type: %"PRIu32"\n", new->file_type);
+                        redis_hash_field_set(store, REDIS_FILE_SECTOR_INSERT,
+                                             file, "is_dir",
+                                             (uint8_t*) &(new->file_type), 
+                                             sizeof(new->file_type));
+                        fprintf(stdout, "set is_dir\n");
+                        redis_flush_pipeline(store);
+                        
+                        fprintf(stdout, "finished inode_sector\n");
                     }
                     //__emit_created_file(store, channel, (char*) new->name,
                     //                    new->name_len, write_counter);
@@ -630,11 +719,14 @@ int __diff_dir(uint8_t* write, struct kv_store* store,
                 __emit_created_file(store, channel, (char*) new->name,
                                    new->name_len, write_counter);
                 free(channel);
+                channel = NULL;
             }
 
         }
         old_pos += old->rec_len;
         new_pos += new->rec_len;
+        if (channel == NULL)
+            channel = construct_channel_name(vmname, path);
     }
 
     if (redis_hash_field_set(store, REDIS_DIR_SECTOR_INSERT, dir, "data",
@@ -1151,8 +1243,11 @@ int __diff_extent_tree(uint8_t* write, struct kv_store* store,
 int __qemu_dispatch_write(uint8_t* data,
                           struct kv_store* store, char* vmname,
                           uint64_t write_counter,
-                          char* pointer, size_t len)
+                          char* pointer, size_t len,
+                          struct ext4_superblock* super,
+                          uint64_t partition_offset)
 {
+    D_PRINT64(partition_offset);
     if (strncmp(pointer, "start", strlen("start")) == 0)
         __emit_file_bytes(data, store, vmname, write_counter, pointer, len);
     else if(strncmp(pointer, "fs", strlen("fs")) == 0)
@@ -1168,7 +1263,8 @@ int __qemu_dispatch_write(uint8_t* data,
     else if(strncmp(pointer, "lextents", strlen("lextents")) == 0)
         __diff_extent_tree(data, store, vmname, pointer);
     else if(strncmp(pointer, "dirdata", strlen("dirdata")) == 0)
-        __diff_dir(data, store, vmname, write_counter, pointer, len);
+        __diff_dir(data, store, vmname, write_counter, pointer, len,
+                   super, partition_offset);
     else
     {
         fprintf_light_red(stderr, "Redis returned unknown sector type [%s]\n",
@@ -1179,8 +1275,9 @@ int __qemu_dispatch_write(uint8_t* data,
 }
 
 int qemu_deep_inspect(struct ext4_superblock* superblock,
-                      struct qemu_bdrv_write* write, struct kv_store* store,
-                      uint64_t write_counter, char* vmname)
+                      struct qemu_bdrv_write* write,
+                      struct kv_store* store, uint64_t write_counter,
+                      char* vmname, uint64_t partition_offset)
 {
     uint64_t i;
     uint8_t result[1024];
@@ -1224,8 +1321,10 @@ int qemu_deep_inspect(struct ext4_superblock* superblock,
                 size = block_size;
             }
 
+            D_PRINT64(partition_offset);
             __qemu_dispatch_write(data, store, vmname, write_counter,
-                                  (char *) result, (size_t) size);
+                                  (char *) result, (size_t) size, superblock,
+                                  partition_offset);
         }
         else
         {
@@ -1250,6 +1349,26 @@ int qemu_get_superblock(struct kv_store* store,
         fprintf_light_red(stderr, "Error retrieving superblock\n");
         return EXIT_FAILURE;
     }
+
+    return EXIT_SUCCESS;
+}
+
+int qemu_get_pt_offset(struct kv_store* store,
+                       uint64_t* partition_offset,
+                       uint64_t pt_id)
+{
+    uint32_t sector_offset = 0;
+    size_t len = sizeof(sector_offset);
+
+    if (redis_hash_field_get(store, REDIS_SUPERBLOCK_SECTOR_GET,
+                             pt_id, "first_sector_lba",
+                             (uint8_t*) &sector_offset, &len))
+    {
+        fprintf_light_red(stderr, "Error retrieving first_sector_lba\n");
+        return EXIT_FAILURE;
+    }
+
+    *partition_offset = sector_offset * SECTOR_SIZE; 
 
     return EXIT_SUCCESS;
 }

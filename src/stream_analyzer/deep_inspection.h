@@ -66,8 +66,12 @@ enum SECTOR_TYPE qemu_infer_sector_type(struct ext4_superblock* super,
 int qemu_get_superblock(struct kv_store* store,
                         struct ext4_superblock* superblock,
                         uint64_t fs_id);
+int qemu_get_pt_offset(struct kv_store* store,
+                       uint64_t* partition_offset,
+                       uint64_t pt_id);
 int qemu_print_sector_type(enum SECTOR_TYPE type);
 int qemu_deep_inspect(struct ext4_superblock* superblock,
                       struct qemu_bdrv_write* write, struct kv_store* store,
-                      uint64_t write_counter, char* vmname);
+                      uint64_t write_counter, char* vmname,
+                      uint64_t partition_offset);
 #endif
