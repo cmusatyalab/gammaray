@@ -159,6 +159,5 @@ int main(int argc, char* args[])
 
     read_loop(fd, handle);
     close(fd);
-
     return EXIT_SUCCESS;
 }

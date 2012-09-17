@@ -21,14 +21,17 @@
 #define REDIS_DEFAULT_PIPELINED 16384 /* unitless; 16384 (4096*16384=64MB) */
 #define REDIS_DEFAULT_BYTES 262144000 /* bytes; 250 MiB */
 
+
+#define REDIS_SECTOR_GET "GET sector:%"PRIu64
+
 #define REDIS_DATA_INSERT "SET sector:%"PRIu64" "\
                           "start:%"PRIu64":"\
                           "end:%"PRIu64":"\
                           "file:%"PRIu64
 
-#define REDIS_ENQUEUE_WRITE "SETEX sector:%"PRIu64" %d %b"
-#define REDIS_DEQUEUE_WRITE "GET sector:%"PRIu64
-#define REDIS_DEL_WRITE "DEL sector:%"PRIu64
+#define REDIS_ENQUEUE_WRITE "SETEX qsector:%"PRIu64" %d %b"
+#define REDIS_DEQUEUE_WRITE "GET qsector:%"PRIu64
+#define REDIS_DEL_WRITE "DEL qsector:%"PRIu64
 
 #define REDIS_PUBLISH "PUBLISH %s %b"
 
@@ -140,6 +143,7 @@ void * redis_periodic_flusher(void* data)
 
     while (1)
     {
+        sleep(REDIS_DEFAULT_FLUSH_TICK);
         job = (struct thread_job*) malloc(sizeof(struct thread_job));
         job->handle = (struct kv_store*) data;
 
@@ -151,7 +155,6 @@ void * redis_periodic_flusher(void* data)
         sem_post(&(job->handle->thread_counter));
 
         redis_flush_thread_pipeline(job);
-        sleep(REDIS_DEFAULT_FLUSH_TICK);
     }
 
     return EXIT_SUCCESS;
@@ -318,7 +321,7 @@ int redis_sector_lookup(struct kv_store* handle, uint64_t src,
 {
     redisReply* reply;
     redis_flush_pipeline(handle);
-    reply = redisCommand(handle->connection, REDIS_DEQUEUE_WRITE, src);
+    reply = redisCommand(handle->connection, REDIS_SECTOR_GET, src);
     if (reply->type == REDIS_REPLY_STRING &&
         reply->len > 0 &&
         reply->len <= *len)
