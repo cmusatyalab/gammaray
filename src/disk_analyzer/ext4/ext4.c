@@ -597,6 +597,7 @@ int ext4_read_inode_serialized(FILE* disk, int64_t partition_offset,
     inode_offset *= superblock.s_inode_size;
     struct bson_kv val;
     uint64_t sector, offset;
+    uint64_t sectors_per_block = ext4_block_size(superblock) / SECTOR_SIZE;
 
     if (ext4_read_bgd(disk, partition_offset, superblock, block_group, &bgd))
     {
@@ -629,6 +630,8 @@ int ext4_read_inode_serialized(FILE* disk, int64_t partition_offset,
     
     sector = (partition_offset + inode_table_offset + inode_offset) /
              SECTOR_SIZE;
+    sector /= sectors_per_block;
+    sector *= sectors_per_block;
     val.type = BSON_INT64;
     val.key = "inode_sector";
     val.data = &sector;
@@ -636,7 +639,7 @@ int ext4_read_inode_serialized(FILE* disk, int64_t partition_offset,
     bson_serialize(bson, &val);
 
     offset = (partition_offset + inode_table_offset + inode_offset) %
-             SECTOR_SIZE;
+             ext4_block_size(superblock);
     val.type = BSON_INT64;
     val.key = "inode_offset";
     val.data = &offset;
