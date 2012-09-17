@@ -1,0 +1,29 @@
+dentry Manipulations
+-------------------------------------------------------------------------------
+
+New File
+
+    (1) Insert 'file:ID is_dir, inode_num, inode_offset, path'
+
+    (2) Insert 'files:ID' where ID is sector of block of itable
+        'file:ID' where ID is ID of new file
+
+    (3) Insert 'inode:ID' where ID is inode number 'file:ID'
+
+
+Deleted File
+
+    (1) Walk list 'inode:ID', if another 'file:ID' points
+            + just delete 'file:ID', 'filesectors:ID', 'extents:ID', remove
+              from 'files:ID' list, remove from 'inode:ID' list
+
+    (2) If no other 'file:ID' points
+            + delete as before
+            + walk 'filesectors:ID' deleting each (if dirdata, delete)
+            + walk 'extents:ID' deleting each
+
+
+Rename File
+
+    (1) Replace 'file:ID' path with updated path (final element replaced)
+    (2) If dir, recurse rename on children in dirdata's

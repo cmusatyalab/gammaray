@@ -1,0 +1,113 @@
+Keyspace: <mbr:UINT_64>
+[HASH] mbr:
+            gpt                 : BOOL
+            active_partitions   : UINT_32 
+            mbr                 : BINARY_512
+
+Keyspace: <fs:UINT_64> --> id derived from PT entry number
+[HASH] fs:
+            partition_type              : UINT_32
+            mount_point                 : CSTRING
+            superblock_offset           : UINT_64
+            num_files                   : UINT_32
+            first_sector_lba            : UINT_32
+            final_sector_lba            : UINT_32
+            num_block_groups            : UINT_32
+            fs                          : CSTRING
+            superblock_sector           : UINT_64
+            superblock                  : BINARY_1024
+
+Keyspace: <bgd:UINT_64> --> id derived from logical BGD position in BGD table
+[HASH] bgd:
+            bgd                         : BINARY_[32,64]
+            offset                      : UINT_32
+            block_bitmap_sector_start   : UINT_64
+            inode_bitmap_sector_start   : UINT_64
+            inode_table_sector_start    : UINT_64
+            inode_table_sector_end      : UINT_64
+
+Keyspace: <bgds:UINT_64> --> ID derived from start sector of fs block w/ BGDs
+[LIST] bgds:
+            [<bgd:UINT_64>, ...]
+
+
+
+/**** FILES ****/
+Keyspace: <files:UINT_64> --> ID matches sector of block of itable
+[LIST] files:
+            [<file:UINT_64>, ...]
+
+Keyspace: <file:UINT_64> --> ID derived from Redis counter
+[HASH] file:
+            is_dir                      : BOOL
+            inode_num                   : UINT_32
+            size                        : UINT_64
+            inode_offset                : UINT_64 --> from block start
+            path                        : CSTRING
+            inode                       : BINARY_[256,?]
+
+/* index of inodes --> files */
+Keyspace: <inode:UINT_64> --> ID derived from inode number
+[LIST] inode:
+            [<file:UINT_64>, ...]
+
+/* index of data blocks -- > file */
+Keyspace: <filesectors:UINT_64> --> ID matches file:ID
+[LIST] filesectors:
+            [<sector:UINT_64>, ...]
+
+/* index of extents --> file */
+Keyspace: <extents:UINT_64> --> ID matches file ID; list of extent blocks for file
+            [<extent:UINT_64>, ...]
+
+Keyspace: <extent:UINT_64> --> ID matches; contains block of extent as value
+[HASH] extent:
+            data                        : BINARY_[FS_BLOCK_SIZE]
+
+Keyspace: <dirdata:UINT_64> --> ID is sector ID first sector in block 
+[HASH] dirdata:
+        file                            : UINT_64
+        data                            : BINARY_[FS_BLOCK_SIZE]
+
+
+
+/**** SECTORS ****/
+Keyspace: <sector:UINT_64>            --> ID derived from sector number
+[KEY] sector:
+            ( 
+              mbr:UINT_64           | --> MBR sector
+              fs:UINT_64            | --> superblock sector
+              lbgds:UINT_64         | --> lead block sector part of BGD table
+              bgd:UINT_64           | --> inode block map or data block map
+              lfiles:UINT_64        | --> lead block sector of part of itable
+              lextents:UINT_64      | --> intermediate extent tree
+              dirdata:UINT_64       | --> data block of directory (dentry's)
+              start:UINT_64:\
+              end:UINT_64:\
+              file:UINT_64          | --> data block of file (start+end bytes)
+            )
+
+/**** WRITE QUEUE ****/
+Keyspace: <writequeue> 
+[LIST] writequeue: --> queue of unknown writes
+        [BINARY_[*], ...] --> Binary write dumped from Qemu
+
+
+
+/**** ASYNC QUEUE ****/
+Keyspace: <qsector:UINT_64> --> ID is sector number; with TTL
+[KEY] qsector --> Binary data associated with sector being written
+
+/**** DENTRY SETS ****/
+Keyspace: <createset>
+[SET] createset: --> set of created files
+    [<inode:UINT_64>, ...]
+
+Keyspace: <deleteset>
+[SET] deleteset: --> set of deleted files
+    [<inode:UINT_64>, ...]
+
+
+/**** FILE COUNTER ****/
+Keyspace: <fcounter>
+[KEY] fcounter: --> monotonically increasing file counter
