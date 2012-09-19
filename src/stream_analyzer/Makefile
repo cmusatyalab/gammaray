@@ -68,16 +68,22 @@ default:
 
 
 test_async: clean default
+	@redis-cli flushall
 	@time ./async_queuer \
 		/home/wolf/Dropbox/Projects/xray/sample/ext4_trace.bin \
 	    4
 
 test_async_mem: clean default
+	@redis-cli flushall
 	@valgrind --leak-check=full --show-reachable=yes time ./async_queuer \
 		/home/wolf/Dropbox/Projects/xray/sample/ext4_trace.bin \
 	    4
 
 test_ext4: clean default
+	@redis-cli flushall
+	@./async_queuer \
+		/home/wolf/Dropbox/Projects/xray/sample/ext4_trace.bin \
+	    4
 	@./inference_engine \
 		/home/wolf/Dropbox/Projects/xray/sample/ext4_index.bson \
 		/home/wolf/Dropbox/Projects/xray/sample/ext4_trace.bin \
@@ -86,6 +92,7 @@ test_ext4: clean default
 		ext4_test_vm
 
 test_ext4_mem: clean default
+	@redis-cli flushall
 	@valgrind --leak-check=full --show-reachable=yes ./inference_engine \
 		/home/wolf/Dropbox/Projects/xray/sample/ext4_index.bson \
 		/home/wolf/Dropbox/Projects/xray/sample/ext4_trace.bin \
@@ -106,3 +113,4 @@ memtest: default
 
 clean:
 	@rm -f inference_engine
+	@rm -f async_queuer

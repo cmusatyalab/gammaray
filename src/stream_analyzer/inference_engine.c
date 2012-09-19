@@ -23,16 +23,14 @@
 
 #define SECTOR_SIZE 512 
 
-int read_loop(int fd, struct kv_store* store, char* vmname)
+int read_loop(struct kv_store* store, char* vmname)
 {
-    uint8_t buf[QEMU_HEADER_SIZE];
-    int64_t total = 0, read_ret = 0;
+    struct timeval start, end;
     int sector_type = SECTOR_UNKNOWN;
-    uint64_t write_counter = 0, partition_offset;
+    uint64_t write_counter = 0, partition_offset, time = 0;
     struct qemu_bdrv_write write;
     struct ext4_superblock superblock;
-    uint8_t* databuf = (uint8_t*) malloc(SECTOR_SIZE * 8);
-    write.data = databuf;
+    char pretty_time[32];
 
     if (qemu_get_superblock(store, &superblock, (uint64_t) 0))
     {
@@ -48,72 +46,32 @@ int read_loop(int fd, struct kv_store* store, char* vmname)
 
     while (1)
     {
-        read_ret = read(fd, buf, QEMU_HEADER_SIZE);
-        total = read_ret;
+        write.data = NULL;
 
-        while (read_ret > 0 && total < QEMU_HEADER_SIZE)
+        if (redis_async_write_dequeue(store, &write))
         {
-            read_ret = read(fd, &buf[total], QEMU_HEADER_SIZE - total);
-            total += read_ret;
-        }
-
-        /* check for EOF */
-        if (read_ret == 0)
-        {
-            fprintf_light_red(stderr, "Processed: %"PRId64" writes.\n",
-                                      write_counter);
-            fprintf_light_red(stderr, "Reading from stream failed, assuming "
-                                      "teardown.\n");
-            free((void*) write.data);
+            fprintf_light_red(stderr, "Redis dequeue failure.\n"
+                                      "Shutting down\n");
+            if (write.data)
+                free(write.data);
             return EXIT_SUCCESS;
-        }
-
-        if (read_ret < 0)
-        {
-            fprintf_light_red(stderr, "Unknown fatal error occurred, 0 bytes"
-                                       "read from stream.\n");
-            free((void*) write.data);
-            return EXIT_FAILURE;
-        }
-
-        qemu_parse_header(buf, &write);
-        write.data = (uint8_t*)
-                     realloc(write.data, write.header.nb_sectors*SECTOR_SIZE);
-
-        if (write.data == NULL)
-        {
-            fprintf_light_red(stderr, "realloc() failed, assuming OOM.\n");
-            fprintf_light_red(stderr, "tried allocating: %d bytes\n",
-                                      write.header.nb_sectors*SECTOR_SIZE);
-            return EXIT_FAILURE;
-        }
-
-        read_ret  = read(fd, (uint8_t*) write.data,
-                         write.header.nb_sectors*SECTOR_SIZE);
-        total = read_ret;
-
-        while (read_ret > 0 && total < write.header.nb_sectors*SECTOR_SIZE)
-        {
-            read_ret  = read(fd, (uint8_t*) &write.data[total],
-                             write.header.nb_sectors*SECTOR_SIZE - total);
-            total += read_ret;
-        }
-
-        if (read_ret <= 0)
-        {
-            fprintf_light_red(stderr, "Stream ended while reading sector "
-                                      "data.\n");
-            free((void*) write.data);
-            return EXIT_FAILURE;
         }
 
         qemu_print_write(&write);
         sector_type = qemu_infer_sector_type(&superblock, &write, store);
         qemu_print_sector_type(sector_type);
+        gettimeofday(&start, NULL);
         qemu_deep_inspect(&superblock, &write, store, write_counter++, vmname,
                           partition_offset);
+        gettimeofday(&end, NULL);
+        time = diff_time(start, end);
+        pretty_print_micros(time, pretty_time, 32);
+        fprintf_cyan(stdout, "[%"PRIu64"] write inference in %s.\n", pretty_time);
+        if (write.data)
+            free(write.data);
     }
-    free((void*) write.data);
+
+    fprintf(stdout, "Processed: %"PRIu64" writes.\n", write_counter);
 
     return EXIT_SUCCESS;
 }
@@ -121,7 +79,7 @@ int read_loop(int fd, struct kv_store* store, char* vmname)
 /* main thread of execution */
 int main(int argc, char* args[])
 {
-    int fd, ret = EXIT_SUCCESS;
+    int ret = EXIT_SUCCESS;
     uint64_t time;
     char* index, *db, *stream, *vmname;
     FILE* indexf;
@@ -133,17 +91,16 @@ int main(int argc, char* args[])
                          "<wolf@cs.cmu.edu>\n");
     redis_print_version();
 
-    if (argc < 5)
+    if (argc < 4)
     {
-        fprintf_light_red(stderr, "Usage: %s <disk index file> <stream file>"
+        fprintf_light_red(stderr, "Usage: %s <disk index file> " 
                                   " <redis db num> <vmname>\n", args[0]);
         return EXIT_FAILURE;
     }
 
     index = args[1];
-    stream = args[2];
-    db = args[3];
-    vmname = args[4];
+    db = args[2];
+    vmname = args[3];
 
     fprintf_cyan(stdout, "%s: loading index: %s\n\n", vmname, index);
 
@@ -176,27 +133,9 @@ int main(int argc, char* args[])
     gettimeofday(&end, NULL);
     time = diff_time(start, end);
 
-    fprintf_cyan(stdout, "%s: attaching to stream: %s\n\n", vmname, stream);
-
-    if (strcmp(stream, "-") != 0)
-    {
-        fd = open(stream, O_RDONLY);
-    }
-    else
-    {
-        fd = STDIN_FILENO;
-    }
-    
-    if (fd == -1)
-    {
-        fprintf_light_red(stderr, "Error opening stream file. "
-                                  "Does it exist?\n");
-        return EXIT_FAILURE;
-    }
-
     fclose(indexf);
     gettimeofday(&start, NULL);
-    ret = read_loop(fd, handle, vmname);
+    ret = read_loop(handle, vmname);
     gettimeofday(&end, NULL);
 
     pretty_print_microseconds(time, pretty_micros, 32);

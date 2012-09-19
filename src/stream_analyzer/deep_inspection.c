@@ -1358,6 +1358,19 @@ int __diff_inodes(uint8_t* write, struct kv_store* store,
         FIELD_COMPARE(i_crtime_extra, "i_crtime_extra", "metadata", BSON_INT32)
         FIELD_COMPARE(i_version_hi, "i_version_hi", "metadata", BSON_INT32)
 
+        /* diff ext4_extent_header() */
+        /* if eh_entries diff */
+        /*      if depth same, just update any extra intermediates */
+        /*      depth == 0 --> sector mappings */
+        /*      depth > 0 --> intermediate mappings */
+        /* if eh_max diff */
+        /* if depth diff --> add intermediate extent (check keyspace schema) */
+        /*      number added/diffed depends on eh_entries */
+        /* generation don't care */
+        __diff_ext4_extents(store, channel, file, write_counter, 
+                            &(new->i_block[0]),
+                            &(old->i_block[1]));
+
         len2 = sizeof(struct ext4_inode);
         if (redis_hash_field_set(store, REDIS_FILE_SECTOR_INSERT, file, "inode",
                                  (uint8_t*) new, len2))
