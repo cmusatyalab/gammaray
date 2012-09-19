@@ -1,6 +1,8 @@
 #ifndef __STREAM_ANALYZER_REDIS_H
 #define __STREAM_ANALYZER_REDIS_H
 
+#include "qemu_common.h"
+
 #include <inttypes.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -100,6 +102,6 @@ int redis_set_remove(struct kv_store* handle, char* fmt, uint64_t id,
 int redis_async_write_enqueue(struct kv_store* handle, int64_t sector,
                                                        uint8_t* data,
                                                        size_t len);
-int redis_async_write_dequeue(struct kv_store* handle, uint8_t* data,
-                                                       size_t* len);
+int redis_async_write_dequeue(struct kv_store* handle,
+                              struct qemu_bdrv_write* write);
 #endif

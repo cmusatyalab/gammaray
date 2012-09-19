@@ -31,6 +31,14 @@ int read_loop(int fd, struct kv_store* handle)
     size_t len = QEMU_HEADER_SIZE;
     uint64_t counter = 0;
 
+    write.data = (uint8_t*) malloc(4096);
+
+    if (write.data == NULL)
+    {
+        fprintf_light_red(stderr, "Failed initial alloc for write.data.\n");
+        return EXIT_FAILURE;
+    }
+
     while (1)
     {
         gettimeofday(&start, NULL);
@@ -61,19 +69,18 @@ int read_loop(int fd, struct kv_store* handle)
         }
 
         qemu_parse_header(buf, &write);
-        len = write.header.nb_sectors * SECTOR_SIZE + QEMU_HEADER_SIZE;
-        write.data = (uint8_t*) malloc(len);
+        len = write.header.nb_sectors * SECTOR_SIZE;
+        write.data = (uint8_t*) realloc(write.data, len);
 
         if (write.data == NULL)
         {
-            fprintf_light_red(stderr, "malloc() failed, assuming OOM.\n");
+            fprintf_light_red(stderr, "realloc() failed, assuming OOM.\n");
             fprintf_light_red(stderr, "tried allocating: %d bytes\n",
                                       write.header.nb_sectors*SECTOR_SIZE);
             return EXIT_FAILURE;
         }
 
-        memcpy(write.data, buf, QEMU_HEADER_SIZE);
-        read_ret  = read(fd, (uint8_t*) &(write.data[QEMU_HEADER_SIZE]),
+        read_ret  = read(fd, (uint8_t*) write.data,
                          write.header.nb_sectors*SECTOR_SIZE);
         total = read_ret;
 
@@ -95,14 +102,15 @@ int read_loop(int fd, struct kv_store* handle)
         redis_async_write_enqueue(handle, write.header.sector_num, write.data,
                                   len);
 
-        free(write.data);
-
         gettimeofday(&end, NULL);
         fprintf(stderr, "[%"PRIu64"]read_loop finished in %"PRIu64
                         " microseconds [%zu bytes]\n", counter++,
                         diff_time(start, end),
                         write.header.nb_sectors*SECTOR_SIZE);
     }
+
+    if (write.data)
+        free(write.data);
 
     return EXIT_SUCCESS;
 }
@@ -157,9 +165,7 @@ int main(int argc, char* args[])
         return EXIT_FAILURE;
     }
 
-
     read_loop(fd, handle);
     close(fd);
-    exit(1);
     return EXIT_SUCCESS;
 }

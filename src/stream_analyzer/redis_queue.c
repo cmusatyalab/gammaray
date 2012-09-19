@@ -455,6 +455,8 @@ int redis_async_write_enqueue(struct kv_store* handle, int64_t sector,
     pthread_mutex_lock(&(handle->cmd_lock));
 
     handle->outstanding_pipelined_cmds++;
+    handle->outstanding_bytes += sizeof(sector);
+    handle->outstanding_pipelined_cmds++;
     handle->outstanding_bytes += len;
 
     if (handle->outstanding_pipelined_cmds >= REDIS_DEFAULT_PIPELINED ||
@@ -472,28 +474,65 @@ int redis_async_write_enqueue(struct kv_store* handle, int64_t sector,
         }
         handle->outstanding_bytes = 0;
     }
-
-    pthread_mutex_unlock(&(handle->cmd_lock));
+    else
+    {
+        pthread_mutex_unlock(&(handle->cmd_lock));
+    }
 
     return EXIT_SUCCESS;
 }
 
-int redis_async_write_dequeue(struct kv_store* handle, uint8_t* data,
-                              size_t* len)
+int redis_async_write_dequeue(struct kv_store* handle,
+                              struct qemu_bdrv_write* write)
 {
     redisReply* reply;
     redis_flush_pipeline(handle);
+
+    /* get sector number */
     reply = redisCommand(handle->connection, REDIS_ASYNC_QUEUE_POP);
-    if (reply->type == REDIS_REPLY_STRING &&
-        reply->len > 0 &&
-        reply->len <= *len)
+
+    if (reply->type == REDIS_REPLY_ARRAY &&
+        reply->elements == 2 &&
+        reply->element[1]->type == REDIS_REPLY_STRING &&
+        reply->element[1]->len == sizeof(write->header.sector_num))
     {
-        memcpy(data, reply->str, reply->len);
-        *len = reply->len;
+        memcpy((uint8_t*) &(write->header.sector_num),
+               reply->element[1]->str, reply->element[1]->len);
     }
     else
     {
-        *len = 0;
+        fprintf(stdout, "Error len: %d\n", reply->element[1]->len);
+        write->header.sector_num = -1;
+        return EXIT_FAILURE;
+    }
+
+    check_redis_return(handle, reply);
+
+    /* get sector number */
+    reply = redisCommand(handle->connection, REDIS_ASYNC_QUEUE_POP);
+
+    if (reply->type == REDIS_REPLY_ARRAY &&
+        reply->elements == 2)
+    {
+        write->data = NULL;
+        write->data = malloc(reply->element[1]->len);
+        if (write->data)
+        {
+            memcpy(write->data, reply->element[1]->str,
+                                reply->element[1]->len);
+            write->header.nb_sectors = reply->element[1]->len / SECTOR_SIZE;
+        }
+        else
+        {
+            write->header.nb_sectors = 0;
+            return EXIT_FAILURE;
+        }
+    }
+    else
+    {
+        write->header.nb_sectors = 0;
+        write->data = NULL;
+        return EXIT_FAILURE;
     }
 
     return check_redis_return(handle, reply);
@@ -539,10 +578,9 @@ int redis_set_reset(struct kv_store* handle)
            check_redis_return(handle, reply2);
 }
 
-void redis_shutdown(int not_clear, struct kv_store* handle)
+void redis_shutdown(int exit_value, struct kv_store* handle)
 {
     int outstanding = 0;
-    redisReply* reply;
 
     if (handle)
     {
@@ -557,12 +595,6 @@ void redis_shutdown(int not_clear, struct kv_store* handle)
         }
 
         redis_flush_pipeline(handle);
-
-        if (not_clear == 0)
-        {
-            reply = redisCommand(handle->connection, "FLUSHALL");
-            check_redis_return(handle, reply);
-        }
 
         if (handle->connection)
         {
