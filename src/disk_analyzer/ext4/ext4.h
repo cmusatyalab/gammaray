@@ -165,6 +165,31 @@ struct ext4_dir_entry
     uint8_t name[255];  /* 263 bytes */
 } __attribute__((packed));
 
+struct ext4_extent_header
+{
+    uint16_t eh_magic;
+    uint16_t eh_entries;
+    uint16_t eh_max;
+    uint16_t eh_depth;
+    uint32_t eh_generation;
+} __attribute__((packed));
+
+struct ext4_extent_idx
+{
+    uint32_t ei_block;
+    uint32_t ei_leaf_lo;
+    uint16_t ei_leaf_hi;
+    uint16_t ei_unused;
+};
+
+struct ext4_extent
+{
+    uint32_t ee_block;
+    uint16_t ee_len;
+    uint16_t ee_start_hi;
+    uint32_t ee_start_lo;
+};
+
 int ext4_print_superblock(struct ext4_superblock superblock);
 int ext4_print_features(struct ext4_superblock* superblock);
 int ext4_print_block_group_descriptor(struct ext4_block_group_descriptor);

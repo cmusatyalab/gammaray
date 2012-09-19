@@ -56,30 +56,6 @@
 #define EXT3_FEATURE_RO_COMPAT_UNSUPPORTED      ~EXT3_FEATURE_RO_COMPAT_SUPP
 
 
-struct ext4_extent_header
-{
-    uint16_t eh_magic;
-    uint16_t eh_entries;
-    uint16_t eh_max;
-    uint16_t eh_depth;
-    uint32_t eh_generation;
-} __attribute__((packed));
-
-struct ext4_extent_idx
-{
-    uint32_t ei_block;
-    uint32_t ei_leaf_lo;
-    uint16_t ei_leaf_hi;
-    uint16_t ei_unused;
-};
-
-struct ext4_extent
-{
-    uint32_t ee_block;
-    uint16_t ee_len;
-    uint16_t ee_start_hi;
-    uint32_t ee_start_lo;
-};
 
 char* ext4_s_creator_os_LUT[] = {
                                 "EXT4_OS_LINUX","EXT4_OS_HURD","EXT4_OS_MASIX",
