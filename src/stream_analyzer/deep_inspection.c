@@ -1451,8 +1451,8 @@ int __diff_ext4_extents(struct kv_store* store, char* vmname, uint64_t file,
 
     while (old_entries--)
     {
-        fprintf_light_red(stderr, "LARGE deletion quickly of extent tree 
-                                   associated with a file.");
+        fprintf_light_red(stderr, "LARGE deletion quickly of extent tree "
+                                  "associated with a file.");
         /* ALL deletions */
     }
     
