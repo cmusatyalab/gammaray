@@ -31,7 +31,7 @@ int read_loop(struct kv_store* store, char* vmname)
     struct qemu_bdrv_write write;
     struct ext4_superblock superblock;
     char pretty_time[32];
-
+    
     if (qemu_get_superblock(store, &superblock, (uint64_t) 0))
     {
         fprintf_light_red(stderr, "Failed getting superblock.\n");
@@ -65,8 +65,8 @@ int read_loop(struct kv_store* store, char* vmname)
                           partition_offset);
         gettimeofday(&end, NULL);
         time = diff_time(start, end);
-        pretty_print_micros(time, pretty_time, 32);
-        fprintf_cyan(stdout, "[%"PRIu64"] write inference in %s.\n", pretty_time);
+        pretty_print_microseconds(time, pretty_time, 32);
+        fprintf_cyan(stdout, "[%"PRIu64"] write inference in %s.\n", write_counter, pretty_time);
         if (write.data)
             free(write.data);
     }
@@ -81,7 +81,7 @@ int main(int argc, char* args[])
 {
     int ret = EXIT_SUCCESS;
     uint64_t time;
-    char* index, *db, *stream, *vmname;
+    char* index, *db, *vmname;
     FILE* indexf;
     struct timeval start, end;
     char pretty_micros[32];
@@ -144,7 +144,6 @@ int main(int argc, char* args[])
     pretty_print_microseconds(diff_time(start, end), pretty_micros, 32);
     fprintf_light_red(stderr, "read_loop time: %s.\n", pretty_micros);
 
-    close(fd);
     redis_flush_pipeline(handle);
 
     return ret;

@@ -34,14 +34,14 @@
 
 #define D_PRINT64(val) { fprintf_light_yellow(stdout, "" \
                          STRINGIFY(val)" : %"PRIu64"\n", val); }
+#define D_PRINT16(val) { fprintf_light_yellow(stdout, "" \
+                         STRINGIFY(val)" : %"PRIu32"\n", (uint32_t) val); }
 
 /*** Pre-Definitions ***/
-int __qemu_dispatch_write(uint8_t* data,
-                          struct kv_store* store, char* vmname,
-                          uint64_t write_counter,
-                          char* pointer, size_t len,
-                          struct ext4_superblock* super,
-                          uint64_t partition_offset);
+int qemu_deep_inspect(struct ext4_superblock* superblock,
+                      struct qemu_bdrv_write* write,
+                      struct kv_store* store, uint64_t write_counter,
+                      char* vmname, uint64_t partition_offset);
 
 char* construct_channel_name(char* vmname, char* path)
 {
@@ -171,6 +171,7 @@ int qemu_print_sector_type(enum SECTOR_TYPE type)
             return 0;
         case SECTOR_EXT4_EXTENT:
             fprintf_light_green(stdout, "Write to ext4 extents detected.\n");
+            return 0;
         case SECTOR_UNKNOWN:
             fprintf_light_red(stdout, "Unknown sector type.\n");
     }
@@ -401,12 +402,17 @@ int __emit_field_update(struct kv_store* store, char* field, char* type,
 
 int __reinspect_write(struct ext4_superblock* super, struct kv_store* store,
                       int64_t partition_offset, uint64_t block_num,
-                      uint64_t write_counter, char* pointer, char* vmname)
+                      uint64_t write_counter, char* vmname)
 {
     uint8_t buf[ext4_block_size(*super)];
     size_t len = ext4_block_size(*super);
     uint64_t sector = block_num * ext4_block_size(*super) + partition_offset;
+    struct qemu_bdrv_write write;
     sector /= SECTOR_SIZE;
+
+    write.header.nb_sectors = len / SECTOR_SIZE;
+    write.header.sector_num = sector;
+    write.data = buf;
 
     if (redis_dequeue(store, sector, buf, &len))
     {
@@ -417,13 +423,13 @@ int __reinspect_write(struct ext4_superblock* super, struct kv_store* store,
 
     if (len == 0)
     {
-        fprintf_light_red(stderr, "Empty write returned for [%"PRIu64"\n",
+        fprintf_light_red(stderr, "Empty write returned for [%"PRIu64"]\n",
                                   sector);
         return EXIT_FAILURE;
     }
 
-    return __qemu_dispatch_write(buf, store, vmname, write_counter, pointer,
-                                 len, super, partition_offset);
+    return qemu_deep_inspect(super, &write, store, write_counter, vmname,
+                             partition_offset);
 }
 
 uint64_t __inode_sector(struct kv_store* store, struct ext4_superblock* super,
@@ -1007,6 +1013,8 @@ int __emit_file_bytes(uint8_t* write, struct kv_store* store,
     bson_serialize(bson, &val);
 
     bson_finalize(bson);
+
+    fprintf_light_white(stdout, "publishing message\n");
         
     if (redis_publish(store, channel_name, bson->buffer,
                       (size_t) bson->position))
@@ -1016,7 +1024,9 @@ int __emit_file_bytes(uint8_t* write, struct kv_store* store,
         return -1;
     }
 
+    fprintf_light_white(stdout, "freeing channel\n");
     free(channel_name);
+    fprintf_light_white(stdout, "cleaning up bson\n");
     bson_cleanup(bson);
 
     return EXIT_SUCCESS;
@@ -1237,9 +1247,222 @@ int __diff_bgds(uint8_t* write, struct kv_store* store,
     return EXIT_SUCCESS;
 }
 
+int __ext4_new_extent_leaf_block(struct kv_store* store, uint64_t file,
+                                 uint64_t block, struct ext4_superblock* super,
+                                 uint64_t partition_offset, uint64_t write_counter,
+                                 char* vmname) 
+{
+    uint64_t sector = block * ext4_block_size(*super);
+    sector += partition_offset;
+    sector /= SECTOR_SIZE;
+
+    if (redis_reverse_pointer_set(store, REDIS_EXTENTS_INSERT,
+                          file,
+                          sector))
+    {
+        return EXIT_FAILURE;
+    }
+
+    if (redis_reverse_pointer_set(store, REDIS_EXTENTS_SECTOR_INSERT,
+                          sector,
+                          file))
+    {
+        return EXIT_FAILURE;
+    }
+
+    __reinspect_write(super, store, partition_offset, block, write_counter,
+                      vmname);
+
+    return EXIT_SUCCESS;
+}
+
+int __ext4_new_extent(struct kv_store* store, uint64_t file,
+                      struct ext4_superblock* super,
+                      uint64_t partition_offset, struct ext4_extent* extent_new,
+                      char* vmname, uint64_t write_counter)
+{
+    uint64_t block_size = ext4_block_size(*super);
+    uint64_t sector = extent_new->ee_block * block_size;
+    sector += partition_offset;
+    sector /= SECTOR_SIZE;
+    uint64_t sectors_per_block = block_size / SECTOR_SIZE;
+    uint64_t i, counter = extent_new->ee_block * block_size;
+
+    for (i = 0; i < extent_new->ee_len; i++)
+    {
+        redis_reverse_pointer_set(store, REDIS_FILE_SECTORS_INSERT,
+                                  file, 
+                                  sector);
+        redis_reverse_file_data_pointer_set(store, 
+                                            sector,
+                                            counter, counter + block_size, file);
+        counter += block_size;        
+        sector += sectors_per_block;
+        
+        __reinspect_write(super, store, partition_offset,
+                          extent_new->ee_block + i, write_counter,
+                          vmname);
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int __diff_ext4_extents(struct kv_store* store, char* vmname, uint64_t file,
+                        uint64_t write_counter, uint8_t* newb, uint8_t* oldb,
+                        uint64_t partition_offset, struct ext4_superblock* super)
+{
+    struct ext4_extent_header* hdr_new, *hdr_old;
+    struct ext4_extent_idx* idx_new, *idx_old;
+    struct ext4_extent* extent_new, *extent_old;
+
+    struct ext4_extent_header hdr_def = { .eh_magic = 0,
+                                          .eh_entries = 0,
+                                          .eh_max = 0,
+                                          .eh_depth = 0,
+                                          .eh_generation = 0
+                                        };
+    
+    struct ext4_extent_idx idx_def = { .ei_block = 0,
+                                       .ei_leaf_lo = 0,
+                                       .ei_leaf_hi = 0,
+                                       .ei_unused = 0
+                                     };
+
+    struct ext4_extent extent_def = { .ee_block = 0,
+                                      .ee_len = 0,
+                                      .ee_start_hi = 0,
+                                      .ee_start_lo = 0
+                                    };
+
+    uint64_t new_entries = 0, old_entries = 0, old_counter = 0, new_counter = 0;
+    
+    hdr_new = (struct ext4_extent_header*) newb;
+    hdr_old = (struct ext4_extent_header*) oldb;
+
+    new_entries = hdr_new->eh_entries;
+    old_entries  = hdr_old->eh_entries;
+
+    fprintf_light_cyan(stdout, "__ext4_diff_extents()\n");
+    D_PRINT16(hdr_new->eh_magic);
+    D_PRINT16(hdr_old->eh_magic);
+
+    while (new_entries)
+    {
+        D_PRINT16(new_entries);
+        D_PRINT16(old_entries);
+
+        D_PRINT16(hdr_new->eh_depth);
+        D_PRINT16(hdr_old->eh_depth);
+
+        if (old_entries == 0)
+        {
+            idx_old = &idx_def;
+            hdr_old = &hdr_def;
+            extent_old = &extent_def;
+        }
+
+        if (hdr_new->eh_depth)
+        {
+            idx_new = (struct ext4_extent_idx *)
+                      &(newb[sizeof(struct ext4_extent_header) +
+                             sizeof(struct ext4_extent_idx) * new_counter]);
+
+            if (hdr_old->eh_depth)
+            {
+                idx_old = (struct ext4_extent_idx *)
+                          &(oldb[sizeof(struct ext4_extent_header) +
+                                 sizeof(struct ext4_extent_idx)*old_counter]);
+
+                if (ext4_extent_index_leaf(*idx_new) !=
+                    ext4_extent_index_leaf(*idx_old))
+                {
+                    D_PRINT64(ext4_extent_index_leaf(*idx_new));
+                    D_PRINT64(ext4_extent_index_leaf(*idx_old));
+                    fprintf_light_white(stdout, "found new extent position.\n");
+                    exit(0);
+
+                    __ext4_new_extent_leaf_block(store, file,
+                                              ext4_extent_index_leaf(*idx_new),
+                                              super, partition_offset,
+                                              write_counter, vmname);
+                }
+                    D_PRINT64(ext4_extent_index_leaf(*idx_new));
+                    D_PRINT64(ext4_extent_index_leaf(*idx_old));
+                    hexdump(oldb, 60);
+                    exit(0);
+            }
+            else
+            {
+                __ext4_new_extent_leaf_block(store, file,
+                                          ext4_extent_index_leaf(*idx_new),
+                                          super, partition_offset,
+                                          write_counter, vmname);
+            }
+        }
+        else
+        {
+            extent_new = (struct ext4_extent *)
+                      &(newb[sizeof(struct ext4_extent_header) +
+                             sizeof(struct ext4_extent) * new_counter]);
+            fprintf_light_white(stdout, "no depth new\n");
+            if (hdr_old->eh_depth == 0)
+            {
+                fprintf_light_white(stdout, "no depth old\n");
+                if (old_entries)
+                {
+                    extent_old = (struct ext4_extent *)
+                          &(oldb[sizeof(struct ext4_extent_header) +
+                                 sizeof(struct ext4_extent) * old_counter]);
+                }
+
+                if (ext4_extent_start(*extent_new) !=
+                    ext4_extent_start(*extent_old))
+                {
+                    fprintf_light_white(stdout, "adding new extents as start shifted.\n");
+                    __ext4_new_extent(store, file, super, partition_offset,
+                                      extent_new, vmname, write_counter);
+                    exit(0);
+                }
+                else
+                {
+                    fprintf_light_cyan(stdout, "what's wrong? ");
+                }
+            }
+            else
+            {
+                __ext4_new_extent(store, file, super, partition_offset,
+                                  extent_new, vmname, write_counter);
+                /* deleted index */
+            }
+        }
+
+        if (old_entries)
+        {
+            old_entries--;
+            old_counter++;
+        }
+
+        if (new_entries)
+        {
+            new_entries--;
+            new_counter++;
+        }
+    }
+
+    while (old_entries--)
+    {
+        fprintf_light_red(stderr, "LARGE deletion quickly of extent tree 
+                                   associated with a file.");
+        /* ALL deletions */
+    }
+    
+    return EXIT_SUCCESS; 
+}
+
 int __diff_inodes(uint8_t* write, struct kv_store* store,
                   char* vmname, uint64_t write_counter, char* pointer,
-                  size_t write_len)
+                  size_t write_len, struct ext4_superblock* super,
+                  uint64_t partition_offset)
 {
     /* TODO (0) walk extent or blocks
      *      (1) if new with depth, enter new extents into Redis
@@ -1367,9 +1590,15 @@ int __diff_inodes(uint8_t* write, struct kv_store* store,
         /* if depth diff --> add intermediate extent (check keyspace schema) */
         /*      number added/diffed depends on eh_entries */
         /* generation don't care */
-        __diff_ext4_extents(store, channel, file, write_counter, 
-                            &(new->i_block[0]),
-                            &(old->i_block[1]));
+        if (((new->i_mode & 0x8000) == 0x8000 ||
+             (new->i_mode & 0x4000) == 0x4000) &&
+            !((new->i_mode & 0x6000) == 0x6000 ||
+              (new->i_mode & 0xa000) == 0xa000))
+        {
+            __diff_ext4_extents(store, vmname, file, write_counter, 
+                                (uint8_t *) &(new->i_block[0]),
+                                (uint8_t *) &(old->i_block[0]), partition_offset, super);
+        }
 
         len2 = sizeof(struct ext4_inode);
         if (redis_hash_field_set(store, REDIS_FILE_SECTOR_INSERT, file, "inode",
@@ -1394,9 +1623,33 @@ int __diff_bitmap(uint8_t* write, struct kv_store* store,
 }
 
 int __diff_extent_tree(uint8_t* write, struct kv_store* store,
-                       const char* vmname, const char* pointer)
+                       const char* vmname, char* pointer,
+                       uint64_t write_counter, size_t write_len,
+                       struct ext4_superblock* super,
+                       uint64_t partition_offset)
 {
+    size_t len = ext4_block_size(*super);
+    uint8_t buf[len];
+    uint64_t id;
+    struct ext4_extent_header def;
+
+    memset(&def, 0, sizeof(def));
+    strtok(pointer, ":");
+    sscanf(strtok(NULL, ":"), "%"SCNu64, &id);
+
     fprintf_light_white(stdout, "__diff_extent_tree()\n");
+    D_PRINT64(id);
+    /* load old extent block */
+    if (redis_hash_field_get(store, REDIS_EXTENT_SECTOR_GET, id, "data", buf,
+                             &len))
+    {
+
+        return EXIT_FAILURE;
+    }
+
+    /* if non-existant, put this guy in with diff extent and old set to def
+     * header*/
+    /* if existant, diff as normal */
     return EXIT_SUCCESS;
 }
 
@@ -1408,6 +1661,7 @@ int __qemu_dispatch_write(uint8_t* data,
                           uint64_t partition_offset)
 {
     D_PRINT64(partition_offset);
+    fprintf_light_blue(stdout, "pointer: %s\n", pointer);
     if (strncmp(pointer, "start", strlen("start")) == 0)
         __emit_file_bytes(data, store, vmname, write_counter, pointer, len);
     else if(strncmp(pointer, "fs", strlen("fs")) == 0)
@@ -1417,11 +1671,13 @@ int __qemu_dispatch_write(uint8_t* data,
     else if(strncmp(pointer, "lbgds", strlen("lbgds")) == 0)
         __diff_bgds(data, store, vmname, write_counter, pointer, len);
     else if(strncmp(pointer, "lfiles", strlen("lfiles")) == 0)
-        __diff_inodes(data, store, vmname, write_counter, pointer, len);
+        __diff_inodes(data, store, vmname, write_counter, pointer, len, super,
+                      partition_offset);
     else if(strncmp(pointer, "bgd", strlen("bgd")) == 0)
         __diff_bitmap(data, store, vmname, pointer);
     else if(strncmp(pointer, "lextents", strlen("lextents")) == 0)
-        __diff_extent_tree(data, store, vmname, pointer);
+        __diff_extent_tree(data, store, vmname, pointer, write_counter, len, 
+                           super, partition_offset);
     else if(strncmp(pointer, "dirdata", strlen("dirdata")) == 0)
         __diff_dir(data, store, vmname, write_counter, pointer, len,
                    super, partition_offset);
@@ -1819,7 +2075,7 @@ int __deserialize_file(struct ext4_superblock* superblock,
 
             while (bson_deserialize(bson2, &value1, &value2) == 1)
             {
-                sscanf((const char*) value1.data, "%"SCNu64, &sector);
+                sscanf((const char*) value1.key, "%"SCNu64, &sector);
 
                 if (redis_hash_field_set(store, REDIS_EXTENT_SECTOR_INSERT, sector,
                                  "data", (const uint8_t*) value1.data,

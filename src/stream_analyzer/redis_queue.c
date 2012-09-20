@@ -508,7 +508,7 @@ int redis_async_write_dequeue(struct kv_store* handle,
 
     check_redis_return(handle, reply);
 
-    /* get sector number */
+    /* get write data */
     reply = redisCommand(handle->connection, REDIS_ASYNC_QUEUE_POP);
 
     if (reply->type == REDIS_REPLY_ARRAY &&
