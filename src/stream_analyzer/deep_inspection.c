@@ -401,14 +401,12 @@ int __emit_field_update(struct kv_store* store, char* field, char* type,
 }
 
 int __reinspect_write(struct ext4_superblock* super, struct kv_store* store,
-                      int64_t partition_offset, uint64_t block_num,
+                      int64_t partition_offset, uint64_t sector,
                       uint64_t write_counter, char* vmname)
 {
     uint8_t buf[ext4_block_size(*super)];
     size_t len = ext4_block_size(*super);
-    uint64_t sector = block_num * ext4_block_size(*super) + partition_offset;
     struct qemu_bdrv_write write;
-    sector /= SECTOR_SIZE;
 
     write.header.nb_sectors = len / SECTOR_SIZE;
     write.header.sector_num = sector;
@@ -1270,7 +1268,7 @@ int __ext4_new_extent_leaf_block(struct kv_store* store, uint64_t file,
         return EXIT_FAILURE;
     }
 
-    __reinspect_write(super, store, partition_offset, block, write_counter,
+    __reinspect_write(super, store, partition_offset, sector, write_counter,
                       vmname);
 
     return EXIT_SUCCESS;
@@ -1282,11 +1280,12 @@ int __ext4_new_extent(struct kv_store* store, uint64_t file,
                       char* vmname, uint64_t write_counter)
 {
     uint64_t block_size = ext4_block_size(*super);
-    uint64_t sector = extent_new->ee_block * block_size;
+    uint64_t sector = ext4_extent_start(*extent_new) * block_size;
     sector += partition_offset;
     sector /= SECTOR_SIZE;
     uint64_t sectors_per_block = block_size / SECTOR_SIZE;
     uint64_t i, counter = extent_new->ee_block * block_size;
+
 
     for (i = 0; i < extent_new->ee_len; i++)
     {
@@ -1295,13 +1294,19 @@ int __ext4_new_extent(struct kv_store* store, uint64_t file,
                                   sector);
         redis_reverse_file_data_pointer_set(store, 
                                             sector,
-                                            counter, counter + block_size, file);
+                                            counter, counter + block_size,
+                                            file);
+        D_PRINT64(counter);
+        D_PRINT64(extent_new->ee_block);
+        D_PRINT64(file);
+
+        __reinspect_write(super, store, partition_offset,
+                          sector, write_counter,
+                          vmname);
+
         counter += block_size;        
         sector += sectors_per_block;
         
-        __reinspect_write(super, store, partition_offset,
-                          extent_new->ee_block + i, write_counter,
-                          vmname);
     }
 
     return EXIT_SUCCESS;
@@ -1415,10 +1420,17 @@ int __diff_ext4_extents(struct kv_store* store, char* vmname, uint64_t file,
                                  sizeof(struct ext4_extent) * old_counter]);
                 }
 
+                D_PRINT64(ext4_extent_start(*extent_new));
+                D_PRINT64(ext4_extent_start(*extent_old));
+
+                D_PRINT16(extent_new->ee_len);
+                D_PRINT16(extent_old->ee_len);
+
                 if (ext4_extent_start(*extent_new) !=
                     ext4_extent_start(*extent_old))
                 {
-                    fprintf_light_white(stdout, "adding new extents as start shifted.\n");
+                    fprintf_light_white(stdout, "adding new extents as start "
+                                                "shifted.\n");
                     __ext4_new_extent(store, file, super, partition_offset,
                                       extent_new, vmname, write_counter);
                     exit(0);
