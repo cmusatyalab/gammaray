@@ -190,6 +190,9 @@ struct ext4_extent
     uint32_t ee_start_lo;
 };
 
+uint64_t ext4_extent_start(struct ext4_extent extent);
+uint64_t ext4_extent_index_leaf(struct ext4_extent_idx idx);
+
 int ext4_print_superblock(struct ext4_superblock superblock);
 int ext4_print_features(struct ext4_superblock* superblock);
 int ext4_print_block_group_descriptor(struct ext4_block_group_descriptor);
