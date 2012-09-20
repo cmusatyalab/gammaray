@@ -1314,7 +1314,8 @@ int __ext4_new_extent(struct kv_store* store, uint64_t file,
 
 int __diff_ext4_extents(struct kv_store* store, char* vmname, uint64_t file,
                         uint64_t write_counter, uint8_t* newb, uint8_t* oldb,
-                        uint64_t partition_offset, struct ext4_superblock* super)
+                        uint64_t partition_offset,
+                        struct ext4_superblock* super)
 {
     struct ext4_extent_header* hdr_new, *hdr_old;
     struct ext4_extent_idx* idx_new, *idx_old;
@@ -1393,8 +1394,6 @@ int __diff_ext4_extents(struct kv_store* store, char* vmname, uint64_t file,
                 }
                     D_PRINT64(ext4_extent_index_leaf(*idx_new));
                     D_PRINT64(ext4_extent_index_leaf(*idx_old));
-                    hexdump(oldb, 60);
-                    exit(0);
             }
             else
             {
@@ -1426,18 +1425,18 @@ int __diff_ext4_extents(struct kv_store* store, char* vmname, uint64_t file,
                 D_PRINT16(extent_new->ee_len);
                 D_PRINT16(extent_old->ee_len);
 
-                if (ext4_extent_start(*extent_new) !=
-                    ext4_extent_start(*extent_old))
+                if ((ext4_extent_start(*extent_new) !=
+                     ext4_extent_start(*extent_old)) ||
+                    (extent_new->ee_len != extent_old->ee_len))
                 {
                     fprintf_light_white(stdout, "adding new extents as start "
                                                 "shifted.\n");
                     __ext4_new_extent(store, file, super, partition_offset,
                                       extent_new, vmname, write_counter);
-                    exit(0);
                 }
                 else
                 {
-                    fprintf_light_cyan(stdout, "what's wrong? ");
+                    fprintf_light_cyan(stdout, "Extents exactly match.\n");
                 }
             }
             else
