@@ -192,6 +192,7 @@ struct ext4_extent
 
 uint64_t ext4_extent_start(struct ext4_extent extent);
 uint64_t ext4_extent_index_leaf(struct ext4_extent_idx idx);
+uint64_t ext4_file_size(struct ext4_inode inode);
 
 int ext4_print_superblock(struct ext4_superblock superblock);
 int ext4_print_features(struct ext4_superblock* superblock);
