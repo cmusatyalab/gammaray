@@ -503,6 +503,7 @@ int redis_async_write_dequeue(struct kv_store* handle,
     {
         fprintf(stdout, "Error len: %d\n", reply->element[1]->len);
         write->header.sector_num = -1;
+        exit(1);
         return EXIT_FAILURE;
     }
 
@@ -530,8 +531,10 @@ int redis_async_write_dequeue(struct kv_store* handle,
     }
     else
     {
+        fprintf(stderr, "Error second part of array.\n");
         write->header.nb_sectors = 0;
         write->data = NULL;
+        exit(1);
         return EXIT_FAILURE;
     }
 

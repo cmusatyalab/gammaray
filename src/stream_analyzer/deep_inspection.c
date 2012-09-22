@@ -723,7 +723,6 @@ int __diff_dir2(uint8_t* write, struct kv_store* store,
     path[len] = '\0';
     fprintf_light_white(stdout, "Got path ['%s'] for file %"PRIu64"\n", path, file);
 
-
     while (old_pos < write_len || new_pos < write_len)
     {
         if (channel == NULL)
@@ -1385,7 +1384,6 @@ int __diff_ext4_extents(struct kv_store* store, char* vmname, uint64_t file,
                     D_PRINT64(ext4_extent_index_leaf(*idx_new));
                     D_PRINT64(ext4_extent_index_leaf(*idx_old));
                     fprintf_light_white(stdout, "found new extent position.\n");
-                    exit(0);
 
                     __ext4_new_extent_leaf_block(store, file,
                                               ext4_extent_index_leaf(*idx_new),
@@ -1480,7 +1478,7 @@ int __diff_inodes(uint8_t* write, struct kv_store* store,
      *      (2) if new with no depth, enter new data block map into Redis
      *      (3) reinspect each block
      */
-    uint64_t file = 0, lfiles = 0, i, offset;
+    uint64_t file = 0, lfiles = 0, i, offset, new_size;
     uint8_t** list;
     size_t len = 0, len2 = 4096;
     struct ext4_inode oldd, *old = &oldd, *new;
@@ -1619,6 +1617,15 @@ int __diff_inodes(uint8_t* write, struct kv_store* store,
                                       "from Redis.\n", file);
             return EXIT_FAILURE;
         }
+
+        new_size = ext4_file_size(*new);
+        len2 = sizeof(new_size);
+        if (redis_hash_field_set(store, REDIS_FILE_SECTOR_INSERT, file, "size",
+                                 (uint8_t*) &new_size, len2))
+        {
+            fprintf_light_red(stdout, "Error inserting new size.\n", file);
+            return EXIT_FAILURE;
+        }
         free(channel);
     }
 
@@ -1634,15 +1641,20 @@ int __diff_bitmap(uint8_t* write, struct kv_store* store,
 }
 
 int __diff_extent_tree(uint8_t* write, struct kv_store* store,
-                       const char* vmname, char* pointer,
+                       char* vmname, char* pointer,
                        uint64_t write_counter, size_t write_len,
                        struct ext4_superblock* super,
                        uint64_t partition_offset)
 {
-    size_t len = ext4_block_size(*super);
+    size_t len = ext4_block_size(*super), len2 = sizeof(uint64_t);
     uint8_t buf[len];
-    uint64_t id;
-    struct ext4_extent_header def;
+    uint64_t id, file;
+    struct ext4_extent_header def = { .eh_magic = 0,
+                                      .eh_entries = 0,
+                                      .eh_max = 0,
+                                      .eh_depth = 0,
+                                      .eh_generation = 0
+                                    };
 
     memset(&def, 0, sizeof(def));
     strtok(pointer, ":");
@@ -1650,17 +1662,33 @@ int __diff_extent_tree(uint8_t* write, struct kv_store* store,
 
     fprintf_light_white(stdout, "__diff_extent_tree()\n");
     D_PRINT64(id);
+    /* load old extent block file id */
+    if (redis_hash_field_get(store, REDIS_EXTENT_SECTOR_GET, id, "file",
+                             (uint8_t*) &file, &len2))
+    {
+        fprintf_light_red(stderr, "No old index?\n");
+    }
+
     /* load old extent block */
     if (redis_hash_field_get(store, REDIS_EXTENT_SECTOR_GET, id, "data", buf,
                              &len))
     {
+        fprintf_light_red(stderr, "No old index?\n");
+        len = sizeof(def);
+        memcpy(buf, &def, sizeof(def));
+    }
 
+    __diff_ext4_extents(store, vmname, file, write_counter, write, buf,
+                        partition_offset, super);
+
+    /* set new extent block */
+    if (redis_hash_field_set(store, REDIS_EXTENT_SECTOR_INSERT, id, "data", write,
+                             write_len))
+    {
         return EXIT_FAILURE;
     }
 
-    /* if non-existant, put this guy in with diff extent and old set to def
-     * header*/
-    /* if existant, diff as normal */
+    exit(0);
     return EXIT_SUCCESS;
 }
 
@@ -2087,6 +2115,13 @@ int __deserialize_file(struct ext4_superblock* superblock,
             while (bson_deserialize(bson2, &value1, &value2) == 1)
             {
                 sscanf((const char*) value1.key, "%"SCNu64, &sector);
+
+                if (redis_hash_field_set(store, REDIS_EXTENT_SECTOR_INSERT,
+                                         sector, "file", (uint8_t*) &id, sizeof(id)))
+                {
+                    bson_cleanup(bson2);
+                    return EXIT_FAILURE;
+                }
 
                 if (redis_hash_field_set(store, REDIS_EXTENT_SECTOR_INSERT, sector,
                                  "data", (const uint8_t*) value1.data,
