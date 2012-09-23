@@ -31,6 +31,7 @@
 #define REDIS_FILE_SECTOR_GET "HGET file:%"PRIu64" %s"
 #define REDIS_FILE_SECTORS_INSERT "RPUSH filesectors:%"PRIu64" sector:%"PRIu64
 #define REDIS_FILE_SECTORS_LGET "LRANGE filesectors:%"PRIu64" 0 -1"
+#define REDIS_FILE_SECTORS_LAST_SECTOR "LINDEX filesectors:%"PRIu64" -1"
 #define REDIS_FILES_INSERT "RPUSH files:%"PRIu64" file:%"PRIu64
 #define REDIS_FILES_LGET "LRANGE files:%"PRIu64" 0 -1"
 #define REDIS_FILES_SECTOR_INSERT "SET sector:%"PRIu64" lfiles:%"PRIu64
@@ -40,7 +41,7 @@
 #define REDIS_EXTENT_SECTOR_GET "HGET extent:%"PRIu64" %s"
 #define REDIS_EXTENTS_INSERT "RPUSH extents:%"PRIu64" extent:%"PRIu64
 #define REDIS_EXTENTS_LGET "LRANGE extents:%"PRIu64" 0 -1"
-#define REDIS_EXTENTS_SECTOR_INSERT "SET sector:%"PRIu64" lextents:%"PRIu64
+#define REDIS_EXTENTS_SECTOR_INSERT "SET sector:%"PRIu64" extent:%"PRIu64
 
 #define REDIS_DIR_SECTOR_INSERT "HSET dirdata:%"PRIu64" %s %b"
 #define REDIS_DIR_SECTOR_GET "HGET dirdata:%"PRIu64" %s"
@@ -74,6 +75,7 @@ int redis_enqueue_pipelined(struct kv_store* handle, uint64_t sector_num,
                             const uint8_t* data, size_t len);
 int redis_dequeue(struct kv_store* handle, uint64_t sector_num,
                   uint8_t* data, size_t* len);
+int redis_delqueue_pipelined(struct kv_store* handle, uint64_t sector_num);
 int redis_publish(struct kv_store* handle, char* channel, uint8_t* data,
                   size_t len);
 
@@ -93,6 +95,9 @@ int redis_sector_lookup(struct kv_store* store, uint64_t sector, uint8_t* data,
 int redis_list_get(struct kv_store* handle, char* fmt, uint64_t src,
                    uint8_t** result[], size_t* len);
 void redis_free_list(uint8_t* list[], size_t len);
+
+int redis_last_file_sector(struct kv_store* handle, uint64_t id, 
+                           uint64_t* sector);
 
 int redis_set_reset(struct kv_store* handle);
 int redis_set_add(struct kv_store* handle, char* fmt, uint64_t id);

@@ -259,6 +259,21 @@ int redis_dequeue(struct kv_store* handle, uint64_t sector_num, uint8_t* data,
     return check_redis_return(handle, reply);
 }
 
+int redis_delqueue_pipelined(struct kv_store* handle, uint64_t sector_num)
+{
+    redisAppendCommand(handle->connection, REDIS_DEL_WRITE, sector_num);
+    handle->outstanding_pipelined_cmds++;
+
+    if (handle->outstanding_pipelined_cmds >= REDIS_DEFAULT_PIPELINED)
+    {
+        if (redis_flush_pipeline(handle))
+        {
+            assert(true);
+        }
+    }
+    return EXIT_SUCCESS;
+}
+
 int redis_reverse_pointer_set(struct kv_store* handle, const char* fmt,
                               uint64_t src, uint64_t dst)
 {
@@ -278,7 +293,8 @@ int redis_reverse_pointer_set(struct kv_store* handle, const char* fmt,
 }
 
 int redis_hash_field_set(struct kv_store* handle, const char* fmt,
-                         uint64_t src, const char* field, const uint8_t* data, size_t len)
+                         uint64_t src, const char* field, const uint8_t* data,
+                         size_t len)
 {
     redisAppendCommand(handle->connection, fmt,
                                            src,
@@ -313,6 +329,25 @@ int redis_hash_field_get(struct kv_store* handle, const char* fmt,
     else
     {
         *len = 0;
+    }
+
+    return check_redis_return(handle, reply);
+}
+
+int redis_last_file_sector(struct kv_store* handle, uint64_t id, 
+                           uint64_t* sector)
+{
+    uint8_t data[64];
+    redisReply* reply;
+    redis_flush_pipeline(handle);
+    reply = redisCommand(handle->connection, REDIS_FILE_SECTORS_LAST_SECTOR, id);
+    if (reply->type == REDIS_REPLY_STRING &&
+        reply->len > 0 &&
+        reply->len <= 64)
+    {
+        memcpy(data, reply->str, reply->len);
+        strtok((char *) data, ":");
+        sscanf(strtok(NULL, ":"), "%"SCNu64, sector);
     }
 
     return check_redis_return(handle, reply);
