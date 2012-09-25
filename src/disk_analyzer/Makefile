@@ -80,16 +80,16 @@ test: default
 		#/tmp/win7enterprise.bson
 
 test_ext4: default
-	@./disk_analyzer \
-		/home/wolf/VM/vm_ext4_test/vm_ext4_test.raw \
+	@time ./disk_analyzer \
+		/home/wolf/VM/vm_ext4_test/vm_ext4_test.raw.pristine \
 		/home/wolf/Dropbox/Projects/xray/sample/ext4_index.bson
-	@../bson/bson_printer \
-		/home/wolf/Dropbox/Projects/xray/sample/ext4_index.bson | \
-		head -n 40 
+	#@../bson/bson_printer \
+	#	/home/wolf/Dropbox/Projects/xray/sample/ext4_index.bson | \
+ 	#	head -n 200
 	@ls -lah /home/wolf/Dropbox/Projects/xray/sample/ext4_index.bson
 	@gzip --best -c \
 		/home/wolf/Dropbox/Projects/xray/sample/ext4_index.bson \
-		> /tmp/ext4_index.bson.gz
+	 	> /tmp/ext4_index.bson.gz
 	@ls -lah /tmp/ext4_index.bson.gz
 
 test_tinycore: default
