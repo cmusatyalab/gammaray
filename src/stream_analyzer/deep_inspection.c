@@ -661,7 +661,7 @@ int __diff_dir2(uint8_t* write, struct kv_store* store,
      *       (2) add file:new if gained
      *       (2.5) remove from deletequeue if in it
      *       (3) update file:old sectors to point to any remaining path refs */
-    uint64_t dir = 0, old_pos = 0, new_pos = 0, file = 0, i, inode_sector, inode_offset;
+    uint64_t dir = 0, old_pos = 0, new_pos = 0, file = 0, inode_sector, inode_offset;
     struct ext4_dir_entry* old, *new;
     struct ext4_dir_entry cleared = {   .inode = 0,
                                         .rec_len = 0,
@@ -670,13 +670,11 @@ int __diff_dir2(uint8_t* write, struct kv_store* store,
                                         .name = {0}
                                     };
     uint8_t old_dir[write_len];
-    char path[4096], stored_path[4096];
+    char path[4096];
     char created_copy[4096];
     char deleted_copy[4096];
-    size_t len, len2;
+    size_t len;
     char* channel = NULL;
-    uint8_t** files;
-    bool found;
 
     fprintf_light_white(stdout, "__diff_dir(), write_len == %zu\n", write_len);
     fprintf_light_white(stdout, "operating on: %s\n", pointer);
@@ -760,122 +758,45 @@ int __diff_dir2(uint8_t* write, struct kv_store* store,
 
             if (old->inode != new->inode)
             {
-                if (new->name_len)
-                {
-                    redis_set_add(store, REDIS_CREATED_SET_ADD,
-                                  (uint64_t) new->inode);
-                    redis_list_get(store, REDIS_INODE_LGET, (uint64_t) new->inode,
-                                   &files, &len);
-                    found = false;
-                    for (i = 0; i < len; i++)
-                    {
-                        fprintf_light_blue(stdout, "%s\n", (char*) files[i]);
+                redis_get_fcounter(store, &file);
+                fprintf_light_white(stdout, "Creating new file:%"
+                                             PRIu64"\n", file);
 
-                        strtok((char*) files[i], ":");
-                        sscanf(strtok(NULL, ":"), "%"SCNu64, &file);
-                        
-                        len2 = 4096;
-                        redis_hash_field_get(store, REDIS_FILE_SECTOR_GET, file,
-                                             "path", (uint8_t*) stored_path, &len2);
+                    redis_hash_field_set(store, REDIS_FILE_SECTOR_INSERT,
+                                         file, "inode_num",
+                                         (uint8_t*) &(new->inode), sizeof(new->inode));
+                    fprintf(stdout, "set inode_num\n");
 
-                        if (len2)
-                        {
-                            stored_path[len2] = 0;
-                            fprintf(stdout, "stored_path: %s\n", (char *) stored_path);
-                            if (strncmp(stored_path, created_copy,
-                                        strlen(created_copy)) == 0)
-                                found = true;
-                        }
-                    }
-                    redis_free_list(files, len);
+                    inode_offset = __inode_offset(store, super, new->inode);
+                    redis_hash_field_set(store, REDIS_FILE_SECTOR_INSERT,
+                                         file, "inode_offset",
+                                         (uint8_t*) &(inode_offset), sizeof(inode_offset));
+                    fprintf(stdout, "set inode_offset\n");
 
-                    if (!found)
-                    {
-                        redis_get_fcounter(store, &file);
-                        fprintf_light_white(stdout, "Creating new file:%"
-                                                    PRIu64"\n", file);
+                    inode_sector = __inode_sector(store, super, new->inode);
+                    redis_reverse_pointer_set(store, REDIS_FILES_INSERT,
+                                  inode_sector,
+                                  file);
+                    redis_reverse_pointer_set(store, REDIS_FILES_SECTOR_INSERT,
+                                  inode_sector,
+                                  inode_sector);
+                    fprintf(stdout, "set inode_sector\n");
 
-                        redis_hash_field_set(store, REDIS_FILE_SECTOR_INSERT,
-                                             file, "inode_num",
-                                             (uint8_t*) &(new->inode), sizeof(new->inode));
-                        fprintf(stdout, "set inode_num\n");
-
-                        inode_offset = __inode_offset(store, super, new->inode);
-                        redis_hash_field_set(store, REDIS_FILE_SECTOR_INSERT,
-                                             file, "inode_offset",
-                                             (uint8_t*) &(inode_offset), sizeof(inode_offset));
-                        fprintf(stdout, "set inode_offset\n");
-
-                        inode_sector = __inode_sector(store, super, new->inode);
-                        redis_reverse_pointer_set(store, REDIS_FILES_INSERT,
-                                      inode_sector,
-                                      file);
-                        redis_reverse_pointer_set(store, REDIS_FILES_SECTOR_INSERT,
-                                      inode_sector,
-                                      inode_sector);
-                        fprintf(stdout, "set inode_sector\n");
-
-                        new->file_type = ((new->file_type & 0x2) == 0x2);
-                        fprintf(stdout, "new->file_type: %"PRIu32"\n", new->file_type);
-                        redis_hash_field_set(store, REDIS_FILE_SECTOR_INSERT,
-                                             file, "is_dir",
-                                             (uint8_t*) &(new->file_type), 
-                                             sizeof(new->file_type));
-                        fprintf(stdout, "set is_dir\n");
-                        redis_flush_pipeline(store);
-                        
-                        fprintf(stdout, "finished inode_sector\n");
-                    }
+                    new->file_type = ((new->file_type & 0x2) == 0x2);
+                    fprintf(stdout, "new->file_type: %"PRIu32"\n", new->file_type);
+                    redis_hash_field_set(store, REDIS_FILE_SECTOR_INSERT,
+                                         file, "is_dir",
+                                         (uint8_t*) &(new->file_type), 
+                                         sizeof(new->file_type));
+                    fprintf(stdout, "set is_dir\n");
+                    redis_flush_pipeline(store);
+                    
+                    fprintf(stdout, "finished inode_sector\n");
                     //__emit_created_file(store, channel, (char*) new->name,
                     //                    new->name_len, write_counter);
                 }
-
-                if (old->name_len)
-                {
-                    redis_set_add(store, REDIS_DELETED_SET_ADD,
-                                  (uint64_t) old->inode);
-                    //__emit_deleted_file(store, channel, (char*) old->name,
-                    //                    old->name_len, write_counter);
-
-                    //free(channel);
-                    //channel = construct_channel_name(vmname,
-                    //                                 strncat(strcat(deleted_copy, "/"),
-                    //                                        (char*) old->name,
-                    //                                           old->name_len));
-
-                    //__emit_deleted_file(store, channel, (char*) old->name,
-                    //                    old->name_len, write_counter);
-                }
-
-                //if (new->name_len)
-                //{
-                    //free(channel);
-                    //channel = construct_channel_name(vmname, created_copy);
-                    //__emit_created_file(store, channel, (char*) new->name,
-                    //                    new->name_len, write_counter);
-                //}
-                
-                /* handle true deleted files */
-            }
-            else
-            {
-                fprintf_light_cyan(stdout, "Rename: %.*s -> %.*s\n",
-                                   old->name, old->name_len,
-                                   new->name, new->name_len);
-
-                channel = construct_channel_name(vmname, deleted_copy);
-                __emit_rename_file(store, channel, (char*) new->name,
-                                   new->name_len, write_counter);
-                free(channel);
-
-                channel = construct_channel_name(vmname, created_copy);
-                __emit_created_file(store, channel, (char*) new->name,
-                                   new->name_len, write_counter);
-                free(channel);
-                channel = NULL;
             }
 
-        }
         old_pos += old->rec_len;
         new_pos += new->rec_len;
         if (channel == NULL)
@@ -1265,6 +1186,9 @@ int __ext4_new_extent_leaf_block(struct kv_store* store, uint64_t file,
     uint64_t sector = block * ext4_block_size(*super);
     sector += partition_offset;
     sector /= SECTOR_SIZE;
+    
+    redis_hash_field_set(store, REDIS_EXTENT_SECTOR_INSERT,
+                         sector, "file", (uint8_t*) &file, sizeof(file));
 
     if (redis_reverse_pointer_set(store, REDIS_EXTENTS_INSERT,
                           file,
@@ -1356,6 +1280,11 @@ int __diff_ext4_extents(struct kv_store* store, char* vmname, uint64_t file,
     
     hdr_new = (struct ext4_extent_header*) newb;
     hdr_old = (struct ext4_extent_header*) oldb;
+
+    if (hdr_new->eh_magic != 0xF30A)
+        hdr_new = &hdr_def;
+    if (hdr_old->eh_magic != 0xF30A)
+        hdr_old = &hdr_def;
 
     new_entries = hdr_new->eh_entries;
     old_entries  = hdr_old->eh_entries;
@@ -1538,6 +1467,11 @@ int __diff_inodes(uint8_t* write, struct kv_store* store,
             return EXIT_FAILURE;
         }
 
+        if (len2 == 0)
+        {
+            memset(&oldd, 0, sizeof(oldd));
+        }
+
         new = (struct ext4_inode*) &(write[offset]);
         old_size = ext4_file_size(*old);
 
@@ -1714,7 +1648,6 @@ int __diff_extent_tree(uint8_t* write, struct kv_store* store,
         return EXIT_FAILURE;
     }
 
-    exit(0);
     return EXIT_SUCCESS;
 }
 
@@ -1752,7 +1685,6 @@ int __qemu_dispatch_write(uint8_t* data,
     {
         fprintf_light_red(stderr, "Redis returned unknown sector type [%s]\n",
                                                                       pointer);
-        exit(1);
     }
     return EXIT_SUCCESS;
 }
