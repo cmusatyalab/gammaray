@@ -2936,3 +2936,43 @@ int ext4_serialize_fs_tree(FILE* disk, int64_t partition_offset,
 
     return 0;
 }
+
+int ext4_serialize_journal(FILE* disk, int64_t partition_offset,
+                            struct ext4_superblock* superblock, char* mount,
+                            FILE* serializef)
+{
+    struct ext4_inode root;
+    struct bson_info* bson;
+    char* buf = malloc(strlen(mount) + 1);
+
+    if (buf == NULL)
+    {
+        fprintf_light_red(stderr, "Error allocating root dir path string.\n");
+        return -1;
+    }
+
+    memcpy(buf, mount, strlen(mount));
+    buf[strlen(mount) + 1] = '\0';
+
+    bson = bson_init();
+
+    if (ext4_read_inode_serialized(disk, partition_offset, *superblock, 8,\
+                                   &root, bson))
+    {
+        free(buf);
+        fprintf(stderr, "Failed getting root fs inode.\n");
+        return -1;
+    }
+
+    if (ext4_serialize_tree(disk, partition_offset, *superblock, root,
+                            buf, serializef, bson))
+    {
+        free(buf);
+        fprintf(stdout, "Error listing fs tree from root inode.\n");
+        return -1;
+    }
+
+    free(buf);
+
+    return 0;
+}

@@ -230,4 +230,7 @@ int ext4_serialize_bgds(FILE* disk, int64_t partition_offset,
 int ext4_serialize_fs_tree(FILE* disk, int64_t partition_offset,
                            struct ext4_superblock* superblock, char* prefix,
                            FILE* serializef);
+int ext4_serialize_journal(FILE* disk, int64_t partition_offset,
+                            struct ext4_superblock* superblock, char* mount,
+                            FILE* serializef);
 #endif

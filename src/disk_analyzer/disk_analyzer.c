@@ -251,6 +251,10 @@ int main(int argc, char* args[])
                                        &ext4_superblock,
                                        ext4_last_mount_point(&ext4_superblock),
                                        serializef);
+                ext4_serialize_journal(disk, partition_offset, 
+                                       &ext4_superblock,
+                                       "journal",
+                                       serializef);
             }
 
             if (ntfs_probe(disk, partition_offset, &ntfs_bootf))
