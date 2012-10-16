@@ -20,7 +20,6 @@
  * double   8 bytes (64-bit IEEE 754 floating point)
  *
  */
-
 struct bson_info* bson_init()
 {
     struct bson_info* bson_info = (struct bson_info*)
@@ -197,21 +196,12 @@ int serialize_document(struct bson_info* bson_info,
     if (bson_info == NULL || document == NULL)
         return EXIT_FAILURE;
 
-    int32_t added_size = 4 + document->position + 1;
-
-    if (check_size(bson_info, added_size))
+    if (check_size(bson_info, document->position))
         return EXIT_FAILURE;
     
-    memcpy(&(bson_info->buffer[bson_info->position]), &added_size,
-           4);
-    bson_info->position += 4;
-
     memmove(&(bson_info->buffer[bson_info->position]), document->buffer,
             document->position);
     bson_info->position += document->position;
-
-    bson_info->buffer[bson_info->position] = 0x00;
-    bson_info->position++;
 
     return EXIT_SUCCESS;
 }
