@@ -1,0 +1,37 @@
+Backtracing from 'bdrv_co_writev':
+
+BlockDriverState: "raw" format drive
+
+coroutine_trampoline ->
+    bdrv_co_do_rw ->
+        bdrv_co_do_writev ->
+            raw_co_writev (block/raw.c) ->
+                **bdrv_co_writev
+
+The "raw" format is generic and switches to a "file" backend (I think only
+POSIX and win 32 exist).
+
+BlockDriverState: "file" format (block/raw-posix.c)
+
+                bdrv_co_do_writev ->
+                    bdrv_co_writev_em ->
+                        bdrv_aio_writev ->
+                            raw_aio_submit ->
+                                    paio_submit or laio_submit
+                                aio_threads (thread pool?) ->
+                                    pwritev
+
+
+The "meta"-bdrv events seem to occur in a single thread.
+
+
+virtio comes in with
+
+    virtio_submit_multiwrite ->
+            "raw" format drive
+        bdrv_aio_multiwrite ->
+            bdrv_aio_writev ->
+                bdrv_co_aio_rw_vector ->
+                    bdrv_co_do_rw -> (NEW COROUTINE CREATED, jmp with GDB
+                                      getting lost)
+                        bdrv_co_do_writev -> AS BEFORE
