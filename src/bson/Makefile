@@ -35,3 +35,4 @@ bson_printer: default
 
 clean:
 	@rm bson_test
+	@rm bson_printer
