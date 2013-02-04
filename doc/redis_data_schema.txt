@@ -69,6 +69,10 @@ Keyspace: <dirdata:UINT_64> --> ID is sector ID first sector in block
         file                            : UINT_64
         data                            : BINARY_[FS_BLOCK_SIZE]
 
+/* application: read-driver */
+Keyspace: <path:BINARY> --> BINARY matches file system path
+        file:UINT_64
+    
 
 
 /**** SECTORS ****/
