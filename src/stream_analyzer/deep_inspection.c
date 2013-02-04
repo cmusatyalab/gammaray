@@ -2123,6 +2123,17 @@ int __deserialize_file(struct ext4_superblock* superblock,
 
             bson_cleanup(bson2);
         }
+        else if (strcmp(value1.key, "path") == 0)
+        {
+            if (redis_hash_field_set(store, REDIS_FILE_SECTOR_INSERT, id,
+                                 value1.key, (const uint8_t*) value1.data,
+                                 (size_t) value1.size))
+                return EXIT_FAILURE;
+
+            if (redis_path_set(store, (const uint8_t*) value1.data,
+                               (size_t) value1.size, id))
+               return EXIT_FAILURE; 
+        }
         else
         {
             if (redis_hash_field_set(store, REDIS_FILE_SECTOR_INSERT, id,
