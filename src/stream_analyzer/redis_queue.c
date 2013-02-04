@@ -395,6 +395,37 @@ int redis_reverse_file_data_pointer_set(struct kv_store* handle,
     return EXIT_SUCCESS;
 }
 
+int redis_path_set(struct kv_store* handle, const uint8_t* path, size_t len,
+                   uint64_t id)
+{
+    redisAppendCommand(handle->connection, REDIS_PATH_SET, path, len, id);
+    handle->outstanding_pipelined_cmds++;
+
+    if (handle->outstanding_pipelined_cmds >= REDIS_DEFAULT_PIPELINED)
+    {
+        if (redis_flush_pipeline(handle))
+        {
+            assert(true);
+        }
+    }
+    return EXIT_SUCCESS;
+}
+
+int redis_path_get(struct kv_store* handle, const uint8_t* path, size_t len,
+                   uint64_t* id)
+{
+    redisReply* reply;
+    redis_flush_pipeline(handle);
+    reply = redisCommand(handle->connection, REDIS_PATH_GET, path, len);
+
+    if (reply->type == REDIS_REPLY_INTEGER)
+    {
+        *id = reply->integer;
+    }
+
+    return check_redis_return(handle, reply);
+}
+
 int redis_get_fcounter(struct kv_store* handle, uint64_t* counter)
 {
     redisReply* reply;

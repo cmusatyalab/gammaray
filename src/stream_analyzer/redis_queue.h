@@ -37,6 +37,9 @@
 #define REDIS_FILES_SECTOR_INSERT "SET sector:%"PRIu64" lfiles:%"PRIu64
 #define REDIS_FILES_SECTOR_DELETE "DEL sector:%"PRIu64
 
+#define REDIS_PATH_SET "SET path:%b %"PRIu64
+#define REDIS_PATH_GET "GET path:%b"
+
 #define REDIS_EXTENT_SECTOR_INSERT "HSET extent:%"PRIu64" %s %b"
 #define REDIS_EXTENT_SECTOR_GET "HGET extent:%"PRIu64" %s"
 #define REDIS_EXTENTS_INSERT "RPUSH extents:%"PRIu64" extent:%"PRIu64
@@ -109,4 +112,9 @@ int redis_async_write_enqueue(struct kv_store* handle, int64_t sector,
                                                        size_t len);
 int redis_async_write_dequeue(struct kv_store* handle,
                               struct qemu_bdrv_write* write);
+
+int redis_path_set(struct kv_store* handle, const uint8_t* path, size_t len,
+                   uint64_t id);
+int redis_path_get(struct kv_store* handle, const uint8_t* path, size_t len,
+                   uint64_t* id);
 #endif
