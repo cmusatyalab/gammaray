@@ -3,6 +3,7 @@
 
 #include <inttypes.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #define SECTOR_SIZE 512
 #define EXT2_SUPERBLOCK_OFFSET 1024

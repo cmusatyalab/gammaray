@@ -5,6 +5,7 @@
 
 #include <inttypes.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #define SECTOR_SIZE 512
 #define EXT4_SUPERBLOCK_OFFSET 1024
@@ -216,6 +217,7 @@ int ext4_reconstruct_root_fs(FILE* disk, int64_t partition_offset,
 int ext4_read_block(FILE* disk, int64_t partition_offset, 
                     struct ext4_superblock superblock, uint64_t block_num, 
                     uint8_t* buf);
+int ext4_read_dir_entry(uint8_t* buf, struct ext4_dir_entry* dir);
 int ext4_print_block(uint8_t* buf, uint32_t block_size);
 uint64_t ext4_block_size(struct ext4_superblock superblock);
 int ext4_print_sectormap(FILE* disk, int64_t partition_offset,
