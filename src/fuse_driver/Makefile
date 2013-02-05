@@ -21,17 +21,17 @@ default:
 		   `pkg-config fuse --cflags --libs`
 
 test: default
-	@mkdir -p test
-	@./xray_fs -s -d test
+	@mkdir -p /tmp/test
+	@./xray_fs -s -d /tmp/test /home/wolf/VM/vm_ext4_test/vm_ext4_test.raw
 	@ls test
 	@sleep 0.25
-	@sudo umount test
-	@rm -rf test
+	@sudo umount /tmp/test
+	@rm -rf /tmp/test
 
 clean:
-	@rm -rf test
+	@rm -rf /tmp/test
 	@rm xray_fs
-	@sudo umount test
+	@sudo umount /tmp/test
 
 hellofs:
 	@clang -Wall \
