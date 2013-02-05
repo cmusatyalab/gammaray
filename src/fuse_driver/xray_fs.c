@@ -134,7 +134,6 @@ static int xrayfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler,
                        inode_num, &list, &len))
         return -ENOENT;
 
-    /* loop through all blocks of dir file */
     for (i = 0; i < len; i++)
     {
         strtok((char*) (list)[i], ":");
@@ -185,14 +184,6 @@ static int xrayfs_open(const char* path, struct fuse_file_info* fi)
     return 0;
 }
 
-/**
- *  This function must implement the following:
- *      (1) Lookup path from '/' recursively in Redis (dentries)
- *      (2) If path doesn't exist, return -ENOENT
- *      (3) Get list of block size sectors from 'filesectors:ID x y'
- *      (4) for each block, split on ':', read from disk (+partition offset)
- *      (5) Return 0
- */
 static int xrayfs_read(const char* path, char* buf, size_t size, off_t offset,
                        struct fuse_file_info* fi)
 {
@@ -245,7 +236,7 @@ static int xrayfs_read(const char* path, char* buf, size_t size, off_t offset,
         position += readb;
     }
 
-    //redis_free_list(list, len);
+    redis_free_list(list, len);
 
     return position;
 }
