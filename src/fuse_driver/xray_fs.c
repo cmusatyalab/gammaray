@@ -70,7 +70,7 @@ static int xrayfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler,
     int64_t inode_num = xrayfs_pathlookup(path);
     uint8_t data_buf[block_size];
     uint8_t** list;
-    size_t len = 0;
+    size_t len = 0, len2 = 0;
     uint64_t position = 0, sector = 0, i = 0;
     struct ext4_dir_entry dir;
 
@@ -86,10 +86,10 @@ static int xrayfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler,
     {
         strtok((char*) (list)[i], ":");
         sscanf(strtok(NULL, ":"), "%"SCNu64, &sector);
-        len = block_size;
+        len2 = block_size;
 
         if (redis_hash_field_get(handle, REDIS_DIR_SECTOR_GET, sector, "data",
-                                 data_buf, &len))
+                                 data_buf, &len2))
             return -ENOENT;
 
         position = 0;
