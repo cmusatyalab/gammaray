@@ -122,8 +122,7 @@ static int xrayfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler,
                           off_t offset, struct fuse_file_info* fi)
 {
     int64_t inode_num = xrayfs_pathlookup(path);
-    uint8_t data_buf[block_size];
-    uint8_t** list;
+    uint8_t data_buf[block_size], **list;
     size_t len = 0, len2 = 0;
     uint64_t position = 0, sector = 0, i = 0;
     struct ext4_dir_entry dir;
@@ -165,7 +164,6 @@ static int xrayfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler,
             dir.name[dir.name_len] = 0;
             filler(buf, (const char*) dir.name, NULL, 0);
             position += dir.rec_len;
-
         }
     }
 
