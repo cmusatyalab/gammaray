@@ -20,9 +20,9 @@ default:
 		   -I/usr/include/hiredis \
 		   `pkg-config fuse --cflags --libs`
 
-test:
+test: default
 	@mkdir -p test
-	@./xray_fs test
+	@./xray_fs -s -d test
 	@ls test
 	@sleep 0.25
 	@sudo umount test
