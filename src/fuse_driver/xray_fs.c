@@ -1,8 +1,13 @@
+#define _FILE_OFFSET_BITS 64
+
 #include <errno.h>
+#include <fcntl.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include "deep_inspection.h"
 #include "redis_queue.h"
@@ -11,6 +16,7 @@
 static uint64_t partition_offset;
 static uint64_t block_size;
 static struct kv_store* handle;
+static int fd_disk;
 
 static int64_t xrayfs_pathlookup(const char* path)
 {
@@ -131,7 +137,58 @@ static int xrayfs_open(const char* path, struct fuse_file_info* fi)
 static int xrayfs_read(const char* path, char* buf, size_t size, off_t offset,
                        struct fuse_file_info* fi)
 {
-    return -ENOSYS;
+    uint64_t inode_num = xrayfs_pathlookup(path);
+    uint8_t** list;
+    size_t len = 0;
+    ssize_t readb = 0, toread = 0, ret = 0;
+    uint64_t position = 0, sector = 0, i = 0;
+    struct stat st;
+    int64_t start = offset / 4096, end;
+
+    if (xrayfs_getattr(path, &st))
+        return -ENOENT;
+
+    if (offset > st.st_size)
+        return -EINVAL;
+
+    if (offset + size > st.st_size)
+        size = st.st_size - offset;
+
+    end = start + ((size + 4095) / 4096);
+
+    if (redis_list_get_var(handle, REDIS_FILE_SECTORS_LGET_VAR,
+                           inode_num, &list, &len, start, end))
+        return -ENOENT;
+
+    /* loop through all blocks of file to size */
+    for (i = 0; i < len; i++)
+    {
+        strtok((char*) (list)[i], ":");
+        sscanf(strtok(NULL, ":"), "%"SCNu64, &sector);
+
+        lseek(fd_disk, sector * 512 + offset % block_size, SEEK_SET);
+        readb = 0;
+
+        if (position + block_size - offset % block_size < size)
+            toread = block_size - offset % block_size;
+        else
+            toread = size - position;
+
+        while (readb < toread)
+        {
+            ret = read(fd_disk, (char*) &(buf[position]), toread - readb);
+            if (ret < 0)
+                return -EINVAL;
+            readb += ret;
+        }
+
+        offset += readb;
+        position += readb;
+    }
+
+    //redis_free_list(list, len);
+
+    return position;
 }
 
 /**
@@ -142,8 +199,12 @@ static int xrayfs_read(const char* path, char* buf, size_t size, off_t offset,
 int main(int argc, char* argv[])
 {
     struct ext4_superblock superblock;
+    const char* path = argv[argc - 1];
     handle = redis_init("4", false);
     on_exit((void (*) (int, void *)) redis_shutdown, handle);
+
+    fd_disk = open(path, O_RDONLY);
+    argc -= 1;
 
     if (qemu_get_superblock(handle, &superblock, (uint64_t) 0))
         return EXIT_FAILURE;
