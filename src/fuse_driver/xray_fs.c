@@ -54,7 +54,7 @@ static int xrayfs_getattr(const char* path, struct stat* stbuf)
     stbuf->st_mtime = inode.i_mtime;
     stbuf->st_ctime = inode.i_ctime;
 
-    return -ENOSYS;
+    return 0;
 }
 
 /**
@@ -117,7 +117,7 @@ static int xrayfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler,
 
     redis_free_list(list, len);
 
-    return -ENOSYS;
+    return 0;
 }
 
 static int xrayfs_open(const char* path, struct fuse_file_info* fi)
