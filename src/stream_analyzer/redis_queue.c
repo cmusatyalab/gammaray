@@ -488,6 +488,44 @@ int redis_list_get(struct kv_store* handle, char* fmt, uint64_t src,
     return check_redis_return(handle, reply);
 }
 
+int redis_list_get_var(struct kv_store* handle, char* fmt, uint64_t src,
+                       uint8_t** result[], size_t* len, int64_t start,
+                       int64_t end)
+{
+    uint64_t i;
+    redisReply* reply;
+    redis_flush_pipeline(handle);
+    reply = redisCommand(handle->connection, fmt, src, start, end);
+
+    if (reply->type == REDIS_REPLY_ARRAY)
+    {
+        *len = reply->elements;
+        *result = malloc(sizeof(uint8_t*) * (*len));
+
+        if (*result == NULL)
+            return EXIT_FAILURE;
+
+        for (i = 0; i < *len; i++)
+        {
+            if (reply->element[i]->type != REDIS_REPLY_STRING)
+            {
+                check_redis_return(handle, reply);
+                free(*result);
+                *result = NULL;
+                return EXIT_FAILURE;
+            }
+
+            (*result)[i] = (uint8_t*) malloc(reply->len + 1);
+
+            memcpy((*result)[i], reply->element[i]->str,
+                   (size_t) reply->element[i]->len);
+
+            (*result)[i][reply->element[i]->len] = 0;
+        }
+    }
+
+    return check_redis_return(handle, reply);
+}
 
 void redis_free_list(uint8_t* list[], size_t len)
 {

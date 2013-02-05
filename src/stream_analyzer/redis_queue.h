@@ -31,6 +31,7 @@
 #define REDIS_FILE_SECTOR_GET "HGET file:%"PRIu64" %s"
 #define REDIS_FILE_SECTORS_INSERT "RPUSH filesectors:%"PRIu64" sector:%"PRIu64
 #define REDIS_FILE_SECTORS_LGET "LRANGE filesectors:%"PRIu64" 0 -1"
+#define REDIS_FILE_SECTORS_LGET_VAR "LRANGE filesectors:%"PRIu64" %"PRIu64" %"PRIu64
 #define REDIS_FILE_SECTORS_LAST_SECTOR "LINDEX filesectors:%"PRIu64" -1"
 #define REDIS_FILES_INSERT "RPUSH files:%"PRIu64" file:%"PRIu64
 #define REDIS_FILES_LGET "LRANGE files:%"PRIu64" 0 -1"
@@ -95,8 +96,9 @@ int redis_reverse_file_data_pointer_set(struct kv_store* handle,
                                         uint64_t end, uint64_t dst);
 int redis_sector_lookup(struct kv_store* store, uint64_t sector, uint8_t* data,
                         size_t* len);
-int redis_list_get(struct kv_store* handle, char* fmt, uint64_t src,
-                   uint8_t** result[], size_t* len);
+int redis_list_get_var(struct kv_store* handle, char* fmt, uint64_t src,
+                       uint8_t** result[], size_t* len, 
+                       int64_t start, int64_t end);
 void redis_free_list(uint8_t* list[], size_t len);
 
 int redis_last_file_sector(struct kv_store* handle, uint64_t id, 
