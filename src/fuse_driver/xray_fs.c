@@ -36,20 +36,14 @@ static int xrayfs_getattr(const char* path, struct stat* stbuf)
 
     memset(stbuf, 0, sizeof(struct stat));
 
-    len2 = sizeof(stbuf->st_ino);
-
-    if (redis_hash_field_get(handle, REDIS_FILE_SECTOR_GET, inode_num,
-                             "inode_num", (uint8_t*) &(stbuf->st_ino),
-                             &len2))
-        return -ENOENT;
-
     stbuf->st_mode = inode.i_mode;
     stbuf->st_nlink = inode.i_links_count;
     stbuf->st_uid = inode.i_uid;
     stbuf->st_gid = inode.i_gid;
     stbuf->st_blksize = block_size;
     stbuf->st_size = ext4_file_size(inode);
-    stbuf->st_blocks = stbuf->st_size / 512;
+    stbuf->st_blocks = (stbuf->st_size % 512) ? stbuf->st_size / 512 + 1 : 
+                                                stbuf->st_size / 512;
     stbuf->st_atime = inode.i_atime;
     stbuf->st_mtime = inode.i_mtime;
     stbuf->st_ctime = inode.i_ctime;
@@ -57,13 +51,6 @@ static int xrayfs_getattr(const char* path, struct stat* stbuf)
     return 0;
 }
 
-/**
- *  This function must implement the following:
- *      (1) Lookup path from '/' recursively in Redis (dentries)
- *      (2) If path doesn't exist, return -ENOENT
- *      (3) Else pull dentry data, use filler for each dentry
- *      (4) Return 0
- */
 static int xrayfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler,
                           off_t offset, struct fuse_file_info* fi)
 {
