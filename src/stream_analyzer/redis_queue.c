@@ -418,9 +418,10 @@ int redis_path_get(struct kv_store* handle, const uint8_t* path, size_t len,
     redis_flush_pipeline(handle);
     reply = redisCommand(handle->connection, REDIS_PATH_GET, path, len);
 
-    if (reply->type == REDIS_REPLY_INTEGER)
+    if (reply->type == REDIS_REPLY_STRING &&
+        reply->len > 0)
     {
-        *id = reply->integer;
+        sscanf(reply->str, "%"SCNu64, id);
     }
 
     return check_redis_return(handle, reply);
