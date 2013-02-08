@@ -789,6 +789,11 @@ int __diff_dir2(uint8_t* write, struct kv_store* store,
                                          (uint8_t*) &(new->file_type), 
                                          sizeof(new->file_type));
                     fprintf(stdout, "set is_dir\n");
+
+
+                    redis_path_set(store, (const uint8_t*) created_copy,
+                                    strlen(created_copy), file);
+                    fprintf(stdout, "set path reverse mapping\n");
                     redis_flush_pipeline(store);
                     
                     fprintf(stdout, "finished inode_sector\n");
