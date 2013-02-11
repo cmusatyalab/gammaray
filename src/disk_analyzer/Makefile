@@ -72,12 +72,8 @@ test: default
 	@rm -rf /tmp/win7
 	@mkdir /tmp/win7
 	@./disk_analyzer \
-		/home/wolf/VM/win7enterprise.raw \
+		/home/wolf/VM/vm_ntfs_test/win7enterprise.raw \
 		/tmp/win7enterprise.bson #| grep found > fnames
-
-	#@valgrind --track-origins=yes ./disk_analyzer \
-		#/home/wolf/VM/win7enterprise.raw \
-		#/tmp/win7enterprise.bson
 
 test_ext4: default
 	@time ./disk_analyzer \
