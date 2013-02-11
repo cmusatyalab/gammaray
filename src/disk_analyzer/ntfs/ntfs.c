@@ -802,27 +802,29 @@ int ntfs_attribute_dispatcher(uint8_t* data, uint64_t* offset, wchar_t** fname,
         if (ntfs_dispatch_file_name_attribute(data, offset, fname, sah))
            ret = -1;
         fprintf(stdout, "dispatched file name: %ls\n", *fname);
-        if (*fname && wcscmp(*fname, L"test.txt") != 0)
-        {
-            fprintf_light_blue(stdout, "\tNOT the file we're looking for.\n");
-            return 0;
-        }
-        *offset = old_offset + sah->length - sizeof(*sah);
     }
-    else if (sah->attribute_type == 0x80 && *fname && wcscmp(*fname, L"test.txt") == 0)
+    else if (sah->attribute_type == 0x80 && *fname)
     {
         fprintf_light_yellow(stdout, "Dispatching data attribute.\n");
         fprintf(stdout, "with fname: %ls\n", *fname);
         if (ntfs_dispatch_data_attribute(data, offset, *fname, sah, bootf,
                                          partition_offset, disk, extension))
             ret = -1;
-        *offset = old_offset + sah->length - sizeof(*sah);
+    }
+    else if (sah->attribute_type == 0x90 && *fname)
+    {
+        fprintf_light_yellow(stdout, "Dispatching index root attribute.\n");
+        if (ntfs_dispatch_index_root_attribute(data, offset, *fname, sah,
+                                               bootf, partition_offset, disk,
+                                               extension))
+            ret = -1;
     }
     else
     {
-        *offset += sah->length - sizeof(*sah);
         fprintf_light_yellow(stdout, "Dispatching unhandled attribute.\n");
     }
+
+    *offset = old_offset + sah->length - sizeof(*sah);
 
     if (*((int32_t*) &(data[*offset])) == -1)
         ret = 0;
