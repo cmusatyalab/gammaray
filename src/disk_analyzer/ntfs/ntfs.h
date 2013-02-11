@@ -129,6 +129,16 @@ struct ntfs_update_sequence
     uint8_t* data;
 } __attribute__((packed));
 
+struct ntfs_index_root
+{
+    uint32_t attribute_type;
+    uint32_t collation_rule;
+    uint32_t index_alloc_entry_size;
+    uint8_t clusters_per_index_record;
+    uint16_t padding1;
+    uint8_t padding2;
+} __attribute__((packed));
+
 uint64_t ntfs_file_record_size (struct ntfs_boot_file* bootf);
 int ntfs_probe(FILE* disk, int64_t partition_offset,
                struct ntfs_boot_file* bootf);

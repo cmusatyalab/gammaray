@@ -226,6 +226,18 @@ int ntfs_print_update_sequence(struct ntfs_update_sequence* seq)
 }
 
 
+int ntfs_print_index_root(struct ntfs_index_root* root)
+{
+    fprintf_yellow(stdout, "root.attribute_type: 0x%"PRIx32"\n",
+                                                   root->attribute_type);
+    fprintf_yellow(stdout, "root.collation_rule: %"PRIu32"\n",
+                                                   root->collation_rule);
+    fprintf_yellow(stdout, "root.index_alloc_entry_size: %"PRIu32"\n",
+                                                   root->index_alloc_entry_size);
+    fprintf_yellow(stdout, "root.clusters_per_index_record: %"PRIu8"\n",
+                                                   root->clusters_per_index_record);
+    return EXIT_SUCCESS;
+}
 
 
 
@@ -546,8 +558,6 @@ int ntfs_handle_non_resident_data_attribute(uint8_t* data, uint64_t* offset,
     fprintf_white(stdout, "\tnrh->offset_of_attribute: %x\tsizeof(nrh+sah) %x\n", nrh.data_run_offset, sizeof(nrh) + sizeof(*sah));
     fprintf_green(stdout, "\tSeeking to %d\n", nrh.data_run_offset - sizeof(*sah) - sizeof(nrh));
 
-    exit(1);
-
     *offset += nrh.data_run_offset - sizeof(*sah) - sizeof(nrh);
     if (reconstructed)
     {
@@ -727,6 +737,34 @@ int ntfs_dispatch_file_name_attribute(uint8_t* data, uint64_t* offset,
 }
 
 /* dispatch handler for data */
+int ntfs_dispatch_index_root_attribute(uint8_t* data, uint64_t* offset,
+                                       wchar_t* name,
+                                       struct ntfs_standard_attribute_header* sah,
+                                       struct ntfs_boot_file* bootf,
+                                       int64_t partition_offset,
+                                       FILE* disk,
+                                       bool extension)
+{
+    struct ntfs_index_root root;
+
+    memset(&root, 0, sizeof(struct ntfs_index_root));
+
+    if (sah->attribute_type != 0x90)
+    {
+        fprintf_light_red(stderr, "Index Root handler, bad attribute!\n");
+        return EXIT_FAILURE;
+    }
+
+    memcpy(&root, &(data[*offset + sah->offset_of_attribute - sizeof(struct ntfs_standard_attribute_header)]), sizeof(struct ntfs_index_root));
+
+    ntfs_print_index_root(&root);
+
+    *offset += sizeof(root);
+
+    return 0;
+}
+
+/* dispatch handler for data */
 int ntfs_dispatch_data_attribute(uint8_t* data, uint64_t* offset,
                                  wchar_t* name,
                                  struct ntfs_standard_attribute_header* sah,
@@ -858,7 +896,8 @@ int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf,
                               PRId64"\n",
                               file_record_counter,
                               file_record_offset);
-    while (ntfs_read_file_record(disk, file_record_counter, partition_offset, bootf, data))
+    while (ntfs_read_file_record(disk, file_record_counter, partition_offset, bootf, data) &&
+           file_record_counter <= 5)
     {
         extension = false;
         data_offset = 0;
@@ -876,7 +915,9 @@ int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf,
         if (!(rec.flags & 0x01)) /* in use */
            continue;
         if (rec.flags & 0x02) /* not a dir */
-            continue;
+        {
+            fprintf_light_red(stdout, "DIRECTORY ENCOUNTERED.\n");
+        }
         if (rec.file_ref_base) /* BASE FILE Record */
         {
             fprintf_light_red(stderr, "Uh oh: Extension FILE Record "
