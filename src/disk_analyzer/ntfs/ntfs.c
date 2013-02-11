@@ -225,7 +225,6 @@ int ntfs_print_update_sequence(struct ntfs_update_sequence* seq)
     return EXIT_SUCCESS;
 }
 
-
 int ntfs_print_index_root(struct ntfs_index_root* root)
 {
     fprintf_yellow(stdout, "root.attribute_type: 0x%"PRIx32"\n",
@@ -239,7 +238,18 @@ int ntfs_print_index_root(struct ntfs_index_root* root)
     return EXIT_SUCCESS;
 }
 
-
+int ntfs_print_index_header(struct ntfs_index_header* hdr)
+{
+    fprintf_yellow(stdout, "hdr.first_entry_offset: %"PRIu32"\n",
+                                                   hdr->first_entry_offset);
+    fprintf_yellow(stdout, "hdr.total_size: %"PRIu32"\n",
+                                                   hdr->total_size);
+    fprintf_yellow(stdout, "hdr.allocated_size: %"PRIu32"\n",
+                                                   hdr->allocated_size);
+    fprintf_yellow(stdout, "hdr.flags: %"PRIu8"\n",
+                                                   hdr->flags);
+    return EXIT_SUCCESS;
+}
 
 /* read boot record/probe for valid NTFS partition */
 int ntfs_probe(FILE* disk, int64_t partition_offset,
@@ -736,6 +746,25 @@ int ntfs_dispatch_file_name_attribute(uint8_t* data, uint64_t* offset,
     return EXIT_SUCCESS;
 }
 
+int ntfs_read_index_header(uint8_t* data, uint64_t* offset,
+                                       wchar_t* name,
+                                       struct ntfs_standard_attribute_header* sah,
+                                       struct ntfs_boot_file* bootf,
+                                       int64_t partition_offset,
+                                       FILE* disk,
+                                       bool extension)
+{
+    struct ntfs_index_header hdr;
+
+    memcpy(&hdr, &(data[*offset]), sizeof(hdr));
+
+    ntfs_print_index_header(&hdr);
+
+    *offset += sizeof(hdr);
+
+    return 0;
+}
+
 /* dispatch handler for data */
 int ntfs_dispatch_index_root_attribute(uint8_t* data, uint64_t* offset,
                                        wchar_t* name,
@@ -747,19 +776,21 @@ int ntfs_dispatch_index_root_attribute(uint8_t* data, uint64_t* offset,
 {
     struct ntfs_index_root root;
 
-    memset(&root, 0, sizeof(struct ntfs_index_root));
-
     if (sah->attribute_type != 0x90)
     {
         fprintf_light_red(stderr, "Index Root handler, bad attribute!\n");
         return EXIT_FAILURE;
     }
 
-    memcpy(&root, &(data[*offset + sah->offset_of_attribute - sizeof(struct ntfs_standard_attribute_header)]), sizeof(struct ntfs_index_root));
+    memcpy(&root, &(data[*offset + sah->offset_of_attribute - sizeof(*sah)]),
+           sizeof(struct ntfs_index_root));
 
     ntfs_print_index_root(&root);
 
-    *offset += sizeof(root);
+    *offset += sizeof(root) + sah->offset_of_attribute - sizeof(*sah);
+
+    ntfs_read_index_header(data, offset, name, sah, bootf, partition_offset,
+                           disk, extension);
 
     return 0;
 }

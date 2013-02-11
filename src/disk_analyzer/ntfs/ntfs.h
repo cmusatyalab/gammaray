@@ -139,6 +139,16 @@ struct ntfs_index_root
     uint8_t padding2;
 } __attribute__((packed));
 
+struct ntfs_index_header
+{
+    uint32_t first_entry_offset;
+    uint32_t total_size;
+    uint32_t allocated_size;
+    uint8_t flags;
+    uint16_t padding1;
+    uint8_t padding2;
+} __attribute__((packed));
+
 uint64_t ntfs_file_record_size (struct ntfs_boot_file* bootf);
 int ntfs_probe(FILE* disk, int64_t partition_offset,
                struct ntfs_boot_file* bootf);
