@@ -232,9 +232,9 @@ int ntfs_print_index_root(struct ntfs_index_root* root)
     fprintf_yellow(stdout, "root.collation_rule: %"PRIu32"\n",
                                                    root->collation_rule);
     fprintf_yellow(stdout, "root.index_alloc_entry_size: %"PRIu32"\n",
-                                                   root->index_alloc_entry_size);
+                                                 root->index_alloc_entry_size);
     fprintf_yellow(stdout, "root.clusters_per_index_record: %"PRIu8"\n",
-                                                   root->clusters_per_index_record);
+                                              root->clusters_per_index_record);
     return EXIT_SUCCESS;
 }
 
@@ -248,6 +248,19 @@ int ntfs_print_index_header(struct ntfs_index_header* hdr)
                                                    hdr->allocated_size);
     fprintf_yellow(stdout, "hdr.flags: %"PRIu8"\n",
                                                    hdr->flags);
+    return EXIT_SUCCESS;
+}
+
+int ntfs_print_index_entry(struct ntfs_index_entry* entry)
+{
+    fprintf_yellow(stdout, "entry.file_reference: %"PRIu64"\n",
+                                                   entry->file_reference);
+    fprintf_yellow(stdout, "entry.length: %"PRIu16"\n",
+                                                   entry->length);
+    fprintf_yellow(stdout, "entry.stream_length: %"PRIu16"\n",
+                                                   entry->stream_length);
+    fprintf_yellow(stdout, "entry.flags: %"PRIu8"\n",
+                                                   entry->flags);
     return EXIT_SUCCESS;
 }
 
@@ -746,13 +759,34 @@ int ntfs_dispatch_file_name_attribute(uint8_t* data, uint64_t* offset,
     return EXIT_SUCCESS;
 }
 
+int ntfs_read_index_entry(struct ntfs_index_entry* entry, uint8_t* data,
+                          uint64_t* offset)
+{
+    memcpy(entry, &(data[*offset]), sizeof(*entry));
+    *offset += entry->length;
+    if (entry->length == 0)
+        exit(1);
+    return 0;
+}
+
+int ntfs_read_index_entries(uint8_t* data, uint64_t* offset)
+{
+    struct ntfs_index_entry entry;
+
+    while (!ntfs_read_index_entry(&entry, data, offset) &&
+           !(entry.flags & 0x02))
+        ntfs_print_index_entry(&entry);
+
+    return 0;
+}
+
 int ntfs_read_index_header(uint8_t* data, uint64_t* offset,
-                                       wchar_t* name,
-                                       struct ntfs_standard_attribute_header* sah,
-                                       struct ntfs_boot_file* bootf,
-                                       int64_t partition_offset,
-                                       FILE* disk,
-                                       bool extension)
+                           wchar_t* name,
+                           struct ntfs_standard_attribute_header* sah,
+                           struct ntfs_boot_file* bootf,
+                           int64_t partition_offset,
+                           FILE* disk,
+                           bool extension)
 {
     struct ntfs_index_header hdr;
 
@@ -760,7 +794,7 @@ int ntfs_read_index_header(uint8_t* data, uint64_t* offset,
 
     ntfs_print_index_header(&hdr);
 
-    *offset += sizeof(hdr);
+    *offset += hdr.first_entry_offset - sizeof(hdr);
 
     return 0;
 }
@@ -792,6 +826,7 @@ int ntfs_dispatch_index_root_attribute(uint8_t* data, uint64_t* offset,
     ntfs_read_index_header(data, offset, name, sah, bootf, partition_offset,
                            disk, extension);
 
+    ntfs_read_index_entries(data, offset);
     return 0;
 }
 
