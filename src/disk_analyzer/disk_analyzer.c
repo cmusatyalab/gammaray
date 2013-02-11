@@ -207,17 +207,6 @@ int main(int argc, char* args[])
                 fprintf_light_green(stdout, "--- Analyzing ext4 Partition at "
                                             "Offset 0x%.16"PRIx64" ---\n",
                                             partition_offset);
-                //ext4_print_superblock(ext4_superblock);
-                //ext4_print_features(&ext4_superblock);
-                //ext4_list_block_groups(disk, partition_offset,
-                //                       ext4_superblock);
-                //ext4_list_root_fs(disk, partition_offset, ext4_superblock,
-                //                  ext4_last_mount_point(&ext4_superblock));
-                //ext4_reconstruct_root_fs(disk, partition_offset,
-                //                         ext4_superblock,
-                //                         ext4_last_mount_point(
-                //                             &ext4_superblock),
-                //                         "/tmp/ext4_copy/");
                 mbr_get_partition_table_entry(mbr, i, &pte);
 
                 fprintf_light_blue(stdout, "Serializing Partition Data to: "
@@ -268,8 +257,8 @@ int main(int argc, char* args[])
                                             "Offset 0x%.16"PRIx64" ---\n",
                                             partition_offset);
                 ntfs_print_boot_file(&ntfs_bootf, partition_offset);
-                //ntfs_diff_file_records(disk, 0, 1, partition_offset,& ntfs_bootf);
                 ntfs_walk_mft(disk, &ntfs_bootf, partition_offset);
+                break;
             }
         }
     }
