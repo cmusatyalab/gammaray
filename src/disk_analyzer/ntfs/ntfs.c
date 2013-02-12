@@ -842,6 +842,20 @@ int ntfs_dispatch_index_root_attribute(uint8_t* data, uint64_t* offset,
     return 0;
 }
 
+int ntfs_dispatch_standard_information_attribute(uint8_t* data,
+                                    uint64_t* offset,
+                                    wchar_t* fname,
+                                    struct ntfs_standard_attribute_header* sah)
+{
+    struct ntfs_standard_information nsi;
+    *offset += sah->offset_of_attribute - sizeof(*sah);
+    nsi = *((struct ntfs_standard_information*) &(data[*offset]));
+
+    ntfs_print_standard_information(&nsi);
+
+    return 0;
+}
+
 /* dispatch handler for data */
 int ntfs_dispatch_data_attribute(uint8_t* data, uint64_t* offset,
                                  wchar_t* name,
@@ -933,6 +947,14 @@ int ntfs_attribute_dispatcher(uint8_t* data, uint64_t* offset, wchar_t** fname,
         if (ntfs_dispatch_index_root_attribute(data, offset, *fname, sah,
                                                bootf, partition_offset, disk,
                                                extension))
+            ret = -1;
+    }
+    else if (sah->attribute_type == 0x10)
+    {
+        fprintf_light_yellow(stdout, "Dispatching standard information "
+                                     "attribute.\n");
+        if (ntfs_dispatch_standard_information_attribute(data, offset, *fname,
+                                                         sah))
             ret = -1;
     }
     else
