@@ -186,6 +186,10 @@ int ntfs_print_standard_information(struct ntfs_standard_information* si)
     fprintf_yellow(stdout, "a_time: %"PRIu64"\n", si->a_time);
     fprintf_yellow(stdout, "m_time: %"PRIu64"\n", si->m_time);
     fprintf_yellow(stdout, "r_time: %"PRIu64"\n", si->r_time);
+    fprintf_yellow(stdout, "Class ID: %"PRIu32"\n", si->class_id);
+    fprintf_yellow(stdout, "Owner ID: %"PRIu32"\n", si->owner_id);
+    fprintf_yellow(stdout, "Security ID: %"PRIu32"\n", si->security_id);
+    fprintf_yellow(stdout, "Permissions: %"PRIo32"\n", si->dos_permissions);
     return EXIT_SUCCESS;
 }
 
