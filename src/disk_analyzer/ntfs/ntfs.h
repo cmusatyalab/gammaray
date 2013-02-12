@@ -112,7 +112,7 @@ struct ntfs_file_name
     uint64_t allocated_size;
     uint64_t real_size;
     uint32_t flags;
-    uint32_t something;
+    uint32_t reparse;
     uint8_t name_len;
     uint8_t fnamespace;
 } __attribute__((packed));
