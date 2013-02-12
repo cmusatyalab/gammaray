@@ -911,7 +911,6 @@ int ntfs_dispatch_data_attribute(uint8_t* data, uint64_t* offset,
     return EXIT_SUCCESS;
 }
 
-
 /* attribute dispatcher */
 int ntfs_attribute_dispatcher(uint8_t* data, uint64_t* offset, wchar_t** fname,
                               struct ntfs_standard_attribute_header* sah,
@@ -947,6 +946,15 @@ int ntfs_attribute_dispatcher(uint8_t* data, uint64_t* offset, wchar_t** fname,
         if (ntfs_dispatch_index_root_attribute(data, offset, *fname, sah,
                                                bootf, partition_offset, disk,
                                                extension))
+            ret = -1;
+    }
+    else if (sah->attribute_type == 0xA0 && *fname)
+    {
+        fprintf_light_yellow(stdout, "Dispatching index allocation "
+                                     "attribute.\n");
+        if (ntfs_dispatch_index_allocation_attribute(data, offset, *fname, sah,
+                                                 bootf, partition_offset, disk,
+                                                 extension))
             ret = -1;
     }
     else if (sah->attribute_type == 0x10)
