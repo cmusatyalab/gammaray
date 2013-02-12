@@ -255,15 +255,20 @@ int ntfs_print_index_header(struct ntfs_index_header* hdr)
     return EXIT_SUCCESS;
 }
 
-int ntfs_print_index_entry(struct ntfs_index_entry* entry)
+int ntfs_print_index_entry(struct ntfs_index_entry* entry, uint8_t* data)
 {
-    fprintf_yellow(stdout, "entry.file_reference: %"PRIu64"\n",
-                                                   entry->file_reference);
+    uint64_t ref;
+
+    memcpy(&ref, entry->ref.record_number, 6);
+    //ref = ref >> 16;
+    hexdump((uint8_t*)&(entry->ref.record_number), 6);
+    fprintf_yellow(stdout, "entry.file_reference: 0x%"PRIx64"\n",
+                                                   ref);
     fprintf_yellow(stdout, "entry.length: %"PRIu16"\n",
                                                    entry->length);
     fprintf_yellow(stdout, "entry.stream_length: %"PRIu16"\n",
                                                    entry->stream_length);
-    fprintf_yellow(stdout, "entry.flags: %"PRIu8"\n",
+    fprintf_yellow(stdout, "entry.flags: %"PRIu16"\n",
                                                    entry->flags);
     return EXIT_SUCCESS;
 }
