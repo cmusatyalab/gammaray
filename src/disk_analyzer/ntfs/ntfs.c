@@ -772,7 +772,6 @@ int ntfs_read_index_entry(struct ntfs_index_entry* entry, uint8_t* data,
                           uint64_t* offset)
 {
     memcpy(entry, &(data[*offset]), sizeof(*entry));
-    *offset += entry->length;
     if (entry->length == 0)
         exit(1);
     return 0;
@@ -782,9 +781,15 @@ int ntfs_read_index_entries(uint8_t* data, uint64_t* offset)
 {
     struct ntfs_index_entry entry;
 
-    while (!ntfs_read_index_entry(&entry, data, offset) &&
-           !(entry.flags & 0x02))
-        ntfs_print_index_entry(&entry);
+    while (!ntfs_read_index_entry(&entry, data, offset))
+    {
+        ntfs_print_index_entry(&entry, &(data[*offset]));
+        *offset += sizeof(entry);
+        ntfs_print_file_name((struct ntfs_file_name*) &(data[*offset]));
+        *offset += entry.stream_length;
+        if (entry.flags & 0x02)
+            break;
+    }
 
     return 0;
 }
@@ -803,12 +808,11 @@ int ntfs_read_index_header(uint8_t* data, uint64_t* offset,
 
     ntfs_print_index_header(&hdr);
 
-    *offset += hdr.first_entry_offset - sizeof(hdr);
+    *offset += hdr.first_entry_offset;
 
     return 0;
 }
 
-/* dispatch handler for data */
 int ntfs_dispatch_index_root_attribute(uint8_t* data, uint64_t* offset,
                                        wchar_t* name,
                                        struct ntfs_standard_attribute_header* sah,
@@ -825,12 +829,11 @@ int ntfs_dispatch_index_root_attribute(uint8_t* data, uint64_t* offset,
         return EXIT_FAILURE;
     }
 
-    memcpy(&root, &(data[*offset + sah->offset_of_attribute - sizeof(*sah)]),
-           sizeof(struct ntfs_index_root));
-
+    *offset += sah->offset_of_attribute - sizeof(*sah);
+    root = *((struct ntfs_index_root*) &(data[*offset]));
     ntfs_print_index_root(&root);
 
-    *offset += sizeof(root) + sah->offset_of_attribute - sizeof(*sah);
+    *offset += sizeof(root);
 
     ntfs_read_index_header(data, offset, name, sah, bootf, partition_offset,
                            disk, extension);
