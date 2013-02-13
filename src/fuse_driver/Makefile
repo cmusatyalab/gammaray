@@ -13,6 +13,29 @@ default:
 		   -lhiredis \
 		   -I../disk_analyzer/ext4 \
 		   -I../disk_analyzer/ext2 \
+		   -I../disk_analyzer/ntfs \
+		   -I../disk_analyzer/mbr \
+		   -I../util \
+		   -I../bson \
+		   -I../stream_analyzer \
+		   -I/usr/include/hiredis \
+		   `pkg-config fuse --cflags --libs`
+	@clang -Wall \
+		   -Werror \
+		   xray_ntfs_fs.c \
+		   ../stream_analyzer/redis_queue.c \
+		   ../stream_analyzer/deep_inspection.c \
+		   ../disk_analyzer/ext4/ext4.c \
+		   ../disk_analyzer/ntfs/ntfs.c \
+		   ../util/color.c \
+		   ../util/util.c \
+		   ../bson/bson-encoder.c \
+		   ../bson/bson-decoder.c \
+		   -o xray_ntfs_fs \
+		   -lhiredis \
+		   -I../disk_analyzer/ext4 \
+		   -I../disk_analyzer/ext2 \
+		   -I../disk_analyzer/ntfs \
 		   -I../disk_analyzer/mbr \
 		   -I../util \
 		   -I../bson \
@@ -22,15 +45,15 @@ default:
 
 test: default
 	@mkdir -p /tmp/test
-	@./xray_fs -s -d /tmp/test /home/wolf/VM/vm_ext4_test/vm_ext4_test.raw
+	@./xray_fs -d -s /tmp/test /home/wolf/VM/vm_ext4_test/vm_ext4_test.raw
 	@ls test
 	@sleep 0.25
-	@sudo umount /tmp/test
-	@rm -rf /tmp/test
+	#@sudo umount /tmp/test
+	#@rm -rf /tmp/test
 
 clean:
 	@rm -rf /tmp/test
-	@rm xray_fs
+	@rm xray_fs xray_ntfs_fs
 	@sudo umount /tmp/test
 
 hellofs:
