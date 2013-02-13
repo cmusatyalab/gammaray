@@ -465,7 +465,8 @@ int ntfs_read_attribute_data(uint8_t* data, uint64_t* offset,
     return EXIT_SUCCESS;
 }
 
-FILE* ntfs_create_reconstructed_file(wchar_t* name, bool extension)
+FILE* ntfs_create_reconstructed_file(wchar_t* name, bool extension,
+                                     bool reconstruct)
 {
     FILE* reconstructed = NULL;
     char fname[1024] = { 0 };
@@ -501,9 +502,10 @@ int ntfs_handle_resident_data_attribute(uint8_t* data, uint64_t* offset,
                                         uint8_t* buf, uint64_t buf_len,
                                         wchar_t* name,
                                         struct ntfs_standard_attribute_header* sah,
-                                        bool extension)
+                                        bool extension,
+                                        bool dir)
 {
-    FILE* reconstructed = ntfs_create_reconstructed_file(name, extension);
+    FILE* reconstructed = ntfs_create_reconstructed_file(name, extension, dir);
     
     fprintf_yellow(stdout, "\tData is resident.\n");
     fprintf_white(stdout, "\tsah->offset_of_attribute: %x\tsizeof(sah) %x\n", sah->offset_of_attribute, sizeof(*sah));
@@ -567,9 +569,11 @@ int ntfs_handle_non_resident_data_attribute(uint8_t* data, uint64_t* offset,
                                             struct ntfs_boot_file* bootf,
                                             int64_t partition_offset,
                                             FILE* disk,
-                                            bool extension)
+                                            bool extension,
+                                            uint8_t** stream,
+                                            bool reconstruct)
 {
-    FILE* reconstructed = ntfs_create_reconstructed_file(name, extension);
+    FILE* reconstructed = ntfs_create_reconstructed_file(name, extension, reconstruct);
     uint8_t buf[4096];
     uint64_t real_size = 0;
     int64_t run_lcn = 0;
@@ -577,6 +581,7 @@ int ntfs_handle_non_resident_data_attribute(uint8_t* data, uint64_t* offset,
     int64_t prev_lcn = 0;
     uint64_t run_length = 0;
     uint64_t run_length_bytes = 0;
+    uint64_t stream_position = 0;
     struct ntfs_non_resident_header nrh;
 
     int counter = 0;
@@ -585,6 +590,8 @@ int ntfs_handle_non_resident_data_attribute(uint8_t* data, uint64_t* offset,
     ntfs_print_non_resident_header(&nrh);
 
     real_size = nrh.real_size;
+    if (stream)
+        *stream = malloc(real_size);
 
     fprintf_yellow(stdout, "\tData is non-resident\n");
     fprintf_white(stdout, "\tnrh->offset_of_attribute: %x\tsizeof(nrh+sah) %x\n", nrh.data_run_offset, sizeof(nrh) + sizeof(*sah));
@@ -638,6 +645,12 @@ int ntfs_handle_non_resident_data_attribute(uint8_t* data, uint64_t* offset,
                         return EXIT_FAILURE;
                     }
 
+                    if (stream)
+                    {
+                        memcpy(&((*stream)[stream_position]), buf, 4096);
+                        stream_position += 4096;
+                    }
+
                     run_length_bytes -= 4096;
                     real_size -= 4096;
                 }
@@ -657,10 +670,16 @@ int ntfs_handle_non_resident_data_attribute(uint8_t* data, uint64_t* offset,
                         return EXIT_FAILURE;
                     }
 
+                    if (stream)
+                    {
+                        memcpy(&((*stream)[stream_position]), buf,
+                               run_length_bytes);
+                        stream_position += 4096;
+                    }
+
                     real_size -= run_length_bytes;
                     run_length_bytes -= run_length_bytes;
                 }
-
             }
 
             prev_lcn = prev_lcn + run_lcn;
@@ -863,11 +882,14 @@ int ntfs_dispatch_data_attribute(uint8_t* data, uint64_t* offset,
                                  struct ntfs_boot_file* bootf,
                                  int64_t partition_offset,
                                  FILE* disk,
-                                 bool extension)
+                                 bool extension,
+                                 uint8_t** stream,
+                                 bool reconstruct)
 {
     uint8_t resident_buffer[4096];
 
-    if (sah->attribute_type != 0x80)
+    if (sah->attribute_type != 0x80 &&
+        sah->attribute_type != 0xA0)
     {
         fprintf_light_red(stderr, "Data handler, not a data attribute.\n");
         return EXIT_FAILURE;
@@ -899,14 +921,41 @@ int ntfs_dispatch_data_attribute(uint8_t* data, uint64_t* offset,
         fprintf_light_red(stdout, "fname to non-resident data handler: %ls\n", name);
         ntfs_handle_non_resident_data_attribute(data, offset, name, sah, bootf,
                                                 partition_offset, disk,
-                                                extension);
+                                                extension, stream, reconstruct);
     }
     else
     {
         fprintf_light_red(stdout, "fname to resident data handler: %ls\n", name);
         ntfs_handle_resident_data_attribute(data, offset, resident_buffer, 4096,
-                                            name, sah, extension);
+                                            name, sah, extension, reconstruct);
+        stream = malloc(4096);
+        memcpy(stream, resident_buffer, 4096);
     }
+
+    return EXIT_SUCCESS;
+}
+
+int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
+                                 wchar_t* name,
+                                 struct ntfs_standard_attribute_header* sah,
+                                 struct ntfs_boot_file* bootf,
+                                 int64_t partition_offset,
+                                 FILE* disk,
+                                 bool extension)
+{
+    uint8_t* stream;
+
+    /* read index records off disk */
+    if (ntfs_dispatch_data_attribute(data, offset, name, sah, bootf,
+                                   partition_offset, disk, extension, &stream,
+                                   false))
+        return EXIT_FAILURE;
+
+    /* process indexes */
+    hexdump(stream, 10);
+
+    /* cleanup */
+    free(stream);
 
     return EXIT_SUCCESS;
 }
@@ -937,7 +986,8 @@ int ntfs_attribute_dispatcher(uint8_t* data, uint64_t* offset, wchar_t** fname,
         fprintf_light_yellow(stdout, "Dispatching data attribute.\n");
         fprintf(stdout, "with fname: %ls\n", *fname);
         if (ntfs_dispatch_data_attribute(data, offset, *fname, sah, bootf,
-                                         partition_offset, disk, extension))
+                                         partition_offset, disk,
+                                         extension, NULL, true))
             ret = -1;
     }
     else if (sah->attribute_type == 0x90 && *fname)
