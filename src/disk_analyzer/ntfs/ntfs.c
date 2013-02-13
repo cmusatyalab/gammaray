@@ -979,7 +979,38 @@ int ntfs_attribute_dispatcher(uint8_t* data, uint64_t* offset, wchar_t** fname,
     return ret;
 }
 
+int ntfs_get_attribute(uint8_t* data, void* attr,
+                       enum NTFS_ATTRIBUTE_TYPE type)
+{
+    struct ntfs_file_record rec;
+    struct ntfs_standard_attribute_header sah;
+    uint64_t offset = 0;
 
+    ntfs_read_file_record_header(data, &offset, &rec);
+    offset = rec.offset_first_attribute;
+
+    while (ntfs_read_attribute_header(data, &offset, &sah))
+    {
+        if (sah.attribute_type == type)
+        {
+            switch (type)
+            {
+                case NTFS_FILE_NAME:
+                    memcpy(attr,
+                       &(data[offset + sah.offset_of_attribute - sizeof(sah)]),
+                       sizeof(struct ntfs_file_name)); 
+                    return EXIT_SUCCESS;
+                default:
+                    fprintf_light_red(stdout, "Unknown attribute to get.\n");
+                    return EXIT_FAILURE;
+            };
+        }
+        offset += sah.length - sizeof(sah);
+    }
+
+    fprintf_light_red(stdout, "Failed to find attribute.\n");
+    return EXIT_FAILURE;
+}
 
 
 /* meta-walk MFT */

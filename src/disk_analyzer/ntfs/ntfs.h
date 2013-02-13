@@ -9,6 +9,28 @@
 #define UPPER_NIBBLE(u) ((u & 0x0f0) >> 4) 
 #define LOWER_NIBBLE(u) ((u & 0x0f))
 
+enum NTFS_ATTRIBUTE_TYPE
+{
+    NTFS_STANDARD_INFORMATION    =   0x10,
+    NTFS_ATTRIBUTE_LIST          =   0x20,
+    NTFS_FILE_NAME               =   0x30,
+    NTFS_VOLUME_VERSION          =   0x40,
+    NTFS_OBJECT_ID               =   0x40,
+    NTFS_SECURITY_DESCRIPTOR     =   0x50,
+    NTFS_VOLUME_NAME             =   0x60,
+    NTFS_VOLUME_INFORMATION      =   0x70,
+    NTFS_DATA                    =   0x80,
+    NTFS_INDEX_ROOT              =   0x90,
+    NTFS_INDEX_ALLOCATION        =   0xA0,
+    NTFS_BITMAP                  =   0xB0,
+    NTFS_SYMBOLIC_LINK           =   0xC0,
+    NTFS_REPARSE_POINT           =   0xC0,
+    NTFS_EA_INFORMATION          =   0xD0,
+    NTFS_EA                      =   0xE0,
+    NTFS_PROPERTY_SET            =   0xF0,
+    NTFS_LOGGED_UTILITY_STREAM   =   0x100
+};
+
 /* partition start, for probing and bootstrapping */
 struct ntfs_boot_file
 {
@@ -177,4 +199,6 @@ int ntfs_read_file_record(FILE* disk, uint64_t record_num,
 int ntfs_diff_file_record_buffs(uint8_t* recorda, uint8_t* recordb,
                                 int64_t partition_offset,
                                 struct ntfs_boot_file* bootf);
+int ntfs_get_attribute(uint8_t* record, void* attr,
+                       enum NTFS_ATTRIBUTE_TYPE type);
 #endif
