@@ -3,6 +3,7 @@
 
 #include "ext2.h"
 #include "ext4.h"
+#include "ntfs.h"
 #include "mbr.h"
 #include "redis_queue.h"
 #include "qemu_common.h"
@@ -66,6 +67,9 @@ enum SECTOR_TYPE qemu_infer_sector_type(struct ext4_superblock* super,
 int qemu_get_superblock(struct kv_store* store,
                         struct ext4_superblock* superblock,
                         uint64_t fs_id);
+int qemu_get_bootf(struct kv_store* store,
+                   struct ntfs_boot_file* bootf,
+                   uint64_t fs_id);
 int qemu_get_pt_offset(struct kv_store* store,
                        uint64_t* partition_offset,
                        uint64_t pt_id);

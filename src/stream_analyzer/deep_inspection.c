@@ -3,6 +3,7 @@
 #include "util.h"
 #include "deep_inspection.h"
 #include "ext4.h"
+#include "ntfs.h"
 #include "__bson.h"
 #include "bson.h"
 #include "redis_queue.h"
@@ -1777,6 +1778,23 @@ int qemu_get_superblock(struct kv_store* store,
 
     if (redis_hash_field_get(store, REDIS_SUPERBLOCK_SECTOR_GET,
                              fs_id, "superblock", (uint8_t*) superblock,
+                             &len))
+    {
+        fprintf_light_red(stderr, "Error retrieving superblock\n");
+        return EXIT_FAILURE;
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int qemu_get_bootf(struct kv_store* store,
+                   struct ntfs_boot_file* bootf,
+                   uint64_t fs_id)
+{
+    size_t len = sizeof(struct ntfs_boot_file);
+
+    if (redis_hash_field_get(store, REDIS_SUPERBLOCK_SECTOR_GET,
+                             fs_id, "superblock", (uint8_t*) bootf,
                              &len))
     {
         fprintf_light_red(stderr, "Error retrieving superblock\n");
