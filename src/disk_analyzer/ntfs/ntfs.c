@@ -369,12 +369,41 @@ uint64_t ntfs_file_record_size(struct ntfs_boot_file* bootf)
 int ntfs_read_file_record(FILE* disk, uint64_t record_num,
                           int64_t partition_offset, 
                           struct ntfs_boot_file* bootf,
-                          uint8_t* buf)
+                          uint8_t* buf, struct bson_info* bson)
 {
     uint64_t record_size = ntfs_file_record_size(bootf); 
     int64_t offset = ntfs_lcn_to_offset(bootf, partition_offset,
                                         bootf->lcn_mft) +
                      record_num * record_size;
+    int64_t sector = offset / 512;
+    int32_t inode_num = record_num;
+    struct bson_kv val;
+
+    val.type = BSON_STRING;
+    val.size = strlen("file");
+    val.key = "type";
+    val.data = "file";
+
+    bson_serialize(bson, &val);
+    
+    val.type = BSON_INT64;
+    val.key = "inode_sector";
+    val.data = &sector;
+
+    bson_serialize(bson, &val);
+
+    sector = offset % (bootf->bytes_per_sector * bootf->sectors_per_cluster);
+    val.type = BSON_INT64;
+    val.key = "inode_offset";
+    val.data = &sector;
+
+    bson_serialize(bson, &val);
+
+    val.type = BSON_INT32;
+    val.key = "inode_num";
+    val.data = &inode_num;
+
+    bson_serialize(bson, &val);
 
     if (buf == NULL)
     {
@@ -1049,6 +1078,24 @@ int ntfs_dispatch_standard_information_attribute(uint8_t* data,
     return 0;
 }
 
+int ntfs_get_size(uint8_t* data, struct ntfs_standard_attribute_header* sah,
+                  uint64_t* data_offset, uint64_t* fsize)
+{
+    struct ntfs_non_resident_header nrh;
+
+    if (sah->non_resident_flag)
+    {
+        ntfs_read_non_resident_attribute_header(data, data_offset, &nrh);
+        *fsize = nrh.real_size; 
+    }
+    else
+    {
+        *fsize = sah->length_of_attribute;
+    }
+
+    return EXIT_SUCCESS;
+}
+
 /* dispatch handler for data */
 int ntfs_dispatch_data_attribute(uint8_t* data, uint64_t* offset,
                                  char* name,
@@ -1241,14 +1288,14 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
 
         if (ntfs_get_reference_int(&(ire.ref)))
         {
+            bson = bson_init();
             if (ntfs_read_file_record(disk, ntfs_get_reference_int(&(ire.ref)), partition_offset, bootf,
-                                      file_record) == 0)
+                                      file_record, bson) == 0)
             {
                 fprintf_light_red(stderr, "Failed reading file record %"PRIu64"\n", ntfs_get_reference_int(&(ire.ref)));
                 return EXIT_FAILURE;
             }           
 
-            bson = bson_init();
             ntfs_serialize_file_record(disk, bootf, partition_offset, name, serializedf, file_record, bson);
         }
 
@@ -1400,7 +1447,7 @@ int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf,
                               PRId64"\n",
                               file_record_counter,
                               file_record_offset);
-    while (ntfs_read_file_record(disk, file_record_counter, partition_offset, bootf, data) &&
+    while (ntfs_read_file_record(disk, file_record_counter, partition_offset, bootf, data, NULL) &&
            file_record_counter <= 5)
     {
         extension = false;
@@ -1922,8 +1969,8 @@ int ntfs_diff_file_records(FILE* disk, uint64_t recorda, uint64_t recordb,
         return EXIT_FAILURE;
     }
 
-    ntfs_read_file_record(disk, recorda, partition_offset, bootf, data_a);
-    ntfs_read_file_record(disk, recordb, partition_offset, bootf, data_b);
+    ntfs_read_file_record(disk, recorda, partition_offset, bootf, data_a, NULL);
+    ntfs_read_file_record(disk, recordb, partition_offset, bootf, data_b, NULL);
 
     ntfs_diff_raw_file_records(data_a, data_b, partition_offset, bootf);
 
@@ -2032,6 +2079,7 @@ int ntfs_serialize_file_record(FILE* disk, struct ntfs_boot_file* bootf,
     ntfs_fixup_data(data, ntfs_file_record_size(bootf), &seq);
 
     data_offset = 0;
+    is_dir = (rec.flags & 0x02) == 0x02;
 
     if (ntfs_get_attribute(data, &fdata, &data_offset, NTFS_FILE_NAME))
     {
@@ -2039,8 +2087,16 @@ int ntfs_serialize_file_record(FILE* disk, struct ntfs_boot_file* bootf,
         return EXIT_FAILURE;
     }
 
-    fsize = fdata.real_size;
-    is_dir = (rec.flags & 0x02) == 0x02;
+    data_offset = 0;
+
+    if (!is_dir && ntfs_get_attribute(data, &sah, &data_offset, NTFS_DATA))
+    {
+        fprintf_light_red(stderr, "Failed getting NTFS_DATA attr.\n");
+        return EXIT_FAILURE;
+    }
+
+    ntfs_get_size(data, &sah, &data_offset, &fsize);
+
 
     value.type = BSON_STRING;
     value.size = strlen(prefix);
@@ -2118,7 +2174,7 @@ int ntfs_serialize_fs_tree(FILE* disk, struct ntfs_boot_file* bootf,
     struct bson_info* bson = bson_init();
 
     if (ntfs_read_file_record(disk, 5, partition_offset, bootf,
-                              data) == 0)
+                              data, bson) == 0)
     {
         fprintf_light_red(stderr, "Failed reading file record 5\n");
         return EXIT_FAILURE;
