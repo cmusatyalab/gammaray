@@ -34,8 +34,10 @@ static int xrayfs_ntfs_getattr(const char* path, struct stat* stbuf)
     int64_t inode_num = xrayfs_pathlookup(path);
     uint8_t data[file_record_size];
     size_t len2 = file_record_size;
-    struct ntfs_file_name fdata;
+    struct ntfs_standard_attribute_header sah;
     struct ntfs_file_record rec;
+    struct ntfs_file_name fdata;
+    uint64_t fsize, data_offset = 0;
 
     if (inode_num < 0)
         return -ENOENT;
@@ -44,8 +46,16 @@ static int xrayfs_ntfs_getattr(const char* path, struct stat* stbuf)
                              (uint8_t*) &data, &len2))
         return -ENOENT;
 
-    if (ntfs_get_attribute(data, &fdata, NTFS_FILE_NAME))
+  
+    if (ntfs_get_attribute(data, &fdata, &data_offset, NTFS_FILE_NAME))
+        return -ENOENT;  
+
+    data_offset = 0;
+
+    if (ntfs_get_attribute(data, &sah, &data_offset, NTFS_DATA))
         return -ENOENT;
+
+    ntfs_get_size(data, &sah, &data_offset, &fsize);
 
     rec = *((struct ntfs_file_record *) data);
 
@@ -63,7 +73,7 @@ static int xrayfs_ntfs_getattr(const char* path, struct stat* stbuf)
 
     stbuf->st_nlink = rec.hard_link_count;
     stbuf->st_blksize = cluster_size;
-    stbuf->st_size = fdata.real_size; 
+    stbuf->st_size = fsize; 
     stbuf->st_blocks = (stbuf->st_size % 512) ? stbuf->st_size / 512 + 1 : 
                                                 stbuf->st_size / 512;
     stbuf->st_atime = fdata.r_time;
@@ -73,10 +83,6 @@ static int xrayfs_ntfs_getattr(const char* path, struct stat* stbuf)
     return 0;
 }
 
-/**
- * Instead of ext4_dir_entry we need to walk INDEX RECORDS one level deep (?)
- *
- */
 static int xrayfs_ntfs_readdir(const char* path, void* buf,
                                fuse_fill_dir_t filler, off_t offset,
                                struct fuse_file_info* fi)
@@ -85,7 +91,11 @@ static int xrayfs_ntfs_readdir(const char* path, void* buf,
     uint8_t data_buf[cluster_size], **list;
     size_t len = 0, len2 = 0;
     uint64_t position = 0, sector = 0, i = 0;
-    struct ext4_dir_entry dir;
+    struct ntfs_index_record_entry ire;
+    char* utf16_fname;
+    size_t utf16_fname_size;
+    size_t current_fname_size = 512;
+    char* current_fname = malloc(current_fname_size);
 
     if (inode_num < 0)
         return -ENOENT;
@@ -105,24 +115,31 @@ static int xrayfs_ntfs_readdir(const char* path, void* buf,
             return -ENOENT;
 
         position = 0;
-        /* loop through all dentry in block while (position < cluster_size) */
-        while (position < cluster_size)
+        memset(current_fname, 0, current_fname_size);
+        /* walk all entries */
+        while (!(ire.flags & 0x02))
         {
-            if (ext4_read_dir_entry(&data_buf[position], &dir))
-                return -ENOENT;
-            
-            if (dir.inode == 0)
+            /* read index entries */
+            ntfs_read_index_record_entry(data_buf, &position, &ire);
+
+            if (ntfs_get_reference_int(&(ire.ref)) < 15 ||
+                ntfs_get_reference_int(&(ire.parent)) == ntfs_get_reference_int(&(ire.ref)))
             {
-                if (dir.rec_len)
-                {
-                    position += dir.rec_len;
-                    continue;
-                }
+                position += ire.size - sizeof(struct ntfs_index_record_entry);
+                continue;
             }
 
-            dir.name[dir.name_len] = 0;
-            filler(buf, (const char*) dir.name, NULL, 0);
-            position += dir.rec_len;
+            utf16_fname = (char*) &(data_buf[position]);
+            utf16_fname_size = ire.filename_length * 2;
+            ntfs_utf16_to_char(utf16_fname, utf16_fname_size,
+                               (char*) current_fname, current_fname_size);
+
+            position += ire.size - sizeof(struct ntfs_index_record_entry);
+
+            if (ntfs_get_reference_int(&(ire.ref)))
+            {
+                filler(buf, current_fname, NULL, 0);
+            }
         }
     }
 
@@ -150,10 +167,15 @@ static int xrayfs_ntfs_read(const char* path, char* buf, size_t size,
     uint64_t inode_num = xrayfs_pathlookup(path);
     uint8_t** list;
     size_t len = 0;
-    ssize_t readb = 0, toread = 0, ret = 0;
-    uint64_t position = 0, sector = 0, i = 0;
+    uint64_t position = 0, i = 0;
+    int64_t sector = 0;
     struct stat st;
-    int64_t start = offset / 4096, end;
+    int64_t start = offset / cluster_size, end;
+    uint64_t file_record_offset = 0;
+    struct ntfs_standard_attribute_header sah;
+    uint8_t data[file_record_size];
+    size_t len2 = file_record_size;
+
 
     if (xrayfs_ntfs_getattr(path, &st))
         return -ENOENT;
@@ -164,7 +186,7 @@ static int xrayfs_ntfs_read(const char* path, char* buf, size_t size,
     if (offset + size > st.st_size)
         size = st.st_size - offset;
 
-    end = start + ((size + 4095) / 4096);
+    end = start + ((size + cluster_size - 1) / cluster_size);
 
     if (redis_list_get_var(handle, REDIS_FILE_SECTORS_LGET_VAR,
                            inode_num, &list, &len, start, end))
@@ -174,26 +196,24 @@ static int xrayfs_ntfs_read(const char* path, char* buf, size_t size,
     for (i = 0; i < len; i++)
     {
         strtok((char*) (list)[i], ":");
-        sscanf(strtok(NULL, ":"), "%"SCNu64, &sector);
+        sscanf(strtok(NULL, ":"), "%"SCNd64, &sector);
 
-        lseek(fd_disk, sector * 512 + offset % cluster_size, SEEK_SET);
-        readb = 0;
-
-        if (position + cluster_size - offset % cluster_size < size)
-            toread = cluster_size - offset % cluster_size;
-        else
-            toread = size - position;
-
-        while (readb < toread)
+        if (sector == -1)
         {
-            ret = read(fd_disk, (char*) &(buf[position]), toread - readb);
-            if (ret < 0)
-                return -EINVAL;
-            readb += ret;
-        }
+            /* read wholly contained within FILE record */
+            if (redis_hash_field_get(handle, REDIS_FILE_SECTOR_GET, inode_num, "inode",
+                                     (uint8_t*) &data, &len2))
+                return -ENOENT;
 
-        offset += readb;
-        position += readb;
+            if (ntfs_get_attribute(data, &sah, &file_record_offset, NTFS_DATA))
+                return -ENOENT;
+
+            file_record_offset += sah.offset_of_attribute - sizeof(sah);
+            memcpy(buf, &(data[file_record_offset + offset]), size);
+            position = size;
+
+            break;
+        }
     }
 
     redis_free_list(list, len);

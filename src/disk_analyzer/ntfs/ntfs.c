@@ -2097,7 +2097,6 @@ int ntfs_serialize_file_record(FILE* disk, struct ntfs_boot_file* bootf,
 
     ntfs_get_size(data, &sah, &data_offset, &fsize);
 
-
     value.type = BSON_STRING;
     value.size = strlen(prefix);
     value.key = "path";

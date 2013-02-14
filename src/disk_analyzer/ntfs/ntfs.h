@@ -257,6 +257,8 @@ int ntfs_diff_file_record_buffs(uint8_t* recorda, uint8_t* recordb,
                                 struct ntfs_boot_file* bootf);
 int ntfs_get_attribute(uint8_t* record, void* attr, uint64_t* offset,
                        enum NTFS_ATTRIBUTE_TYPE type);
+int ntfs_get_size(uint8_t* data, struct ntfs_standard_attribute_header* sah,
+                  uint64_t* offset, uint64_t* fsize);
 int ntfs_serialize_fs(struct ntfs_boot_file* bootf, int64_t partition_offset,
                       uint32_t pte_num, char* mount_point, FILE* serializedf);
 int ntfs_serialize_fs_tree(FILE* disk, struct ntfs_boot_file* bootf,
@@ -266,4 +268,9 @@ int ntfs_serialize_file_record(FILE* disk, struct ntfs_boot_file* bootf,
                                int64_t partition_offset, char* prefix,
                                FILE* serializedf, uint8_t* data,
                                struct bson_info* bson);
+int ntfs_read_index_record_entry(uint8_t* data, uint64_t* offset,
+                                 struct ntfs_index_record_entry* ire);
+uint64_t ntfs_get_reference_int(struct ntfs_file_reference* ref);
+int ntfs_utf16_to_char(char* utf16_fname, size_t inlen, char* char_fname,
+                       size_t outlen);
 #endif
