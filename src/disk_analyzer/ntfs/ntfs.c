@@ -154,6 +154,21 @@ int ntfs_print_file_record(struct ntfs_file_record* rec)
     return EXIT_SUCCESS;
 }
 
+int ntfs_print_index_record_header(struct ntfs_index_record_header* irh)
+{
+    fprintf_light_blue(stdout, "irh->magic: %.4s\n", irh->magic);
+    fprintf_yellow(stdout, "irh->update_seq_offset: %"PRIu16"\n", irh->update_seq_offset);
+    fprintf_yellow(stdout, "irh->size_update_seq: %"PRIu16"\n", irh->size_usn); /* in words */
+    fprintf_yellow(stdout, "irh->log_seq_num: %"PRIu64"\n", irh->log_seq_num);
+    fprintf_yellow(stdout, "irh->index_vcn: %"PRIu64"\n", irh->index_vcn);
+    fprintf_yellow(stdout, "irh->offset_to_index_entries: %"PRIu32"\n", irh->offset_to_index_entries); /* - 0x18 */
+    fprintf_yellow(stdout, "irh->size_of_index_entries: %"PRIu32"\n", irh->size_of_index_entries);
+    fprintf_yellow(stdout, "irh->allocated_size_of_index_entries: %"PRIu32"\n", irh->allocated_size_of_index_entries);
+    fprintf_yellow(stdout, "irh->is_leaf: 0x%"PRIx8"\n", irh->is_leaf);
+    fprintf_yellow(stdout, "irh->usn: [0x%"PRIx16"]\n", irh->usn_num);
+    return EXIT_SUCCESS;
+}
+
 int ntfs_print_standard_attribute_header(struct ntfs_standard_attribute_header* sah)
 {
     fprintf_yellow(stdout, "sah.attribute_type: 0x%"PRIx32"\n", sah->attribute_type);
@@ -944,6 +959,9 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
                                  bool extension)
 {
     uint8_t* stream;
+    uint64_t stream_offset = 0;
+    struct ntfs_index_record_header irh;
+    struct ntfs_update_sequence seq;
 
     /* read index records off disk */
     if (ntfs_dispatch_data_attribute(data, offset, name, sah, bootf,
@@ -951,11 +969,22 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
                                    false))
         return EXIT_FAILURE;
 
-    /* process indexes */
-    hexdump(stream, 10);
+    /* fixup index record */
+    irh = *((struct ntfs_index_record_header*) stream);
+    stream_offset += sizeof(irh);
+
+    ntfs_print_index_record_header(&irh);
+    ntfs_read_update_sequence(stream, &stream_offset,
+                              irh.size_usn, irh.usn_num,
+                              &seq);
+    ntfs_fixup_data(stream, irh.allocated_size_of_index_entries + 0x18, &seq); 
 
     /* cleanup */
+    if (seq.data)
+        free(seq.data);
+
     free(stream);
+    exit(1);
 
     return EXIT_SUCCESS;
 }
@@ -1097,7 +1126,8 @@ int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf,
         file_record_offset += ntfs_file_record_size(bootf);
         ntfs_read_file_record_header(data, &data_offset, &rec);
         ntfs_print_file_record(&rec);
-        ntfs_read_update_sequence(data, &data_offset, &rec, &seq);
+        ntfs_read_update_sequence(data, &data_offset, rec.size_usn,
+                                  rec.usn_num, &seq);
         ntfs_fixup_data(data, 1024, &seq);
 
         /* check if valid record we want to check */
@@ -1548,11 +1578,13 @@ int ntfs_diff_raw_file_records(uint8_t* bufa, uint8_t* bufb,
     uint64_t offseta = 0, offsetb = 0, counter = 0;
 
     ntfs_read_file_record_header(bufa, &offseta, &reca);
-    ntfs_read_update_sequence(bufa, &offseta, &reca, &seqa);
+    ntfs_read_update_sequence(bufa, &offseta, reca.size_usn,
+                              reca.usn_num, &seqa);
     ntfs_fixup_data(bufa, ntfs_file_record_size(bootf), &seqa);
 
     ntfs_read_file_record_header(bufb, &offsetb, &recb);
-    ntfs_read_update_sequence(bufb, &offsetb, &recb, &seqb);
+    ntfs_read_update_sequence(bufb, &offsetb, recb.size_usn,
+                              recb.usn_num, &seqb);
     ntfs_fixup_data(bufb, ntfs_file_record_size(bootf), &seqb);
 
     __diff_file_records(&reca, &recb);

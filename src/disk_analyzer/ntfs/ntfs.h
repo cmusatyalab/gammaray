@@ -182,6 +182,39 @@ struct ntfs_index_entry
     uint16_t flags;
 } __attribute__((packed));
 
+struct ntfs_index_record_header
+{
+    uint8_t magic[4];
+    uint16_t update_seq_offset;
+    uint16_t size_usn; /* in words */
+    uint64_t log_seq_num;
+    uint64_t index_vcn;
+    uint32_t offset_to_index_entries; /* - 0x18 */
+    uint32_t size_of_index_entries;
+    uint32_t allocated_size_of_index_entries;
+    uint8_t is_leaf;
+    uint8_t padding[3];
+    uint16_t usn_num;
+} __attribute__((packed));
+
+struct ntfs_index_record_entry
+{
+    struct ntfs_file_reference ref;
+    uint16_t size;
+    uint16_t file_name_offset;
+    uint16_t flags;
+    uint16_t padding;
+    struct ntfs_file_reference parent;
+    uint64_t c_time;
+    uint64_t m_time;
+    uint64_t a_time;
+    uint64_t file_allocated_size;
+    uint64_t file_real_size;
+    uint64_t file_flags;
+    uint8_t filename_namespace;
+    /* then filename, padding, VCN if not leaf */
+} __attribute__((packed));
+
 uint64_t ntfs_file_record_size (struct ntfs_boot_file* bootf);
 int ntfs_probe(FILE* disk, int64_t partition_offset,
                struct ntfs_boot_file* bootf);
