@@ -49,6 +49,7 @@ default:
 		 ../datastructures/bst.c \
 		 ../datastructures/linkedlist.c \
 		 ../disk_analyzer/ext4/ext4.c \
+		 ../disk_analyzer/ntfs/ntfs.c \
 		 deep_inspection.c \
 		 redis_queue.c \
 		 -lhiredis \
@@ -59,6 +60,7 @@ default:
 		 -Werror \
 		 -I../disk_analyzer/ext2 \
 		 -I../disk_analyzer/ext4 \
+		 -I../disk_analyzer/ntfs\
 		 -I../disk_analyzer/mbr \
 		 -I../util \
 		 -I../bson \
@@ -66,6 +68,42 @@ default:
 		 -I/usr/include/hiredis \
 		 #-DNOCOLOR
 
+	@clang inference_engine_ntfs.c -g \
+		 qemu_common.c \
+		 ../util/color.c \
+		 ../util/util.c \
+		 ../bson/bson-encoder.c \
+		 ../bson/bson-decoder.c \
+		 ../disk_analyzer/ext2/ext2.c \
+		 ../datastructures/bst.c \
+		 ../datastructures/linkedlist.c \
+		 ../disk_analyzer/ext4/ext4.c \
+		 ../disk_analyzer/ntfs/ntfs.c \
+		 deep_inspection.c \
+		 redis_queue.c \
+		 -lhiredis \
+		 -lrt \
+		 -pthread \
+		 -o inference_engine_ntfs \
+		 -Wall \
+		 -Werror \
+		 -I../disk_analyzer/ext2 \
+		 -I../disk_analyzer/ext4 \
+		 -I../disk_analyzer/ntfs\
+		 -I../disk_analyzer/mbr \
+		 -I../util \
+		 -I../bson \
+		 -I../datastructures \
+		 -I/usr/include/hiredis \
+		 #-DNOCOLOR
+
+
+test_ntfs: clean default
+	@redis-cli flushall
+	./inference_engine_ntfs \
+		/tmp/win7enterprise.bson \
+	    4 \
+		ntfs_test_vm
 
 test_async: clean default
 	@redis-cli flushall
@@ -83,7 +121,7 @@ test_ext4: clean default
 	@redis-cli flushall
 	@./async_queuer \
 		/home/wolf/Dropbox/Projects/xray/sample/ext4_trace.bin \
-	    4
+	    m4
 	@./inference_engine \
 		/home/wolf/Dropbox/Projects/xray/sample/ext4_index.bson \
 	    4 \

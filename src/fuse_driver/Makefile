@@ -5,6 +5,7 @@ default:
 		   ../stream_analyzer/redis_queue.c \
 		   ../stream_analyzer/deep_inspection.c \
 		   ../disk_analyzer/ext4/ext4.c \
+		   ../disk_analyzer/ntfs/ntfs.c \
 		   ../util/color.c \
 		   ../util/util.c \
 		   ../bson/bson-encoder.c \
@@ -42,6 +43,14 @@ default:
 		   -I../stream_analyzer \
 		   -I/usr/include/hiredis \
 		   `pkg-config fuse --cflags --libs`
+
+test_ntfs: default
+	@mkdir -p /tmp/test_ntfs
+	@./xray_ntfs_fs -d -s /tmp/test_ntfs /home/wolf/VM/vm_ntfs_test/vm_ntfs_test.raw
+	@ls /tmp/test_ntfs
+	@sleep 0.25
+	#@sudo umount /tmp/test
+	#@rm -rf /tmp/test
 
 test: default
 	@mkdir -p /tmp/test

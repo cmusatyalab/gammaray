@@ -275,7 +275,7 @@ int redis_delqueue_pipelined(struct kv_store* handle, uint64_t sector_num)
 }
 
 int redis_reverse_pointer_set(struct kv_store* handle, const char* fmt,
-                              uint64_t src, uint64_t dst)
+                              uint64_t src, int64_t dst)
 {
     redisAppendCommand(handle->connection, fmt,
                                            src,
@@ -328,6 +328,7 @@ int redis_hash_field_get(struct kv_store* handle, const char* fmt,
     }
     else
     {
+        fprintf(stdout, "reply->len = %zu\n", reply->len);
         *len = 0;
     }
 
@@ -375,7 +376,7 @@ int redis_sector_lookup(struct kv_store* handle, uint64_t src,
 }
 
 int redis_reverse_file_data_pointer_set(struct kv_store* handle,
-                                        uint64_t src, uint64_t start,
+                                        int64_t src, uint64_t start,
                                         uint64_t end, uint64_t dst)
 {
     redisAppendCommand(handle->connection, REDIS_DATA_INSERT,

@@ -644,6 +644,11 @@ int ntfs_parse_data_run(uint8_t* data, uint64_t* offset,
     return 0;
 }
 
+uint64_t ntfs_cluster_size(struct ntfs_boot_file *bootf)
+{
+    return bootf->bytes_per_sector * bootf->sectors_per_cluster;
+}
+
 /* handler for non-resident */
 int ntfs_handle_non_resident_data_attribute(uint8_t* data, uint64_t* offset,
                                             char* name,
@@ -1197,7 +1202,14 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
     char name[32767];
     struct bson_info* datas;
     struct bson_kv data_value, data_array;
+    struct bson_info* sectors;
+    struct bson_kv sector_value, sector_array;
+    uint32_t sector = 0;
     char count[11];
+
+    sectors = bson_init();
+    sector_array.type = BSON_ARRAY;
+    sector_array.key = "sectors";
 
     datas = bson_init();
     data_array.type = BSON_ARRAY;
@@ -1206,6 +1218,10 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
     snprintf(count, 11, "%"PRIu32, 0);
     data_value.key = count;
     data_value.type = BSON_BINARY;
+
+    sector_value.key = count;
+    sector_value.type = BSON_INT32;
+    sector_value.data = &sector;
 
     /* read index records off disk */
     if (ntfs_dispatch_data_attribute(data, offset, name, sah, bootf,
@@ -1224,10 +1240,15 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
     ntfs_fixup_data(stream, irh.allocated_size_of_index_entries + 0x18, &seq); 
     
     data_value.data = stream;
-    data_value.size = 0x18 + irh.offset_to_index_entries +
-                      irh.allocated_size_of_index_entries;
+    data_value.size = 0x18 + irh.allocated_size_of_index_entries;
 
     bson_serialize(datas, &data_value);
+    bson_serialize(sectors, &sector_value);
+
+    bson_finalize(sectors);
+    sector_array.data = sectors;
+    bson_serialize(bson, &sector_array);
+    bson_cleanup(sectors);
 
     bson_finalize(datas);
     data_array.data = datas;
@@ -2132,12 +2153,12 @@ int ntfs_serialize_file_record(FILE* disk, struct ntfs_boot_file* bootf,
         return EXIT_FAILURE;
     }
 
-    ntfs_dispatch_data_attribute(data, &data_offset, prefix, &sah, bootf,
-                                 partition_offset, disk, false, NULL, false,
-                                 bson);
 
     if (!is_dir)
     {
+        ntfs_dispatch_data_attribute(data, &data_offset, prefix, &sah, bootf,
+                                     partition_offset, disk, false, NULL, false,
+                                     bson);
         bson_finalize(bson);
         bson_writef(bson, serializedf);
         bson_cleanup(bson);
@@ -2152,13 +2173,14 @@ int ntfs_serialize_file_record(FILE* disk, struct ntfs_boot_file* bootf,
         if (ntfs_get_attribute(data, &sah, &data_offset, NTFS_INDEX_ALLOCATION))
         {
             fprintf_light_red(stderr, "Failed getting NTFS_INDEX_ALLOCATION attr.\n");
-            return EXIT_FAILURE;
         }
-
-        ntfs_dispatch_index_allocation_attribute(data, (uint64_t*) &data_offset,
-                                                 prefix, &sah, bootf,
-                                                 partition_offset, disk,
-                                                 bson, serializedf);
+        else
+        {
+            ntfs_dispatch_index_allocation_attribute(data, (uint64_t*) &data_offset,
+                                                     prefix, &sah, bootf,
+                                                     partition_offset, disk,
+                                                     bson, serializedf);
+        }
 
     }
 

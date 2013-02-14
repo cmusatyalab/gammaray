@@ -13,6 +13,7 @@
 #include "ntfs.h"
 #include "redis_queue.h"
 #include "xray_ntfs_fs.h"
+#include "util.h"
 
 static uint64_t partition_offset = 0;
 static uint64_t cluster_size = 0;
@@ -37,7 +38,7 @@ static int xrayfs_ntfs_getattr(const char* path, struct stat* stbuf)
     struct ntfs_standard_attribute_header sah;
     struct ntfs_file_record rec;
     struct ntfs_file_name fdata;
-    uint64_t fsize, data_offset = 0;
+    uint64_t fsize = 0, data_offset = 0;
 
     if (inode_num < 0)
         return -ENOENT;
@@ -46,22 +47,25 @@ static int xrayfs_ntfs_getattr(const char* path, struct stat* stbuf)
                              (uint8_t*) &data, &len2))
         return -ENOENT;
 
+    //hexdump(data, len2);
+    rec = *((struct ntfs_file_record *) data);
   
     if (ntfs_get_attribute(data, &fdata, &data_offset, NTFS_FILE_NAME))
         return -ENOENT;  
 
     data_offset = 0;
 
-    if (ntfs_get_attribute(data, &sah, &data_offset, NTFS_DATA))
-        return -ENOENT;
+    if (!((rec.flags & 0x02) == 0x02))
+    {
+        if (ntfs_get_attribute(data, &sah, &data_offset, NTFS_DATA))
+            return -ENOENT;
 
-    ntfs_get_size(data, &sah, &data_offset, &fsize);
-
-    rec = *((struct ntfs_file_record *) data);
+        ntfs_get_size(data, &sah, &data_offset, &fsize);
+    }
 
     memset(stbuf, 0, sizeof(struct stat));
 
-    if (rec.flags & 0x02)
+    if ((rec.flags & 0x02) == 0x02)
         stbuf->st_mode |= S_IFDIR | S_IXUSR | S_IXGRP | S_IXOTH;
     else
         stbuf->st_mode |= S_IFREG;
@@ -96,6 +100,8 @@ static int xrayfs_ntfs_readdir(const char* path, void* buf,
     size_t utf16_fname_size;
     size_t current_fname_size = 512;
     char* current_fname = malloc(current_fname_size);
+    uint32_t counter = 0;
+    struct ntfs_index_record_header irh;
 
     if (inode_num < 0)
         return -ENOENT;
@@ -109,36 +115,47 @@ static int xrayfs_ntfs_readdir(const char* path, void* buf,
         strtok((char*) (list)[i], ":");
         sscanf(strtok(NULL, ":"), "%"SCNu64, &sector);
         len2 = cluster_size;
+        fprintf(stdout, "sector: %"PRIu64" size=%"PRIu64"\n", sector, len2);
 
         if (redis_hash_field_get(handle, REDIS_DIR_SECTOR_GET, sector, "data",
                                  data_buf, &len2))
             return -ENOENT;
 
+        fprintf(stdout, "sector: %"PRIu64" size=%"PRIu64"\n", sector, len2);
         position = 0;
-        memset(current_fname, 0, current_fname_size);
+        hexdump(data_buf, 128);
+        irh = *((struct ntfs_index_record_header*) data_buf);
+        position = irh.offset_to_index_entries + 0x18;
         /* walk all entries */
-        while (!(ire.flags & 0x02))
+        while (!(ire.flags & 0x02) && counter++ < 20)
         {
             /* read index entries */
+            hexdump(&(data_buf[position]), 128);
             ntfs_read_index_record_entry(data_buf, &position, &ire);
+            fprintf(stdout, "xray_ntfs_fs: walking index record entry...\n");
 
             if (ntfs_get_reference_int(&(ire.ref)) < 15 ||
                 ntfs_get_reference_int(&(ire.parent)) == ntfs_get_reference_int(&(ire.ref)))
             {
                 position += ire.size - sizeof(struct ntfs_index_record_entry);
+                fprintf(stdout, "xray_ntfs_fs: ignoring entry... ire.ref = %"PRIu64"\n", ntfs_get_reference_int(&(ire.ref)));
+                fprintf(stdout, "xray_ntfs_fs: ignoring entry... ire.parent = %"PRIu64"\n", ntfs_get_reference_int(&(ire.parent)));
                 continue;
             }
 
             utf16_fname = (char*) &(data_buf[position]);
             utf16_fname_size = ire.filename_length * 2;
+            memset(current_fname, 0, current_fname_size);
             ntfs_utf16_to_char(utf16_fname, utf16_fname_size,
                                (char*) current_fname, current_fname_size);
 
             position += ire.size - sizeof(struct ntfs_index_record_entry);
+            fprintf(stdout, "new entry: %s\n", current_fname);
 
             if (ntfs_get_reference_int(&(ire.ref)))
             {
                 filler(buf, current_fname, NULL, 0);
+                fprintf(stdout, "added new entry!\n");
             }
         }
     }
@@ -231,13 +248,13 @@ int main(int argc, char* argv[])
     fd_disk = open(path, O_RDONLY);
     argc -= 1;
 
-    if (qemu_get_bootf(handle, &bootf, (uint64_t) 0))
+    if (qemu_get_bootf(handle, &bootf, (uint64_t) 1))
         return EXIT_FAILURE;
 
     cluster_size = bootf.bytes_per_sector * bootf.sectors_per_cluster;
     file_record_size = ntfs_file_record_size(&bootf);
 
-    if (qemu_get_pt_offset(handle, &partition_offset, (uint64_t) 0))
+    if (qemu_get_pt_offset(handle, &partition_offset, (uint64_t) 1))
         return EXIT_FAILURE;
 
     return fuse_main(argc, argv, &xrayfs_ntfs_oper, NULL);

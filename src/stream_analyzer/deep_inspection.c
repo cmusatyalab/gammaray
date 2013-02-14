@@ -969,6 +969,59 @@ int __emit_file_bytes(uint8_t* write, struct kv_store* store,
     return EXIT_SUCCESS;
 }
 
+int __diff_superblock_ntfs(uint8_t* write, struct kv_store* store, 
+                      char* vmname, uint64_t write_counter, 
+                      char* pointer, size_t write_len)
+{
+    uint64_t fs = 0, superblock_offset = 0;
+    size_t len = sizeof(struct ntfs_boot_file);
+    struct ntfs_boot_file* new, oldd, *old = &oldd;
+    fprintf_light_white(stdout, "__diff_superblock_ntfs()\n");
+
+    fprintf_light_white(stdout, "working on: %s\n", pointer);
+
+    strtok(pointer, ":");
+    sscanf(strtok(NULL, ":"), "%"SCNu64, &fs);
+
+    fprintf_light_white(stdout, "pulling superblock: %"PRIu64"\n", fs);
+
+    if (redis_hash_field_get(store, REDIS_SUPERBLOCK_SECTOR_GET, fs,
+                             "superblock", (uint8_t*) old, &len))
+    {
+        fprintf_light_red(stderr, "Error getting superblock fs:%"
+                                  PRIu64"\n", fs);
+        return EXIT_FAILURE;
+    }
+
+    len = sizeof(superblock_offset);
+    if (redis_hash_field_get(store, REDIS_SUPERBLOCK_SECTOR_GET, fs,
+                             "superblock_offset", 
+                             (uint8_t*) &superblock_offset, &len))
+    {
+        fprintf_light_red(stderr, "Failed getting superblock_offset fs:%"
+                                  PRIu64"\n", fs);
+        return EXIT_FAILURE;
+    }
+
+    fprintf_light_white(stdout, "superblock_offset: %"PRIu64"\n",
+                                superblock_offset);
+
+    new = (struct ntfs_boot_file *) &(write[superblock_offset]);
+
+    len = sizeof(*new);
+    if (redis_hash_field_set(store, REDIS_SUPERBLOCK_SECTOR_INSERT, fs,
+                             "superblock", (uint8_t*) new, len))
+    {
+        fprintf_light_red(stderr, "Error writing new superblock back: %"
+                                  PRIu64"\n", fs);
+        return EXIT_FAILURE;
+    }
+
+    return EXIT_SUCCESS;
+}
+
+
+
 int __diff_superblock(uint8_t* write, struct kv_store* store, 
                       char* vmname, uint64_t write_counter, 
                       char* pointer, size_t write_len)
@@ -1416,6 +1469,70 @@ int __diff_ext4_extents(struct kv_store* store, char* vmname, uint64_t file,
     return EXIT_SUCCESS; 
 }
 
+int __diff_inodes_ntfs(uint8_t* write, struct kv_store* store,
+                  char* vmname, uint64_t write_counter, char* pointer,
+                  size_t write_len, struct ntfs_boot_file* bootf,
+                  uint64_t partition_offset)
+{
+    uint64_t file = 0, lfiles = 0, i, offset;
+    uint8_t** list;
+    size_t len = 0, len2 = 4096;
+    uint8_t *new;
+    char* path[len2];
+    
+    fprintf_light_white(stdout, "__diff_inodes()\n");
+    fprintf_light_white(stdout, "pointer: %s\n", pointer);
+
+    strtok(pointer, ":");
+    sscanf(strtok(NULL, ":"), "%"SCNu64, &lfiles);
+
+    if (redis_list_get(store, REDIS_FILES_LGET, lfiles, &list, &len))
+    {
+        fprintf_light_red(stdout, "Error getting list of bgds from Redis.\n");
+        return EXIT_FAILURE;
+    }
+
+    for (i = 0; i < len; i++)
+    {
+        len2 = 4096;
+        strtok((char*) (list)[i], ":");
+        sscanf(strtok(NULL, ":"), "%"SCNu64, &file);
+
+        if (redis_hash_field_get(store, REDIS_FILE_SECTOR_GET, file, "path",
+                                 (uint8_t*) path, &len2))
+        {
+            fprintf_light_red(stdout, "Error getting path for file %"PRIu64
+                                      "from Redis.\n", file);
+            return EXIT_FAILURE;
+        }
+
+        path[len2] = '\0';
+
+        len2 = sizeof(offset);
+        if (redis_hash_field_get(store, REDIS_FILE_SECTOR_GET, file, "inode_offset",
+                                 (uint8_t*) &offset, &len2))
+        {
+            fprintf_light_red(stdout, "Error getting offset for file %"PRIu64
+                                      "from Redis.\n", file);
+            return EXIT_FAILURE;
+        }
+
+        new = &(write[offset]);
+
+        len2 = ntfs_file_record_size(bootf);
+        if (redis_hash_field_set(store, REDIS_FILE_SECTOR_INSERT, file, "inode",
+                                 (uint8_t*) new, len2))
+        {
+            fprintf_light_red(stdout, "Error getting offset for file %"PRIu64
+                                      "from Redis.\n", file);
+            return EXIT_FAILURE;
+        }
+    }
+
+    fprintf_light_cyan(stdout, "loaded: %zu elements\n", len);
+    return EXIT_SUCCESS;
+}
+
 int __diff_inodes(uint8_t* write, struct kv_store* store,
                   char* vmname, uint64_t write_counter, char* pointer,
                   size_t write_len, struct ext4_superblock* super,
@@ -1657,6 +1774,45 @@ int __diff_extent_tree(uint8_t* write, struct kv_store* store,
     return EXIT_SUCCESS;
 }
 
+
+int __qemu_dispatch_write_ntfs(uint8_t* data,
+                          struct kv_store* store, char* vmname,
+                          uint64_t write_counter,
+                          char* pointer, size_t len,
+                          struct ntfs_boot_file* bootf,
+                          uint64_t partition_offset,
+                          uint64_t sector)
+{
+    D_PRINT64(partition_offset);
+    fprintf_light_blue(stdout, "pointer: %s\n", pointer);
+    if (strncmp(pointer, "start", strlen("start")) == 0)
+        __emit_file_bytes(data, store, vmname, write_counter, pointer, len,
+                          sector);
+    else if(strncmp(pointer, "fs", strlen("fs")) == 0)
+        __diff_superblock_ntfs(data, store, vmname, write_counter, pointer, len);
+    else if(strncmp(pointer, "mbr", strlen("mbr")) == 0)
+        __diff_mbr(data, store, vmname, pointer);
+    else if(strncmp(pointer, "lbgds", strlen("lbgds")) == 0)
+        __diff_bgds(data, store, vmname, write_counter, pointer, len);
+    else if(strncmp(pointer, "lfiles", strlen("lfiles")) == 0)
+        __diff_inodes_ntfs(data, store, vmname, write_counter, pointer, len, bootf,
+                      partition_offset);
+    else if(strncmp(pointer, "bgd", strlen("bgd")) == 0)
+        __diff_bitmap(data, store, vmname, pointer);
+    //else if(strncmp(pointer, "extent", strlen("extent")) == 0)
+        //__diff_extent_tree(data, store, vmname, pointer, write_counter, len, 
+        //                   super, partition_offset);
+    //else if(strncmp(pointer, "dirdata", strlen("dirdata")) == 0)
+    //    __diff_dir2_ntfs(data, store, vmname, write_counter, pointer, len,
+    //                super, partition_offset);
+    else
+    {
+        fprintf_light_red(stderr, "Redis returned unknown sector type [%s]\n",
+                                                                      pointer);
+    }
+    return EXIT_SUCCESS;
+}
+
 int __qemu_dispatch_write(uint8_t* data,
                           struct kv_store* store, char* vmname,
                           uint64_t write_counter,
@@ -1692,6 +1848,81 @@ int __qemu_dispatch_write(uint8_t* data,
         fprintf_light_red(stderr, "Redis returned unknown sector type [%s]\n",
                                                                       pointer);
     }
+    return EXIT_SUCCESS;
+}
+
+int qemu_deep_inspect_ntfs(struct ntfs_boot_file* bootf,
+                      struct qemu_bdrv_write* write,
+                      struct kv_store* store, uint64_t write_counter,
+                      char* vmname, uint64_t partition_offset)
+{
+    uint64_t i;
+    uint8_t result[1024];
+    size_t len = 1024;
+    uint64_t block_size = ntfs_cluster_size(bootf);
+    uint64_t size = 0;
+    uint8_t* data;
+
+    for (i = 0; i < write->header.nb_sectors; i += block_size / SECTOR_SIZE)
+    {
+        len = 1024;
+        if (redis_sector_lookup(store, write->header.sector_num + i,
+            result, &len))
+        {
+            fprintf_light_red(stderr, "Error doing sector lookup.\n");
+            if ((write->header.nb_sectors - i) * SECTOR_SIZE < block_size)
+            {
+                size = (write->header.nb_sectors - i) * SECTOR_SIZE;
+            }
+            else
+            {
+                size = block_size;
+            }
+
+            redis_enqueue_pipelined(store, write->header.sector_num + i,
+                                    &(write->data[i*SECTOR_SIZE]),
+                                    size);
+            continue;
+        } 
+
+        if (len)
+        {
+            result[len] = 0;
+            data = &(write->data[i*SECTOR_SIZE]);
+
+            if ((write->header.nb_sectors - i) * SECTOR_SIZE < block_size)
+            {
+                size = (write->header.nb_sectors - i)* SECTOR_SIZE;
+            }
+            else
+            {
+                size = block_size;
+            }
+
+            D_PRINT64(partition_offset);
+            __qemu_dispatch_write_ntfs(data, store, vmname, write_counter,
+                                       (char *) result, (size_t) size, bootf,
+                                       partition_offset, write->header.sector_num);
+        }
+        else
+        {
+            fprintf_light_red(stderr, "Returned sector lookup empty.\n");
+            if ((write->header.nb_sectors - i) * SECTOR_SIZE < block_size)
+            {
+                size = (write->header.nb_sectors - i) * SECTOR_SIZE;
+            }
+            else
+            {
+                size = block_size;
+            }
+
+            redis_enqueue_pipelined(store, write->header.sector_num + i,
+                                    &(write->data[i*SECTOR_SIZE]),
+                                    size);
+            return EXIT_FAILURE;
+        }
+    }
+
     return EXIT_SUCCESS;
 }
 
@@ -1855,6 +2086,39 @@ enum SECTOR_TYPE qemu_infer_sector_type(struct ext4_superblock* super,
     uint8_t result[1024];
     size_t len = 1024;
     uint64_t block_size = ext4_block_size(*super);
+
+    for (i = 0; i < write->header.nb_sectors; i += block_size / SECTOR_SIZE)
+    {
+        if (redis_sector_lookup(store, write->header.sector_num + i,
+            result, &len))
+        {
+            fprintf_light_red(stderr, "Error doing sector lookup.\n");
+            return SECTOR_UNKNOWN;
+        } 
+
+        if (len)
+        {
+            result[len] = 0;
+            return __sector_type((const char*) result);
+        }
+        else
+        {
+            return SECTOR_UNKNOWN;
+        }
+    }
+
+    return SECTOR_UNKNOWN;
+}
+
+
+enum SECTOR_TYPE qemu_infer_ntfs_sector_type(struct ntfs_boot_file* bootf,
+                                        struct qemu_bdrv_write* write,
+                                        struct kv_store* store)
+{
+    uint64_t i;
+    uint8_t result[1024];
+    size_t len = 1024;
+    uint64_t block_size = ntfs_cluster_size(bootf);
 
     for (i = 0; i < write->header.nb_sectors; i += block_size / SECTOR_SIZE)
     {
@@ -2087,9 +2351,9 @@ int __deserialize_file(struct ext4_superblock* superblock,
             {
                 redis_reverse_pointer_set(store, REDIS_FILE_SECTORS_INSERT,
                                        id, 
-                                       (uint64_t) *((uint32_t *) value1.data));
+                                       (int64_t) *((int32_t *) value1.data));
                 redis_reverse_file_data_pointer_set(store, 
-                        (uint64_t) *((uint32_t*)value1.data),
+                        (int64_t) *((int32_t*)value1.data),
                         counter, counter + block_size, id);
                 counter += block_size; 
             }

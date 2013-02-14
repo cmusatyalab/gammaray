@@ -238,7 +238,8 @@ struct ntfs_index_record_entry
     /* then filename, padding, VCN if not leaf */
 } __attribute__((packed));
 
-uint64_t ntfs_file_record_size (struct ntfs_boot_file* bootf);
+uint64_t ntfs_file_record_size(struct ntfs_boot_file* bootf);
+uint64_t ntfs_cluster_size(struct ntfs_boot_file* bootf);
 int ntfs_probe(FILE* disk, int64_t partition_offset,
                struct ntfs_boot_file* bootf);
 int ntfs_print_boot_file(struct ntfs_boot_file* bootf,

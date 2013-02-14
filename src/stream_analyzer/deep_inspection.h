@@ -64,6 +64,13 @@ int qemu_print_write(struct qemu_bdrv_write* write);
 enum SECTOR_TYPE qemu_infer_sector_type(struct ext4_superblock* super,
                                         struct qemu_bdrv_write* write, 
                                         struct kv_store* store);
+enum SECTOR_TYPE qemu_infer_ntfs_sector_type(struct ntfs_boot_file* bootf,
+                                             struct qemu_bdrv_write* write, 
+                                             struct kv_store* store);
+int qemu_deep_inspect_ntfs(struct ntfs_boot_file* bootf,
+                           struct qemu_bdrv_write* write, struct kv_store* store,
+                           uint64_t write_counter, char* vmname,
+                           uint64_t partition_offset);
 int qemu_get_superblock(struct kv_store* store,
                         struct ext4_superblock* superblock,
                         uint64_t fs_id);

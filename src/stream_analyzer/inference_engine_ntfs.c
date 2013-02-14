@@ -29,16 +29,16 @@ int read_loop(struct kv_store* store, char* vmname)
     int sector_type = SECTOR_UNKNOWN;
     uint64_t write_counter = 0, partition_offset, time = 0;
     struct qemu_bdrv_write write;
-    struct ext4_superblock superblock;
+    struct ntfs_boot_file bootf;
     char pretty_time[32];
     
-    if (qemu_get_superblock(store, &superblock, (uint64_t) 0))
+    if (qemu_get_bootf(store, &bootf, (uint64_t) 1))
     {
         fprintf_light_red(stderr, "Failed getting superblock.\n");
         return EXIT_FAILURE;
     }
 
-    if (qemu_get_pt_offset(store, &partition_offset, (uint64_t) 0))
+    if (qemu_get_pt_offset(store, &partition_offset, (uint64_t) 1))
     {
         fprintf_light_red(stderr, "Failed getting partition offset.\n");
         return EXIT_FAILURE;
@@ -58,10 +58,10 @@ int read_loop(struct kv_store* store, char* vmname)
         }
 
         qemu_print_write(&write);
-        sector_type = qemu_infer_sector_type(&superblock, &write, store);
+        sector_type = qemu_infer_ntfs_sector_type(&bootf, &write, store);
         qemu_print_sector_type(sector_type);
         gettimeofday(&start, NULL);
-        qemu_deep_inspect(&superblock, &write, store, write_counter++, vmname,
+        qemu_deep_inspect_ntfs(&bootf, &write, store, write_counter++, vmname,
                           partition_offset);
         gettimeofday(&end, NULL);
         time = diff_time(start, end);
@@ -86,7 +86,7 @@ int main(int argc, char* args[])
     struct timeval start, end;
     char pretty_micros[32];
 
-    fprintf_blue(stdout, "VM Disk Analysis Engine -- "
+    fprintf_blue(stdout, "VM Disk Analysis Engine NTFS -- "
                          "By: Wolfgang Richter "
                          "<wolf@cs.cmu.edu>\n");
     redis_print_version();
