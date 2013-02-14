@@ -379,15 +379,15 @@ int ntfs_read_file_record_header(uint8_t* data, uint64_t* offset,
 
 /* read update sequence array */
 int ntfs_read_update_sequence(uint8_t* data, uint64_t* offset,
-                              struct ntfs_file_record* rec,
+                              uint16_t size_usn, uint16_t usn_num,
                               struct ntfs_update_sequence* seq)
 {
-    uint8_t* buf = malloc(2*(rec->size_usn) - 2);
-    memcpy(buf, &(data[*offset]), 2*(rec->size_usn) - 2);
-    *offset += 2*(rec->size_usn) - 2;
+    uint8_t* buf = malloc(2*(size_usn) - 2);
+    memcpy(buf, &(data[*offset]), 2*(size_usn) - 2);
+    *offset += 2*(size_usn) - 2;
 
-    seq->usn_num = rec->usn_num;
-    seq->usn_size = 2*(rec->size_usn) - 2;
+    seq->usn_num = usn_num;
+    seq->usn_size = 2*(size_usn) - 2;
     seq->data = buf;
 
     return EXIT_SUCCESS;
