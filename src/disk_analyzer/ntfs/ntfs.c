@@ -169,6 +169,27 @@ int ntfs_print_index_record_header(struct ntfs_index_record_header* irh)
     return EXIT_SUCCESS;
 }
 
+
+int ntfs_print_index_record_entry(struct ntfs_index_record_entry* ire)
+{
+    uint64_t ref;
+
+    memcpy(&ref, ire->ref.record_number, 6);
+    fprintf_light_blue(stdout, "ire->ref: %"PRIu64"\n", ref);
+    fprintf_yellow(stdout, "ire->size: %"PRIu16"\n", ire->size);
+    fprintf_yellow(stdout, "ire->file_name_offset: %"PRIu16"\n", ire->file_name_offset);
+    fprintf_yellow(stdout, "ire->flags: %"PRIu16"\n", ire->flags);
+    fprintf_yellow(stdout, "ire->c_time: %"PRIu64"\n", ire->c_time);
+    fprintf_yellow(stdout, "ire->m_time: %"PRIu64"\n", ire->m_time);
+    fprintf_yellow(stdout, "ire->a_time: %"PRIu64"\n", ire->a_time);
+    fprintf_yellow(stdout, "ire->file_allocated_size: %"PRIu64"\n", ire->file_allocated_size);
+    fprintf_yellow(stdout, "ire->file_real_size: %"PRIu64"\n", ire->file_real_size);
+    fprintf_yellow(stdout, "ire->file_flags: 0x%"PRIx64"\n", ire->file_flags);
+    fprintf_yellow(stdout, "ire->filename_length: %"PRIu8"\n", ire->filename_length);
+    fprintf_yellow(stdout, "ire->filename_namespace: %"PRIu8"\n", ire->filename_namespace);
+    return EXIT_SUCCESS;
+}
+
 int ntfs_print_standard_attribute_header(struct ntfs_standard_attribute_header* sah)
 {
     fprintf_yellow(stdout, "sah.attribute_type: 0x%"PRIx32"\n", sah->attribute_type);
@@ -711,6 +732,65 @@ int ntfs_handle_non_resident_data_attribute(uint8_t* data, uint64_t* offset,
     return EXIT_SUCCESS;
 }
 
+int ntfs_utf16_to_wchar(char* utf16_fname, size_t inlen, char* wchar_fname,
+                        size_t outlen)
+{
+    iconv_t cd = iconv_open("WCHAR_T", "UTF-16");
+    char* utf16_fnamep = utf16_fname;
+    char** utf16_fnamepp = &utf16_fnamep;
+    char* wchar_fnamep = wchar_fname;
+    char** wchar_fnamepp = &wchar_fnamep;
+    
+    if (cd < 0)
+    {
+        fprintf_light_red(stderr, "Error creating conversion struct.\n");
+        return -1;
+    } 
+
+    if (iconv(cd, utf16_fnamepp, &inlen, wchar_fnamepp, &outlen) == (size_t) -1)
+    {
+        fprintf_light_red(stderr, "bytes: %x %x %x %x %x %x %x %x\n",
+                                  utf16_fname[0],
+                                  utf16_fname[1],
+                                  utf16_fname[2],
+                                  utf16_fname[3],
+                                  utf16_fname[4],
+                                  utf16_fname[5],
+                                  utf16_fname[6],
+                                  utf16_fname[7]
+                                  );
+
+        fprintf_light_red(stderr, "Error converting to wchar_t.\n");
+
+        switch (errno)
+        {
+            case E2BIG:
+                fprintf_light_red(stderr, "There is not sufficient room at"
+                                          " *outbuf\n");
+                break;
+            case EILSEQ:
+                fprintf_light_red(stderr, "An invalid multibyte sequence "
+                                          "has been encountered in the "
+                                          "input.\n");
+                break;
+            case EINVAL:
+                fprintf_light_red(stderr, "An incomplete multibyte "
+                                          "sequence has been encountered "
+                                          "in the input.\n");
+                break;
+            default:
+                fprintf_light_red(stderr, "An unknown iconv error was "
+                                          "encountered.\n");
+        };
+
+        return -1;
+    }
+
+    iconv_close(cd);
+
+    return EXIT_SUCCESS;
+}
+
 /* dispatch handler for file name */
 int ntfs_dispatch_file_name_attribute(uint8_t* data, uint64_t* offset,
                                       wchar_t** name,
@@ -752,6 +832,7 @@ int ntfs_dispatch_file_name_attribute(uint8_t* data, uint64_t* offset,
         file_name_encodedpp = &file_name_encodedp;
         inbytes = 2*fname.name_len;
 
+        hexdump((uint8_t*)*file_name_encodedpp, 24);
         if (iconv(cd, (char**) file_name_encodedpp, &inbytes, (char**) file_namepp, &outbytes) == (size_t) -1)
         {
             fprintf_light_red(stderr, "bytes: %x %x %x %x %x %x %x %x\n",
@@ -797,6 +878,7 @@ int ntfs_dispatch_file_name_attribute(uint8_t* data, uint64_t* offset,
         }
     }
 
+    fprintf(stdout, "inbytes = %zu outbytes = %zu\n", inbytes, outbytes);
     iconv_close(cd);
 
     return EXIT_SUCCESS;
@@ -950,6 +1032,22 @@ int ntfs_dispatch_data_attribute(uint8_t* data, uint64_t* offset,
     return EXIT_SUCCESS;
 }
 
+int ntfs_read_index_record_entry(uint8_t* data, uint64_t* offset,
+                                 struct ntfs_index_record_entry* ire)
+{
+    *ire = *((struct ntfs_index_record_entry*) &(data[*offset]));
+    *offset += sizeof(struct ntfs_index_record_entry);
+
+    return EXIT_SUCCESS;
+}
+
+uint64_t ntfs_get_reference_int(struct ntfs_file_reference* ref)
+{
+    uint64_t ret = 0;
+    memcpy(&ret, ref->record_number, 6);
+    return ret;
+}
+
 int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
                                  wchar_t* name,
                                  struct ntfs_standard_attribute_header* sah,
@@ -962,6 +1060,11 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
     uint64_t stream_offset = 0;
     struct ntfs_index_record_header irh;
     struct ntfs_update_sequence seq;
+    struct ntfs_index_record_entry ire;
+    char* utf16_fname;
+    size_t utf16_fname_size;
+    size_t current_fname_size = 512 * sizeof(wchar_t);
+    wchar_t* current_fname = malloc(current_fname_size);
 
     /* read index records off disk */
     if (ntfs_dispatch_data_attribute(data, offset, name, sah, bootf,
@@ -978,6 +1081,49 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
                               irh.size_usn, irh.usn_num,
                               &seq);
     ntfs_fixup_data(stream, irh.allocated_size_of_index_entries + 0x18, &seq); 
+
+    ire.flags = 0;
+    stream_offset = irh.offset_to_index_entries + 0x18;
+    hexdump((uint8_t*)stream, 4096); 
+    /* walk all entries */
+    while (!(ire.flags & 0x02))
+    {
+        /* read index entries */
+        ntfs_read_index_record_entry(stream, &stream_offset, &ire);
+        ntfs_print_index_record_entry(&ire);
+
+        if (ntfs_get_reference_int(&(ire.ref)) < 15)
+        {
+            stream_offset += ire.size - sizeof(struct ntfs_index_record_entry);
+            continue;
+        }
+
+        utf16_fname = (char*) &(stream[stream_offset]);
+        utf16_fname_size = ire.filename_length * 2;
+        memset(current_fname, 0, current_fname_size);
+        ntfs_utf16_to_wchar(utf16_fname, utf16_fname_size,
+                            (char*) current_fname, current_fname_size);
+
+        fprintf_light_green(stdout, "Current fname: %ls\n", current_fname);
+
+
+        stream_offset += ire.size - sizeof(struct ntfs_index_record_entry);
+
+        if (ire.flags & 0x01)
+            fprintf_light_yellow(stdout, "Has sub-node!\n");
+
+        if (ire.flags & 0x02)
+            fprintf_light_yellow(stdout, "Is last entry; without file!\n");
+
+        if (ire.file_flags & NTFS_F_READ_ONLY)
+            fprintf_light_green(stdout, "NTFS_F_READONLY\n");
+        if (ire.file_flags & NTFS_F_HIDDEN)
+            fprintf_light_green(stdout, "NTFS_F_HIDDEN\n");
+        if (ire.file_flags & NTFS_F_SYSTEM)
+            fprintf_light_green(stdout, "NTFS_F_SYSTEM\n");
+        if (ire.file_flags & NTFS_F_DIRECTORY)
+            fprintf_light_green(stdout, "NTFS_F_DIRECTORY\n");
+    }
 
     /* cleanup */
     if (seq.data)

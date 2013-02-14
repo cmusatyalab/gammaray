@@ -31,6 +31,25 @@ enum NTFS_ATTRIBUTE_TYPE
     NTFS_LOGGED_UTILITY_STREAM   =   0x100
 };
 
+enum NTFS_FILE_FLAGS
+{
+    NTFS_F_READ_ONLY               = 0x0001,
+    NTFS_F_HIDDEN                  = 0x0002,
+    NTFS_F_SYSTEM                  = 0x0004,
+    NTFS_F_ARCHIVE                 = 0x0020,
+    NTFS_F_DEVICE                  = 0x0040,
+    NTFS_F_NORMAL                  = 0x0080,
+    NTFS_F_TEMPORARY               = 0x0100,
+    NTFS_F_SPARSE_FILE             = 0x0200,
+    NTFS_F_REPARSE_POINT           = 0x0400,
+    NTFS_F_COMPRESSED              = 0x0800,
+    NTFS_F_OFFLINE                 = 0x1000,
+    NTFS_F_NOT_CONTENT_INDEXED     = 0x2000,
+    NTFS_F_ENCRYPTED               = 0x4000,
+    NTFS_F_DIRECTORY               = 0x10000000,
+    NTFS_F_INDEX_VIEW              = 0x20000000
+};
+
 /* partition start, for probing and bootstrapping */
 struct ntfs_boot_file
 {
@@ -208,9 +227,12 @@ struct ntfs_index_record_entry
     uint64_t c_time;
     uint64_t m_time;
     uint64_t a_time;
+    uint64_t r_time;
     uint64_t file_allocated_size;
     uint64_t file_real_size;
-    uint64_t file_flags;
+    uint32_t file_flags;
+    uint32_t ea_reparse;
+    uint8_t filename_length;
     uint8_t filename_namespace;
     /* then filename, padding, VCN if not leaf */
 } __attribute__((packed));
