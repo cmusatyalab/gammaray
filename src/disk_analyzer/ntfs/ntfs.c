@@ -1148,7 +1148,17 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
     size_t current_fname_size = 512;
     char* current_fname = malloc(current_fname_size);
     char name[32767];
+    struct bson_info* datas;
+    struct bson_kv data_value, data_array;
+    char count[11];
 
+    datas = bson_init();
+    data_array.type = BSON_ARRAY;
+    data_array.key = "data";
+
+    snprintf(count, 11, "%"PRIu32, 0);
+    data_value.key = count;
+    data_value.type = BSON_BINARY;
 
     /* read index records off disk */
     if (ntfs_dispatch_data_attribute(data, offset, name, sah, bootf,
@@ -1165,6 +1175,21 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
                               irh.size_usn, irh.usn_num,
                               &seq);
     ntfs_fixup_data(stream, irh.allocated_size_of_index_entries + 0x18, &seq); 
+    
+    data_value.data = stream;
+    data_value.size = 0x18 + irh.offset_to_index_entries +
+                      irh.allocated_size_of_index_entries;
+
+    bson_serialize(datas, &data_value);
+
+    bson_finalize(datas);
+    data_array.data = datas;
+    bson_serialize(bson, &data_array);
+    bson_cleanup(datas);
+
+    bson_finalize(bson);
+    bson_writef(bson, serializedf);
+    bson_cleanup(bson);
 
     ire.flags = 0;
     stream_offset = irh.offset_to_index_entries + 0x18;
@@ -2052,11 +2077,16 @@ int ntfs_serialize_file_record(FILE* disk, struct ntfs_boot_file* bootf,
         return EXIT_FAILURE;
     }
 
-    ntfs_dispatch_data_attribute(data, &data_offset, prefix, &sah, bootf, partition_offset, disk, false, NULL, false, bson);
+    ntfs_dispatch_data_attribute(data, &data_offset, prefix, &sah, bootf,
+                                 partition_offset, disk, false, NULL, false,
+                                 bson);
 
-    bson_finalize(bson);
-    bson_writef(bson, serializedf);
-    bson_cleanup(bson);
+    if (!is_dir)
+    {
+        bson_finalize(bson);
+        bson_writef(bson, serializedf);
+        bson_cleanup(bson);
+    }
 
     if (is_dir)
     {
