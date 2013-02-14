@@ -1106,7 +1106,6 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
 
         fprintf_light_green(stdout, "Current fname: %ls\n", current_fname);
 
-
         stream_offset += ire.size - sizeof(struct ntfs_index_record_entry);
 
         if (ire.flags & 0x01)
@@ -1130,7 +1129,6 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
         free(seq.data);
 
     free(stream);
-    exit(1);
 
     return EXIT_SUCCESS;
 }
@@ -1168,10 +1166,11 @@ int ntfs_attribute_dispatcher(uint8_t* data, uint64_t* offset, wchar_t** fname,
     else if (sah->attribute_type == 0x90 && *fname)
     {
         fprintf_light_yellow(stdout, "Dispatching index root attribute.\n");
-        if (ntfs_dispatch_index_root_attribute(data, offset, *fname, sah,
-                                               bootf, partition_offset, disk,
-                                               extension))
-            ret = -1;
+        /* TODO: fix this function */
+        //if (ntfs_dispatch_index_root_attribute(data, offset, *fname, sah,
+        //                                       bootf, partition_offset, disk,
+        //                                       extension))
+        //    ret = -1;
     }
     else if (sah->attribute_type == 0xA0 && *fname)
     {
