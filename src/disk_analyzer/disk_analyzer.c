@@ -256,9 +256,31 @@ int main(int argc, char* args[])
                 fprintf_light_green(stdout, "--- Analyzing NTFS Partition at "
                                             "Offset 0x%.16"PRIx64" ---\n",
                                             partition_offset);
-                ntfs_print_boot_file(&ntfs_bootf, partition_offset);
-                ntfs_walk_mft(disk, &ntfs_bootf, partition_offset);
-                break;
+                if (i == 0)
+                    continue;
+
+                mbr_get_partition_table_entry(mbr, i, &pte);
+
+                fprintf_light_blue(stdout, "Serializing Partition Data to: "
+                                          "%s\n\n", args[2]);
+
+                if (mbr_serialize_partition(i, pte, serializef))
+                {
+                    fprintf_light_red(stderr, "Error writing serialized "
+                                              "partition table entry.\n");
+                    return EXIT_FAILURE;
+                }
+
+                if (ntfs_serialize_fs(&ntfs_bootf, partition_offset, i, "/",
+                                      serializef))
+                {
+                    fprintf_light_red(stderr, "Error writing serialized fs "
+                                              "entry.\n");
+                    return EXIT_FAILURE;
+                }
+
+                ntfs_serialize_fs_tree(disk, &ntfs_bootf, partition_offset,
+                                       "/", serializef);
             }
         }
     }

@@ -1,6 +1,7 @@
 #include "color.h"
 #include "ntfs.h"
 #include "util.h"
+#include "bson.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -501,7 +502,7 @@ int ntfs_read_attribute_data(uint8_t* data, uint64_t* offset,
     return EXIT_SUCCESS;
 }
 
-FILE* ntfs_create_reconstructed_file(wchar_t* name, bool extension,
+FILE* ntfs_create_reconstructed_file(char* name, bool extension,
                                      bool reconstruct)
 {
     FILE* reconstructed = NULL;
@@ -511,11 +512,7 @@ FILE* ntfs_create_reconstructed_file(wchar_t* name, bool extension,
     if (name)
     {
         strcat(fname, "/tmp/win7/");
-        if (wcstombs(fname + strlen(fname), name, 1024 - strlen(fname)) == -1)
-        {
-            fprintf_light_red(stderr, "Could not create file name.\n");
-            return NULL;
-        }
+        strcat(fname, name);
 
         fprintf_light_green(stdout, "Dynamic path: %s\n", fname);
 
@@ -536,12 +533,17 @@ FILE* ntfs_create_reconstructed_file(wchar_t* name, bool extension,
 /* handler for resident */
 int ntfs_handle_resident_data_attribute(uint8_t* data, uint64_t* offset,
                                         uint8_t* buf, uint64_t buf_len,
-                                        wchar_t* name,
+                                        char* name,
                                         struct ntfs_standard_attribute_header* sah,
                                         bool extension,
-                                        bool dir)
+                                        bool dir,
+                                        struct bson_info* bson)
 {
     FILE* reconstructed = ntfs_create_reconstructed_file(name, extension, dir);
+    struct bson_kv value, value1;
+    struct bson_info* sectors = bson_init();
+    char count[11];
+    int32_t value1data = -1;
     
     fprintf_yellow(stdout, "\tData is resident.\n");
     fprintf_white(stdout, "\tsah->offset_of_attribute: %x\tsizeof(sah) %x\n", sah->offset_of_attribute, sizeof(*sah));
@@ -549,6 +551,21 @@ int ntfs_handle_resident_data_attribute(uint8_t* data, uint64_t* offset,
 
     ntfs_read_attribute_data(data, offset, buf, buf_len, sah);
   
+
+    value.type = BSON_ARRAY;
+    value.key = "sectors";
+
+    value1.type = BSON_INT32;
+    value1.key = count;
+    snprintf(count, 11, "%"PRIu32, 0);
+    value1.data = &value1data;
+
+    bson_serialize(sectors, &value1);
+    bson_finalize(sectors);
+    value.data = sectors;
+    bson_serialize(bson, &value);
+    bson_cleanup(sectors);
+
     if (reconstructed)
     {
         if (fwrite(buf, 1, sah->length_of_attribute, reconstructed) != sah->length_of_attribute)
@@ -600,14 +617,15 @@ int ntfs_parse_data_run(uint8_t* data, uint64_t* offset,
 
 /* handler for non-resident */
 int ntfs_handle_non_resident_data_attribute(uint8_t* data, uint64_t* offset,
-                                            wchar_t* name,
+                                            char* name,
                                             struct ntfs_standard_attribute_header* sah,
                                             struct ntfs_boot_file* bootf,
                                             int64_t partition_offset,
                                             FILE* disk,
                                             bool extension,
                                             uint8_t** stream,
-                                            bool reconstruct)
+                                            bool reconstruct,
+                                            struct bson_info* bson)
 {
     FILE* reconstructed = ntfs_create_reconstructed_file(name, extension, reconstruct);
     uint8_t buf[4096];
@@ -732,6 +750,65 @@ int ntfs_handle_non_resident_data_attribute(uint8_t* data, uint64_t* offset,
     return EXIT_SUCCESS;
 }
 
+int ntfs_utf16_to_char(char* utf16_fname, size_t inlen, char* char_fname,
+                       size_t outlen)
+{
+    iconv_t cd = iconv_open("US-ASCII", "UTF-16");
+    char* utf16_fnamep = utf16_fname;
+    char** utf16_fnamepp = &utf16_fnamep;
+    char* char_fnamep = char_fname;
+    char** char_fnamepp = &char_fnamep;
+    
+    if (cd < 0)
+    {
+        fprintf_light_red(stderr, "Error creating conversion struct.\n");
+        return -1;
+    } 
+
+    if (iconv(cd, utf16_fnamepp, &inlen, char_fnamepp, &outlen) == (size_t) -1)
+    {
+        fprintf_light_red(stderr, "bytes: %x %x %x %x %x %x %x %x\n",
+                                  utf16_fname[0],
+                                  utf16_fname[1],
+                                  utf16_fname[2],
+                                  utf16_fname[3],
+                                  utf16_fname[4],
+                                  utf16_fname[5],
+                                  utf16_fname[6],
+                                  utf16_fname[7]
+                                  );
+
+        fprintf_light_red(stderr, "Error converting to wchar_t.\n");
+
+        switch (errno)
+        {
+            case E2BIG:
+                fprintf_light_red(stderr, "There is not sufficient room at"
+                                          " *outbuf\n");
+                break;
+            case EILSEQ:
+                fprintf_light_red(stderr, "An invalid multibyte sequence "
+                                          "has been encountered in the "
+                                          "input.\n");
+                break;
+            case EINVAL:
+                fprintf_light_red(stderr, "An incomplete multibyte "
+                                          "sequence has been encountered "
+                                          "in the input.\n");
+                break;
+            default:
+                fprintf_light_red(stderr, "An unknown iconv error was "
+                                          "encountered.\n");
+        };
+
+        return -1;
+    }
+
+    iconv_close(cd);
+
+    return EXIT_SUCCESS;
+}
+
 int ntfs_utf16_to_wchar(char* utf16_fname, size_t inlen, char* wchar_fname,
                         size_t outlen)
 {
@@ -793,21 +870,21 @@ int ntfs_utf16_to_wchar(char* utf16_fname, size_t inlen, char* wchar_fname,
 
 /* dispatch handler for file name */
 int ntfs_dispatch_file_name_attribute(uint8_t* data, uint64_t* offset,
-                                      wchar_t** name,
+                                      char** name,
                                       struct ntfs_standard_attribute_header* sah)
 {
     struct ntfs_file_name fname;
-    wchar_t* file_name = malloc(sizeof(wchar_t) * 512);
-    wchar_t* file_namep = file_name;
-    wchar_t** file_namepp = &file_namep;
+    char* file_name = malloc(512);
+    char* file_namep = file_name;
+    char** file_namepp = &file_namep;
     char file_name_encoded[512];
     char* file_name_encodedp = file_name_encoded;
     char** file_name_encodedpp = &file_name_encodedp;
-    iconv_t cd = iconv_open("WCHAR_T", "UTF-16");
-    size_t outbytes = sizeof(wchar_t) * 512;
+    iconv_t cd = iconv_open("US-ASCII", "UTF-16");
+    size_t outbytes = 512;
     size_t inbytes; 
 
-    memset(file_name, 0, sizeof(wchar_t) * 512);
+    memset(file_name, 0, 512);
     memset(file_name_encoded, 0, 512);
     
     if (cd < 0)
@@ -911,7 +988,7 @@ int ntfs_read_index_entries(uint8_t* data, uint64_t* offset)
 }
 
 int ntfs_read_index_header(uint8_t* data, uint64_t* offset,
-                           wchar_t* name,
+                           char* name,
                            struct ntfs_standard_attribute_header* sah,
                            struct ntfs_boot_file* bootf,
                            int64_t partition_offset,
@@ -930,7 +1007,7 @@ int ntfs_read_index_header(uint8_t* data, uint64_t* offset,
 }
 
 int ntfs_dispatch_index_root_attribute(uint8_t* data, uint64_t* offset,
-                                       wchar_t* name,
+                                       char* name,
                                        struct ntfs_standard_attribute_header* sah,
                                        struct ntfs_boot_file* bootf,
                                        int64_t partition_offset,
@@ -960,7 +1037,7 @@ int ntfs_dispatch_index_root_attribute(uint8_t* data, uint64_t* offset,
 
 int ntfs_dispatch_standard_information_attribute(uint8_t* data,
                                     uint64_t* offset,
-                                    wchar_t* fname,
+                                    char* fname,
                                     struct ntfs_standard_attribute_header* sah)
 {
     struct ntfs_standard_information nsi;
@@ -974,14 +1051,15 @@ int ntfs_dispatch_standard_information_attribute(uint8_t* data,
 
 /* dispatch handler for data */
 int ntfs_dispatch_data_attribute(uint8_t* data, uint64_t* offset,
-                                 wchar_t* name,
+                                 char* name,
                                  struct ntfs_standard_attribute_header* sah,
                                  struct ntfs_boot_file* bootf,
                                  int64_t partition_offset,
                                  FILE* disk,
                                  bool extension,
                                  uint8_t** stream,
-                                 bool reconstruct)
+                                 bool reconstruct,
+                                 struct bson_info* bson)
 {
     uint8_t resident_buffer[4096];
 
@@ -1015,18 +1093,21 @@ int ntfs_dispatch_data_attribute(uint8_t* data, uint64_t* offset,
 
     if (sah->non_resident_flag)
     {
-        fprintf_light_red(stdout, "fname to non-resident data handler: %ls\n", name);
+        fprintf_light_red(stdout, "fname to non-resident data handler: %s\n", name);
         ntfs_handle_non_resident_data_attribute(data, offset, name, sah, bootf,
                                                 partition_offset, disk,
-                                                extension, stream, reconstruct);
+                                                extension, stream, reconstruct, bson);
     }
     else
     {
-        fprintf_light_red(stdout, "fname to resident data handler: %ls\n", name);
+        fprintf_light_red(stdout, "fname to resident data handler: %s\n", name);
         ntfs_handle_resident_data_attribute(data, offset, resident_buffer, 4096,
-                                            name, sah, extension, reconstruct);
-        stream = malloc(4096);
-        memcpy(stream, resident_buffer, 4096);
+                                            name, sah, extension, reconstruct, bson);
+        if (stream)
+        {
+            *stream = malloc(4096);
+            memcpy(stream, resident_buffer, 4096);
+        }
     }
 
     return EXIT_SUCCESS;
@@ -1049,27 +1130,30 @@ uint64_t ntfs_get_reference_int(struct ntfs_file_reference* ref)
 }
 
 int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
-                                 wchar_t* name,
+                                 char* prefix,
                                  struct ntfs_standard_attribute_header* sah,
                                  struct ntfs_boot_file* bootf,
                                  int64_t partition_offset,
                                  FILE* disk,
-                                 bool extension)
+                                 struct bson_info* bson,
+                                 FILE* serializedf)
 {
-    uint8_t* stream;
+    uint8_t* stream, file_record[ntfs_file_record_size(bootf)];
     uint64_t stream_offset = 0;
     struct ntfs_index_record_header irh;
     struct ntfs_update_sequence seq;
     struct ntfs_index_record_entry ire;
     char* utf16_fname;
     size_t utf16_fname_size;
-    size_t current_fname_size = 512 * sizeof(wchar_t);
-    wchar_t* current_fname = malloc(current_fname_size);
+    size_t current_fname_size = 512;
+    char* current_fname = malloc(current_fname_size);
+    char name[32767];
+
 
     /* read index records off disk */
     if (ntfs_dispatch_data_attribute(data, offset, name, sah, bootf,
-                                   partition_offset, disk, extension, &stream,
-                                   false))
+                                   partition_offset, disk, false, &stream,
+                                   false, bson))
         return EXIT_FAILURE;
 
     /* fixup index record */
@@ -1092,7 +1176,8 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
         ntfs_read_index_record_entry(stream, &stream_offset, &ire);
         ntfs_print_index_record_entry(&ire);
 
-        if (ntfs_get_reference_int(&(ire.ref)) < 15)
+        if (ntfs_get_reference_int(&(ire.ref)) < 15 ||
+            ntfs_get_reference_int(&(ire.parent)) == ntfs_get_reference_int(&(ire.ref)))
         {
             stream_offset += ire.size - sizeof(struct ntfs_index_record_entry);
             continue;
@@ -1101,10 +1186,13 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
         utf16_fname = (char*) &(stream[stream_offset]);
         utf16_fname_size = ire.filename_length * 2;
         memset(current_fname, 0, current_fname_size);
-        ntfs_utf16_to_wchar(utf16_fname, utf16_fname_size,
-                            (char*) current_fname, current_fname_size);
+        ntfs_utf16_to_char(utf16_fname, utf16_fname_size,
+                           (char*) current_fname, current_fname_size);
 
-        fprintf_light_green(stdout, "Current fname: %ls\n", current_fname);
+        fprintf_light_green(stdout, "Current fname: %s\n", current_fname);
+        memset(name, 0, 32767);
+        strncpy(name, prefix, strlen(prefix));
+        strcat(name, current_fname);
 
         stream_offset += ire.size - sizeof(struct ntfs_index_record_entry);
 
@@ -1121,7 +1209,24 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
         if (ire.file_flags & NTFS_F_SYSTEM)
             fprintf_light_green(stdout, "NTFS_F_SYSTEM\n");
         if (ire.file_flags & NTFS_F_DIRECTORY)
+        {
             fprintf_light_green(stdout, "NTFS_F_DIRECTORY\n");
+            strcat(name, "/");
+        }
+
+        if (ntfs_get_reference_int(&(ire.ref)))
+        {
+            if (ntfs_read_file_record(disk, ntfs_get_reference_int(&(ire.ref)), partition_offset, bootf,
+                                      file_record) == 0)
+            {
+                fprintf_light_red(stderr, "Failed reading file record %"PRIu64"\n", ntfs_get_reference_int(&(ire.ref)));
+                return EXIT_FAILURE;
+            }           
+
+            bson = bson_init();
+            ntfs_serialize_file_record(disk, bootf, partition_offset, name, serializedf, file_record, bson);
+        }
+
     }
 
     /* cleanup */
@@ -1134,7 +1239,7 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
 }
 
 /* attribute dispatcher */
-int ntfs_attribute_dispatcher(uint8_t* data, uint64_t* offset, wchar_t** fname,
+int ntfs_attribute_dispatcher(uint8_t* data, uint64_t* offset, char** fname,
                               struct ntfs_standard_attribute_header* sah,
                               struct ntfs_boot_file* bootf,
                               int64_t partition_offset,
@@ -1145,22 +1250,21 @@ int ntfs_attribute_dispatcher(uint8_t* data, uint64_t* offset, wchar_t** fname,
     uint64_t old_offset = *offset;
     
     if (*fname)
-        fprintf(stdout, "%ls\n", *fname);
+        fprintf(stdout, "%s\n", *fname);
 
     if (sah->attribute_type == 0x30)
     {
         fprintf_light_yellow(stdout, "Dispatching file name attribute.\n");
-        if (ntfs_dispatch_file_name_attribute(data, offset, fname, sah))
            ret = -1;
-        fprintf(stdout, "dispatched file name: %ls\n", *fname);
+        fprintf(stdout, "dispatched file name: %s\n", *fname);
     }
     else if (sah->attribute_type == 0x80 && *fname)
     {
         fprintf_light_yellow(stdout, "Dispatching data attribute.\n");
-        fprintf(stdout, "with fname: %ls\n", *fname);
+        fprintf(stdout, "with fname: %s\n", *fname);
         if (ntfs_dispatch_data_attribute(data, offset, *fname, sah, bootf,
                                          partition_offset, disk,
-                                         extension, NULL, true))
+                                         extension, NULL, true, NULL))
             ret = -1;
     }
     else if (sah->attribute_type == 0x90 && *fname)
@@ -1176,10 +1280,10 @@ int ntfs_attribute_dispatcher(uint8_t* data, uint64_t* offset, wchar_t** fname,
     {
         fprintf_light_yellow(stdout, "Dispatching index allocation "
                                      "attribute.\n");
-        if (ntfs_dispatch_index_allocation_attribute(data, offset, *fname, sah,
-                                                 bootf, partition_offset, disk,
-                                                 extension))
-            ret = -1;
+        //if (ntfs_dispatch_index_allocation_attribute(data, offset, *fname, sah,
+        //                                         bootf, partition_offset, disk,
+        //                                         extension))
+        //    ret = -1;
     }
     else if (sah->attribute_type == 0x10)
     {
@@ -1203,17 +1307,16 @@ int ntfs_attribute_dispatcher(uint8_t* data, uint64_t* offset, wchar_t** fname,
     return ret;
 }
 
-int ntfs_get_attribute(uint8_t* data, void* attr,
+int ntfs_get_attribute(uint8_t* data, void* attr, uint64_t* offset,
                        enum NTFS_ATTRIBUTE_TYPE type)
 {
     struct ntfs_file_record rec;
     struct ntfs_standard_attribute_header sah;
-    uint64_t offset = 0;
 
-    ntfs_read_file_record_header(data, &offset, &rec);
-    offset = rec.offset_first_attribute;
+    ntfs_read_file_record_header(data, offset, &rec);
+    *offset = rec.offset_first_attribute;
 
-    while (ntfs_read_attribute_header(data, &offset, &sah))
+    while (ntfs_read_attribute_header(data, offset, &sah) == 0)
     {
         if (sah.attribute_type == type)
         {
@@ -1221,15 +1324,28 @@ int ntfs_get_attribute(uint8_t* data, void* attr,
             {
                 case NTFS_FILE_NAME:
                     memcpy(attr,
-                       &(data[offset + sah.offset_of_attribute - sizeof(sah)]),
+                       &(data[*offset + sah.offset_of_attribute - sizeof(sah)]),
                        sizeof(struct ntfs_file_name)); 
+                    return EXIT_SUCCESS;
+                case NTFS_INDEX_ALLOCATION:
+                case NTFS_DATA:
+                    memcpy(attr,
+                       &(sah),
+                       sizeof(struct ntfs_standard_attribute_header)); 
                     return EXIT_SUCCESS;
                 default:
                     fprintf_light_red(stdout, "Unknown attribute to get.\n");
                     return EXIT_FAILURE;
             };
         }
-        offset += sah.length - sizeof(sah);
+
+        *offset += sah.length - sizeof(sah);
+        
+        if (*((int32_t*) &(data[*offset])) == -1)
+        {
+            fprintf_light_yellow(stdout, "Reached end of attributes while searching.\n");
+            break;
+        }
     }
 
     fprintf_light_red(stdout, "Failed to find attribute.\n");
@@ -1247,7 +1363,7 @@ int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf,
     uint8_t* data = malloc(ntfs_file_record_size(bootf));
     int64_t file_record_offset;
     uint64_t data_offset = 0;
-    wchar_t* fname = NULL;
+    char* fname = NULL;
     int counter = 0;
     uint64_t file_record_counter = 0;
     bool extension = false;
@@ -1501,21 +1617,21 @@ int ntfs_handle_compare_non_resident_data_attribute(uint8_t* bufa, uint64_t* off
 
 /* dispatch handler for file name */
 int ntfs_dispatch_compare_file_name_attribute(uint8_t* data, uint64_t* offset,
-                                              wchar_t** name,
+                                              char** name,
                                               struct ntfs_standard_attribute_header* sah)
 {
     struct ntfs_file_name fname;
-    wchar_t* file_name = malloc(sizeof(wchar_t) * 512);
-    wchar_t* file_namep = file_name;
-    wchar_t** file_namepp = &file_namep;
+    char* file_name = malloc(512);
+    char* file_namep = file_name;
+    char** file_namepp = &file_namep;
     char file_name_encoded[512];
     char* file_name_encodedp = file_name_encoded;
     char** file_name_encodedpp = &file_name_encodedp;
-    iconv_t cd = iconv_open("WCHAR_T", "UTF-16");
-    size_t outbytes = sizeof(wchar_t) * 512;
+    iconv_t cd = iconv_open("US-ASCII", "UTF-16");
+    size_t outbytes = 512;
     size_t inbytes; 
 
-    memset(file_name, 0, sizeof(wchar_t) * 512);
+    memset(file_name, 0, 512);
     memset(file_name_encoded, 0, 512);
     
     if (cd < 0)
@@ -1651,7 +1767,7 @@ int ntfs_dispatch_compare_data_attribute(uint8_t* bufa, uint64_t* offseta,
 
 int ntfs_compare_attribute_dispatcher(uint8_t* bufa, uint8_t* bufb,
                                       uint64_t* offseta, uint64_t* offsetb,
-                                      wchar_t** fnamea, wchar_t** fnameb,
+                                      char** fnamea, char** fnameb,
                                       struct ntfs_standard_attribute_header* saha,
                                       struct ntfs_standard_attribute_header* sahb,
                                       int64_t partition_offset, struct ntfs_boot_file* bootf)
@@ -1673,7 +1789,7 @@ int ntfs_compare_attribute_dispatcher(uint8_t* bufa, uint8_t* bufb,
            ret = -1;
         if (ntfs_dispatch_file_name_attribute(bufb, offsetb, fnameb, sahb))
            ret = -1;
-        if (!(*fnamea == *fnameb) && wcscmp(*fnamea, *fnameb))
+        if (!(*fnamea == *fnameb) && strcmp(*fnamea, *fnameb))
         {
             fprintf_light_red(stdout, "fname mismatch.\n");
             fprintf_light_blue(stdout, "\t%ls != %ls\n", *fnamea, *fnameb);
@@ -1719,7 +1835,7 @@ int ntfs_diff_raw_file_records(uint8_t* bufa, uint8_t* bufb,
     struct ntfs_file_record reca, recb;
     struct ntfs_update_sequence seqa, seqb;
     struct ntfs_standard_attribute_header saha, sahb;
-    wchar_t* fnamea = NULL, *fnameb = NULL;
+    char* fnamea = NULL, *fnameb = NULL;
     uint64_t offseta = 0, offsetb = 0, counter = 0;
 
     ntfs_read_file_record_header(bufa, &offseta, &reca);
@@ -1788,6 +1904,198 @@ int ntfs_diff_file_records(FILE* disk, uint64_t recorda, uint64_t recordb,
 
     free(data_a);    
     free(data_b);
+
+    return EXIT_SUCCESS;
+}
+
+int ntfs_serialize_fs(struct ntfs_boot_file* bootf, int64_t partition_offset,
+                      uint32_t pte_num, char* mount_point, FILE* serializedf)
+{
+    int32_t num_block_groups = 0;
+    int32_t num_files = -1;
+    struct bson_info* serialized;
+    struct bson_info* sectors;
+    struct bson_kv value;
+
+    serialized = bson_init();
+    sectors = bson_init();
+
+    value.type = BSON_STRING;
+    value.size = strlen("fs");
+    value.key = "type";
+    value.data = "fs";
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT32;
+    value.key = "pte_num";
+    value.data = &(pte_num);
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_STRING;
+    value.size = strlen("ntfs");
+    value.key = "fs";
+    value.data = "ntfs";
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_STRING;
+    value.key = "mount_point";
+    value.size = strlen(mount_point);
+    value.data = mount_point;
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT32;
+    value.key = "num_block_groups";
+    value.data = &(num_block_groups);
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT32;
+    value.key = "num_files";
+    value.data = &(num_files);
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT64;
+    value.key = "superblock_sector";
+    partition_offset /= SECTOR_SIZE;
+    value.data = &(partition_offset);
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT64;
+    value.key = "superblock_offset";
+    partition_offset = 0;
+    value.data = &(partition_offset);
+
+    bson_serialize(serialized, &value);
+
+    value.key = "superblock";
+    value.type = BSON_BINARY;
+    value.size = sizeof(struct ntfs_boot_file);
+    value.subtype = BSON_BINARY_GENERIC;
+    value.data = bootf;
+
+    bson_serialize(serialized, &value);
+
+    bson_finalize(serialized);
+    bson_writef(serialized, serializedf);
+    bson_cleanup(sectors);
+    bson_cleanup(serialized);
+
+    return EXIT_SUCCESS;
+}
+
+int ntfs_serialize_file_record(FILE* disk, struct ntfs_boot_file* bootf,
+                               int64_t partition_offset, char* prefix,
+                               FILE* serializedf, uint8_t* data, struct bson_info* bson)
+{
+    uint64_t fsize, data_offset = 0;
+    bool is_dir;
+    struct bson_kv value;
+    struct ntfs_file_record rec;
+    struct ntfs_file_name fdata;
+    struct ntfs_update_sequence seq;
+    struct ntfs_standard_attribute_header sah;
+
+    ntfs_read_file_record_header(data, &data_offset, &rec);
+    ntfs_read_update_sequence(data, &data_offset, rec.size_usn,
+                              rec.usn_num, &seq);
+    ntfs_fixup_data(data, ntfs_file_record_size(bootf), &seq);
+
+    data_offset = 0;
+
+    if (ntfs_get_attribute(data, &fdata, &data_offset, NTFS_FILE_NAME))
+    {
+        fprintf_light_red(stderr, "Failed getting NTFS_FILE_NAME attr.\n");
+        return EXIT_FAILURE;
+    }
+
+    fsize = fdata.real_size;
+    is_dir = (rec.flags & 0x02) == 0x02;
+
+    value.type = BSON_STRING;
+    value.size = strlen(prefix);
+    value.key = "path";
+    value.data = prefix;
+
+    bson_serialize(bson, &value);
+
+    value.type = BSON_BOOLEAN;
+    value.key = "is_dir";
+    value.data = &is_dir;
+
+    bson_serialize(bson, &value);
+
+    value.type = BSON_INT64;
+    value.key = "size";
+    value.data = &(fsize);
+
+    bson_serialize(bson, &value);
+
+    value.type = BSON_BINARY;
+    value.subtype = BSON_BINARY_GENERIC;
+    value.size = ntfs_file_record_size(bootf);
+    value.key = "inode";
+    value.data = data;
+
+    bson_serialize(bson, &value);
+
+    data_offset = 0;
+
+    if (!is_dir && ntfs_get_attribute(data, &sah, &data_offset, NTFS_DATA))
+    {
+        fprintf_light_red(stderr, "Failed getting NTFS_DATA attr.\n");
+        return EXIT_FAILURE;
+    }
+
+    ntfs_dispatch_data_attribute(data, &data_offset, prefix, &sah, bootf, partition_offset, disk, false, NULL, false, bson);
+
+    bson_finalize(bson);
+    bson_writef(bson, serializedf);
+    bson_cleanup(bson);
+
+    if (is_dir)
+    {
+        /* walk index allocation table */
+        fprintf_light_red(stderr, "--- Handling directory ---\n");
+        data_offset = 0;
+
+        if (ntfs_get_attribute(data, &sah, &data_offset, NTFS_INDEX_ALLOCATION))
+        {
+            fprintf_light_red(stderr, "Failed getting NTFS_INDEX_ALLOCATION attr.\n");
+            return EXIT_FAILURE;
+        }
+
+        ntfs_dispatch_index_allocation_attribute(data, (uint64_t*) &data_offset,
+                                                 prefix, &sah, bootf,
+                                                 partition_offset, disk,
+                                                 bson, serializedf);
+
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int ntfs_serialize_fs_tree(FILE* disk, struct ntfs_boot_file* bootf,
+                           int64_t partition_offset, char* mount_point,
+                           FILE* serializedf)
+{
+    uint8_t data[ntfs_file_record_size(bootf)];
+    struct bson_info* bson = bson_init();
+
+    if (ntfs_read_file_record(disk, 5, partition_offset, bootf,
+                              data) == 0)
+    {
+        fprintf_light_red(stderr, "Failed reading file record 5\n");
+        return EXIT_FAILURE;
+    }
+
+    ntfs_serialize_file_record(disk, bootf, partition_offset, 
+                               mount_point, serializedf, data, bson);
 
     return EXIT_SUCCESS;
 }

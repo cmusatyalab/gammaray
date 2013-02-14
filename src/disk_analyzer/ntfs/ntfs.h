@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include "bson.h"
 
 #define SECTOR_SIZE 512
 
@@ -254,6 +255,15 @@ int ntfs_read_file_record(FILE* disk, uint64_t record_num,
 int ntfs_diff_file_record_buffs(uint8_t* recorda, uint8_t* recordb,
                                 int64_t partition_offset,
                                 struct ntfs_boot_file* bootf);
-int ntfs_get_attribute(uint8_t* record, void* attr,
+int ntfs_get_attribute(uint8_t* record, void* attr, uint64_t* offset,
                        enum NTFS_ATTRIBUTE_TYPE type);
+int ntfs_serialize_fs(struct ntfs_boot_file* bootf, int64_t partition_offset,
+                      uint32_t pte_num, char* mount_point, FILE* serializedf);
+int ntfs_serialize_fs_tree(FILE* disk, struct ntfs_boot_file* bootf,
+                           int64_t partition_offset, char* mount_point,
+                           FILE* serializedf);
+int ntfs_serialize_file_record(FILE* disk, struct ntfs_boot_file* bootf,
+                               int64_t partition_offset, char* prefix,
+                               FILE* serializedf, uint8_t* data, struct bson_info* bson);
+
 #endif
