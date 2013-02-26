@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <assert.h>
 #include <errno.h>
 #include <unistd.h>
 
@@ -1469,6 +1470,109 @@ int __diff_ext4_extents(struct kv_store* store, char* vmname, uint64_t file,
     return EXIT_SUCCESS; 
 }
 
+int __diff_data_ntfs(struct kv_store* store, struct ntfs_boot_file* bootf,
+                     uint64_t partition_offset, uint8_t* data, uint64_t file)
+{
+    uint64_t data_offset = 0, real_size = 0, run_length = 0,
+             run_length_bytes = 0, counter = 0, i;
+    int64_t run_lcn = 0, run_lcn_bytes = 0, prev_lcn = 0;
+    struct ntfs_standard_attribute_header sah;
+    struct ntfs_non_resident_header nrh;
+
+    if (ntfs_get_attribute(data, &sah, &data_offset, NTFS_DATA))
+    {
+        fprintf_light_red(stderr, "Failed getting NTFS_DATA attr.\n");
+        return EXIT_FAILURE;
+    }
+
+    if (sah.attribute_type != 0x80 &&
+        sah.attribute_type != 0xA0)
+    {
+        fprintf_light_red(stderr, "Data handler, not a data attribute.\n");
+        return EXIT_FAILURE;
+    }
+    
+    if ((sah.flags & 0x0001) != 0x0000) /* check compressed */
+    {
+        fprintf_light_red(stderr, "NTFS: Error no support for compressed files"
+                                  " yet.\n");
+        return EXIT_FAILURE;
+    }
+
+    if ((sah.flags & 0x4000) != 0x0000) /* check encrypted */
+    {
+        fprintf_light_red(stderr, "NTFS: Error no support for encrypted files "
+                                  "yet.\n");
+        return EXIT_FAILURE;
+    }
+
+    if ((sah.flags & 0x8000) != 0x0000) /* check sparse */
+    {
+        fprintf_light_red(stderr, "NTFS: Error no support for sparse files "
+                                  "yet.\n");
+        return EXIT_FAILURE;
+    }
+
+    /* delete old list just in case (nuking for now) */
+    redis_delete_key(store, REDIS_FILE_SECTORS_DELETE, file);
+
+    if (sah.non_resident_flag)
+    {
+        /* if non-resident: walk runs, insert sectors */
+        ntfs_read_non_resident_attribute_header(data, &data_offset, &nrh);
+        ntfs_print_non_resident_header(&nrh);
+
+        real_size = nrh.real_size;
+
+        data_offset += nrh.data_run_offset - sizeof(sah) - sizeof(nrh);
+        while (ntfs_parse_data_run(data, &data_offset, &run_length, &run_lcn) &&
+               real_size > 0)
+        {
+            fprintf_light_blue(stderr, "got a sequence %d\n", counter++);
+            run_length_bytes = run_length * bootf->bytes_per_sector * bootf->sectors_per_cluster;
+            fprintf_light_red(stderr, "prev_lcn: %"PRIx64"\n", prev_lcn);
+            fprintf_light_red(stderr, "run_lcn: %"PRIx64" (%"PRId64")\n",
+                                      run_lcn, run_lcn);
+            fprintf_light_red(stderr, "prev_lcn + run_lcn: %"PRIx64"\n",
+                                       prev_lcn + run_lcn);
+            run_lcn_bytes = ntfs_lcn_to_offset(bootf, partition_offset,
+                                               prev_lcn + run_lcn);
+            fprintf_light_blue(stderr, "run_lcn_bytes: %"PRIx64
+                                       " run_length_bytes: %"PRIx64"\n",
+                                       run_lcn_bytes,
+                                       run_length_bytes);
+
+            assert(prev_lcn + run_lcn >= 0);
+            assert(prev_lcn + run_lcn < 26214400);
+            assert(run_length_bytes > 0);
+
+            for (i = 0; i < run_length_bytes / SECTOR_SIZE; i += 8)
+            {
+                redis_reverse_pointer_set(store, REDIS_FILE_SECTORS_INSERT,
+                                          file,
+                                          (int64_t) run_lcn_bytes / 512 + i);
+
+            }
+            
+            real_size -= run_length_bytes;
+            prev_lcn = prev_lcn + run_lcn;
+            run_length = 0;
+            run_length_bytes = 0;
+            run_lcn = 0;
+            run_lcn_bytes = 0;
+        }
+    }
+    else
+    {
+        /* if resident: insert -1 */
+        redis_reverse_pointer_set(store, REDIS_FILE_SECTORS_INSERT,
+                                  file, (int64_t) -1);
+    }
+
+
+    return EXIT_SUCCESS;
+}
+
 int __diff_inodes_ntfs(uint8_t* write, struct kv_store* store,
                   char* vmname, uint64_t write_counter, char* pointer,
                   size_t write_len, struct ntfs_boot_file* bootf,
@@ -1477,10 +1581,10 @@ int __diff_inodes_ntfs(uint8_t* write, struct kv_store* store,
     uint64_t file = 0, lfiles = 0, i, offset;
     uint8_t** list;
     size_t len = 0, len2 = 4096;
-    uint8_t *new;
+    uint8_t *new, is_dir;
     char* path[len2];
     
-    fprintf_light_white(stdout, "__diff_inodes()\n");
+    fprintf_light_white(stdout, "__diff_inodes_ntfs()\n");
     fprintf_light_white(stdout, "pointer: %s\n", pointer);
 
     strtok(pointer, ":");
@@ -1488,15 +1592,18 @@ int __diff_inodes_ntfs(uint8_t* write, struct kv_store* store,
 
     if (redis_list_get(store, REDIS_FILES_LGET, lfiles, &list, &len))
     {
-        fprintf_light_red(stdout, "Error getting list of bgds from Redis.\n");
+        fprintf_light_red(stdout, "Error getting list of files from Redis.\n");
         return EXIT_FAILURE;
     }
+
+    fprintf_light_white(stdout, "got inodes: %zd\n", len);
 
     for (i = 0; i < len; i++)
     {
         len2 = 4096;
         strtok((char*) (list)[i], ":");
         sscanf(strtok(NULL, ":"), "%"SCNu64, &file);
+        fprintf(stdout, "getting path: %"PRIu64"\n", file);
 
         if (redis_hash_field_get(store, REDIS_FILE_SECTOR_GET, file, "path",
                                  (uint8_t*) path, &len2))
@@ -1507,6 +1614,17 @@ int __diff_inodes_ntfs(uint8_t* write, struct kv_store* store,
         }
 
         path[len2] = '\0';
+
+        len2 = sizeof(is_dir);
+        if (redis_hash_field_get(store, REDIS_FILE_SECTOR_GET, file, "is_dir",
+                                 &is_dir, &len2)) 
+        {
+
+            fprintf_light_red(stdout, "Error getting is_dir for file %"PRIu64
+                                      "from Redis.\n", file);
+            return EXIT_FAILURE;
+        }
+
 
         len2 = sizeof(offset);
         if (redis_hash_field_get(store, REDIS_FILE_SECTOR_GET, file, "inode_offset",
@@ -1519,6 +1637,11 @@ int __diff_inodes_ntfs(uint8_t* write, struct kv_store* store,
 
         new = &(write[offset]);
 
+        /* update data pointers */
+        if (!is_dir)
+            __diff_data_ntfs(store, bootf, partition_offset, new, file);
+        
+        /* last step: overwrite old record with new */
         len2 = ntfs_file_record_size(bootf);
         if (redis_hash_field_set(store, REDIS_FILE_SECTOR_INSERT, file, "inode",
                                  (uint8_t*) new, len2))
@@ -1784,21 +1907,21 @@ int __qemu_dispatch_write_ntfs(uint8_t* data,
                           uint64_t sector)
 {
     D_PRINT64(partition_offset);
-    fprintf_light_blue(stdout, "pointer: %s\n", pointer);
+    fprintf_light_blue(stdout, "ntfs_dispatch pointer: %s\n", pointer);
     if (strncmp(pointer, "start", strlen("start")) == 0)
         __emit_file_bytes(data, store, vmname, write_counter, pointer, len,
                           sector);
     else if(strncmp(pointer, "fs", strlen("fs")) == 0)
         __diff_superblock_ntfs(data, store, vmname, write_counter, pointer, len);
-    else if(strncmp(pointer, "mbr", strlen("mbr")) == 0)
-        __diff_mbr(data, store, vmname, pointer);
-    else if(strncmp(pointer, "lbgds", strlen("lbgds")) == 0)
-        __diff_bgds(data, store, vmname, write_counter, pointer, len);
+    //else if(strncmp(pointer, "mbr", strlen("mbr")) == 0)
+    //    __diff_mbr(data, store, vmname, pointer);
+    //else if(strncmp(pointer, "lbgds", strlen("lbgds")) == 0)
+    //    __diff_bgds(data, store, vmname, write_counter, pointer, len);
     else if(strncmp(pointer, "lfiles", strlen("lfiles")) == 0)
         __diff_inodes_ntfs(data, store, vmname, write_counter, pointer, len, bootf,
                       partition_offset);
-    else if(strncmp(pointer, "bgd", strlen("bgd")) == 0)
-        __diff_bitmap(data, store, vmname, pointer);
+    //else if(strncmp(pointer, "bgd", strlen("bgd")) == 0)
+    //    __diff_bitmap(data, store, vmname, pointer);
     //else if(strncmp(pointer, "extent", strlen("extent")) == 0)
         //__diff_extent_tree(data, store, vmname, pointer, write_counter, len, 
         //                   super, partition_offset);
