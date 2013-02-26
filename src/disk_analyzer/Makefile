@@ -72,7 +72,7 @@ test: default
 	@rm -rf /tmp/win7
 	@mkdir /tmp/win7
 	@./disk_analyzer \
-		/home/wolf/VM/vm_ntfs_test/win7enterprise.raw \
+		/home/wolf/VM/vm_ntfs_test/win7enterprise.raw.pristine \
 		/tmp/win7enterprise.bson #| grep found > fnames
 
 test_ext4: default
