@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <assert.h>
 
 #include "deep_inspection.h"
 #include "ntfs.h"
@@ -47,7 +48,9 @@ static int xrayfs_ntfs_getattr(const char* path, struct stat* stbuf)
                              (uint8_t*) &data, &len2))
         return -ENOENT;
 
-    //hexdump(data, len2);
+    fprintf(stdout, "len2 == %zu\n", len2);
+    assert(len2 < 8192 && len2 > 0);
+    hexdump(data, len2);
     rec = *((struct ntfs_file_record *) data);
   
     if (ntfs_get_attribute(data, &fdata, &data_offset, NTFS_FILE_NAME))
