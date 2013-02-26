@@ -11,10 +11,20 @@ default:
 		 -Werror \
 		 -I../util \
 		 #-DNOCOLOR
+	@clang bitarray_test.c bitarray.c ../util/color.c ../util/util.c -g \
+		-o ba_test \
+		-Wall \
+		-Werror \
+		-I../util \
+		-lm
 
 test: default
-	valgrind --leak-check=full --show-reachable=yes -v ./linkedlist_test
+	./ba_test
+
+test_valgrind: default
+	valgrind --leak-check=full --show-reachable=yes -v ./ba_test
 
 clean:
 	@rm bst_test 
 	@rm linkedlist_test
+	@rm ba_test
