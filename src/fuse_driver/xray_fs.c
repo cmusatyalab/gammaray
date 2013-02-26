@@ -224,6 +224,9 @@ static int xrayfs_read(const char* path, char* buf, size_t size, off_t offset,
         else
             toread = size - position;
 
+        if (toread <= 0)
+            break;
+
         while (readb < toread)
         {
             ret = read(fd_disk, (char*) &(buf[position]), toread - readb);
