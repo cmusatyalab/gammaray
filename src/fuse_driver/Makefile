@@ -45,8 +45,8 @@ default:
 		   `pkg-config fuse --cflags --libs`
 
 test_ntfs: default
-	@mkdir -p /tmp/test_ntfs
-	@./xray_ntfs_fs -d -s /tmp/test_ntfs /home/wolf/VM/vm_ntfs_test/vm_ntfs_test.raw
+	@mkdir -p /tmp/FUSE/test_ntfs
+	@./xray_ntfs_fs -d -s -oallow_other /tmp/FUSE/test_ntfs /home/wolf/VM/vm_ntfs_test/win7enterprise.raw
 	@ls /tmp/test_ntfs
 	@sleep 0.25
 	#@sudo umount /tmp/test
