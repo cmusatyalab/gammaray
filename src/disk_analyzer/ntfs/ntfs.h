@@ -199,7 +199,8 @@ struct ntfs_index_entry
     struct ntfs_file_reference ref;
     uint16_t length;
     uint16_t stream_length;
-    uint16_t flags;
+    uint8_t flags;
+    uint8_t padding[3];
 } __attribute__((packed));
 
 struct ntfs_index_record_header
