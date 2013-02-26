@@ -566,9 +566,10 @@ int ntfs_handle_resident_data_attribute(uint8_t* data, uint64_t* offset,
                                         struct ntfs_standard_attribute_header* sah,
                                         bool extension,
                                         bool dir,
-                                        struct bson_info* bson)
+                                        struct bson_info* bson,
+                                        bool save_sectors)
 {
-    FILE* reconstructed = ntfs_create_reconstructed_file(name, extension, dir);
+    FILE* reconstructed = NULL;
     struct bson_kv value, value1;
     struct bson_info* sectors = bson_init();
     char count[11];
@@ -580,29 +581,30 @@ int ntfs_handle_resident_data_attribute(uint8_t* data, uint64_t* offset,
 
     ntfs_read_attribute_data(data, offset, buf, buf_len, sah);
   
+    if (save_sectors)
+    {
+        value.type = BSON_ARRAY;
+        value.key = "sectors";
 
-    value.type = BSON_ARRAY;
-    value.key = "sectors";
+        value1.type = BSON_INT32;
+        value1.key = count;
+        snprintf(count, 11, "%"PRIu32, 0);
+        value1.data = &value1data;
 
-    value1.type = BSON_INT32;
-    value1.key = count;
-    snprintf(count, 11, "%"PRIu32, 0);
-    value1.data = &value1data;
-
-    bson_serialize(sectors, &value1);
-    bson_finalize(sectors);
-    value.data = sectors;
-    bson_serialize(bson, &value);
-    bson_cleanup(sectors);
+        bson_serialize(sectors, &value1);
+        bson_finalize(sectors);
+        value.data = sectors;
+        bson_serialize(bson, &value);
+        bson_cleanup(sectors);
+    }
 
     if (reconstructed)
     {
+        reconstructed = ntfs_create_reconstructed_file(name, extension, dir);
         if (fwrite(buf, 1, sah->length_of_attribute, reconstructed) != sah->length_of_attribute)
         {
             fclose(reconstructed);
             fprintf_light_red(stderr, "Error writing resident attribute.\n");
-
-
             return EXIT_FAILURE;
         }
 
@@ -659,9 +661,11 @@ int ntfs_handle_non_resident_data_attribute(uint8_t* data, uint64_t* offset,
                                             bool extension,
                                             uint8_t** stream,
                                             bool reconstruct,
-                                            struct bson_info* bson)
+                                            struct bson_info* bson,
+                                            bool save_sectors,
+                                            uint64_t* stream_len) 
 {
-    FILE* reconstructed = ntfs_create_reconstructed_file(name, extension, reconstruct);
+    FILE* reconstructed = NULL;
     uint8_t buf[4096];
     uint64_t real_size = 0;
     int64_t run_lcn = 0;
@@ -671,111 +675,145 @@ int ntfs_handle_non_resident_data_attribute(uint8_t* data, uint64_t* offset,
     uint64_t run_length_bytes = 0;
     uint64_t stream_position = 0;
     struct ntfs_non_resident_header nrh;
+    struct bson_kv value, value1;
+    struct bson_info* sectors = bson_init();
+    char count[11];
+    int32_t value1data = -1, sector_counter = 0;
+    uint64_t i;
 
     int counter = 0;
+
+    if (save_sectors)
+    {
+        value.type = BSON_ARRAY;
+        value.key = "sectors";
+        value.data = sectors;
+
+        value1.type = BSON_INT32;
+        value1.key = count;
+        value1.data = &value1data;
+        fprintf_light_blue(stdout, "SAVING SECTOR INIT.\n");
+    }
 
     ntfs_read_non_resident_attribute_header(data, offset, &nrh);
     ntfs_print_non_resident_header(&nrh);
 
     real_size = nrh.real_size;
     if (stream)
+    {
         *stream = malloc(real_size);
+        *stream_len = real_size;
+    }
 
     fprintf_yellow(stdout, "\tData is non-resident\n");
     fprintf_white(stdout, "\tnrh->offset_of_attribute: %x\tsizeof(nrh+sah) %x\n", nrh.data_run_offset, sizeof(nrh) + sizeof(*sah));
     fprintf_green(stdout, "\tSeeking to %d\n", nrh.data_run_offset - sizeof(*sah) - sizeof(nrh));
 
     *offset += nrh.data_run_offset - sizeof(*sah) - sizeof(nrh);
-    if (reconstructed)
+    while (ntfs_parse_data_run(data, offset, &run_length, &run_lcn) && real_size)
     {
-        while (ntfs_parse_data_run(data, offset, &run_length, &run_lcn) && real_size)
+        fprintf_light_blue(stdout, "got a sequence %d\n", counter++);
+        run_length_bytes = run_length * bootf->bytes_per_sector * bootf->sectors_per_cluster;
+        fprintf_light_red(stdout, "prev_lcn: %"PRIx64"\n", prev_lcn);
+        fprintf_light_red(stdout, "run_lcn: %"PRIx64" (%"PRId64")\n",
+                                  run_lcn, run_lcn);
+        fprintf_light_red(stdout, "prev_lcn + run_lcn: %"PRIx64"\n",
+                                   prev_lcn + run_lcn);
+        run_lcn_bytes = ntfs_lcn_to_offset(bootf, partition_offset,
+                                           prev_lcn + run_lcn);
+        fprintf_light_blue(stdout, "run_lcn_bytes: %"PRIx64
+                                   " run_length_bytes: %"PRIx64"\n",
+                                   run_lcn_bytes,
+                                   run_length_bytes);
+
+        assert(prev_lcn + run_lcn >= 0);
+        assert(prev_lcn + run_lcn < 26214400);
+
+        if (save_sectors)
         {
-            fprintf_light_blue(stdout, "got a sequence %d\n", counter++);
-            run_length_bytes = run_length * bootf->bytes_per_sector * bootf->sectors_per_cluster;
-            fprintf_light_red(stdout, "prev_lcn: %"PRIx64"\n", prev_lcn);
-            fprintf_light_red(stdout, "run_lcn: %"PRIx64" (%"PRId64")\n",
-                                      run_lcn, run_lcn);
-            fprintf_light_red(stdout, "prev_lcn + run_lcn: %"PRIx64"\n",
-                                       prev_lcn + run_lcn);
-            run_lcn_bytes = ntfs_lcn_to_offset(bootf, partition_offset,
-                                               prev_lcn + run_lcn);
-            fprintf_light_blue(stdout, "run_lcn_bytes: %"PRIx64
-                                       " run_length_bytes: %"PRIx64"\n",
-                                       run_lcn_bytes,
-                                       run_length_bytes);
-
-            assert(prev_lcn + run_lcn >= 0);
-            assert(prev_lcn + run_lcn < 26214400);
-
-            if (fseeko(disk, run_lcn_bytes, SEEK_SET))
+            for (i = 0; i < run_length_bytes / 512; i += 8)
             {
-                fprintf_light_red(stderr, "Error seeking to data run LCN offset: %"
-                                           PRIu64"\n", run_lcn_bytes);
-                exit(1);
+                snprintf(count, 11, "%"PRIu32, sector_counter++);
+                value1data = run_lcn_bytes / 512 + i;
+                bson_serialize(sectors, &value1);
             }
-
-            while (run_length_bytes)
-            {
-                run_length_bytes = run_length_bytes > real_size ? real_size : run_length_bytes;
-                if (run_length_bytes >= 4096)
-                {
-                    if (fread(buf, 4096, 1, disk) != 1)
-                    {
-                        fprintf_light_red(stderr, "Error reading run data.\n");
-                        exit(1);
-                        return EXIT_FAILURE;
-                    }
-
-                    if (fwrite(buf, 4096, 1, reconstructed) != 1)
-                    {
-                        fprintf_light_red(stderr, "Error writing run data.\n");
-                        exit(1);
-                        return EXIT_FAILURE;
-                    }
-
-                    if (stream)
-                    {
-                        memcpy(&((*stream)[stream_position]), buf, 4096);
-                        stream_position += 4096;
-                    }
-
-                    run_length_bytes -= 4096;
-                    real_size -= 4096;
-                }
-                else
-                {
-                    if (fread(buf, run_length_bytes, 1, disk) != 1)
-                    {
-                        fprintf_light_red(stderr, "Error reading run data.\n");
-                        exit(1);
-                        return EXIT_FAILURE;
-                    }
-
-                    if (fwrite(buf, run_length_bytes, 1, reconstructed) != 1)
-                    {
-                        fprintf_light_red(stderr, "Error writing run data.\n");
-                        exit(1);
-                        return EXIT_FAILURE;
-                    }
-
-                    if (stream)
-                    {
-                        memcpy(&((*stream)[stream_position]), buf,
-                               run_length_bytes);
-                        stream_position += 4096;
-                    }
-
-                    real_size -= run_length_bytes;
-                    run_length_bytes -= run_length_bytes;
-                }
-            }
-
-            prev_lcn = prev_lcn + run_lcn;
-            run_length = 0;
-            run_length_bytes = 0;
-            run_lcn = 0;
-            run_lcn_bytes = 0;
         }
+
+        if (stream && fseeko(disk, run_lcn_bytes, SEEK_SET))
+        {
+            fprintf_light_red(stderr, "Error seeking to data run LCN offset: %"
+                                       PRIu64"\n", run_lcn_bytes);
+            exit(1);
+        }
+
+        while (run_length_bytes)
+        {
+            run_length_bytes = run_length_bytes > real_size ? real_size : run_length_bytes;
+            if (run_length_bytes >= 4096)
+            {
+                if (stream && fread(buf, 4096, 1, disk) != 1)
+                {
+                    fprintf_light_red(stderr, "Error reading run data.\n");
+                    exit(1);
+                    return EXIT_FAILURE;
+                }
+
+                if (reconstructed && fwrite(buf, 4096, 1, reconstructed) != 1)
+                {
+                    fprintf_light_red(stderr, "Error writing run data.\n");
+                    exit(1);
+                    return EXIT_FAILURE;
+                }
+
+                if (stream)
+                {
+                    memcpy(&((*stream)[stream_position]), buf, 4096);
+                    stream_position += 4096;
+                }
+
+                run_length_bytes -= 4096;
+                real_size -= 4096;
+            }
+            else
+            {
+                if (stream && fread(buf, run_length_bytes, 1, disk) != 1)
+                {
+                    fprintf_light_red(stderr, "Error reading run data.\n");
+                    exit(1);
+                    return EXIT_FAILURE;
+                }
+
+                if (reconstructed && fwrite(buf, run_length_bytes, 1, reconstructed) != 1)
+                {
+                    fprintf_light_red(stderr, "Error writing run data.\n");
+                    exit(1);
+                    return EXIT_FAILURE;
+                }
+
+                if (stream)
+                {
+                    memcpy(&((*stream)[stream_position]), buf,
+                           run_length_bytes);
+                    stream_position += 4096;
+                }
+
+                real_size -= run_length_bytes;
+                run_length_bytes -= run_length_bytes;
+            }
+        }
+
+        prev_lcn = prev_lcn + run_lcn;
+        run_length = 0;
+        run_length_bytes = 0;
+        run_lcn = 0;
+        run_lcn_bytes = 0;
+    }
+
+    if (save_sectors)
+    {
+        bson_finalize(sectors);
+        bson_serialize(bson, &value);
+        bson_cleanup(sectors);
     }
 
     if (reconstructed)
@@ -1000,7 +1038,7 @@ int ntfs_read_index_entry(struct ntfs_index_entry* entry, uint8_t* data,
 {
     memcpy(entry, &(data[*offset]), sizeof(*entry));
     if (entry->length == 0)
-        exit(1);
+        return EXIT_FAILURE;
     return 0;
 }
 
@@ -1011,9 +1049,7 @@ int ntfs_read_index_entries(uint8_t* data, uint64_t* offset)
     while (!ntfs_read_index_entry(&entry, data, offset))
     {
         ntfs_print_index_entry(&entry, &(data[*offset]));
-        *offset += sizeof(entry);
-        ntfs_print_file_name((struct ntfs_file_name*) &(data[*offset]));
-        *offset += entry.stream_length;
+        *offset += entry.length;
         if (entry.flags & 0x02)
             break;
     }
@@ -1021,13 +1057,14 @@ int ntfs_read_index_entries(uint8_t* data, uint64_t* offset)
     return 0;
 }
 
+/* good */
 int ntfs_read_index_header(uint8_t* data, uint64_t* offset,
                            char* name,
                            struct ntfs_standard_attribute_header* sah,
                            struct ntfs_boot_file* bootf,
                            int64_t partition_offset,
                            FILE* disk,
-                           bool extension)
+                           struct bson_info* bson, FILE* serializedf)
 {
     struct ntfs_index_header hdr;
 
@@ -1046,7 +1083,7 @@ int ntfs_dispatch_index_root_attribute(uint8_t* data, uint64_t* offset,
                                        struct ntfs_boot_file* bootf,
                                        int64_t partition_offset,
                                        FILE* disk,
-                                       bool extension)
+                                       struct bson_info* bson, FILE* serializedf)
 {
     struct ntfs_index_root root;
 
@@ -1063,7 +1100,8 @@ int ntfs_dispatch_index_root_attribute(uint8_t* data, uint64_t* offset,
     *offset += sizeof(root);
 
     ntfs_read_index_header(data, offset, name, sah, bootf, partition_offset,
-                           disk, extension);
+                           disk, bson, serializedf);
+    /* good */
 
     ntfs_read_index_entries(data, offset);
     return 0;
@@ -1111,7 +1149,9 @@ int ntfs_dispatch_data_attribute(uint8_t* data, uint64_t* offset,
                                  bool extension,
                                  uint8_t** stream,
                                  bool reconstruct,
-                                 struct bson_info* bson)
+                                 struct bson_info* bson,
+                                 bool save_sectors,
+                                 uint64_t* stream_len)
 {
     uint8_t resident_buffer[4096];
 
@@ -1148,16 +1188,17 @@ int ntfs_dispatch_data_attribute(uint8_t* data, uint64_t* offset,
         fprintf_light_red(stdout, "fname to non-resident data handler: %s\n", name);
         ntfs_handle_non_resident_data_attribute(data, offset, name, sah, bootf,
                                                 partition_offset, disk,
-                                                extension, stream, reconstruct, bson);
+                                                extension, stream, reconstruct, bson, save_sectors, stream_len);
     }
     else
     {
         fprintf_light_red(stdout, "fname to resident data handler: %s\n", name);
         ntfs_handle_resident_data_attribute(data, offset, resident_buffer, 4096,
-                                            name, sah, extension, reconstruct, bson);
+                                            name, sah, extension, reconstruct, bson, save_sectors);
         if (stream)
         {
             *stream = malloc(4096);
+            *stream_len = 4096;
             memcpy(stream, resident_buffer, 4096);
         }
     }
@@ -1190,7 +1231,7 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
                                  struct bson_info* bson,
                                  FILE* serializedf)
 {
-    uint8_t* stream, file_record[ntfs_file_record_size(bootf)];
+    uint8_t* stream, *ostream, file_record[ntfs_file_record_size(bootf)];
     uint64_t stream_offset = 0;
     struct ntfs_index_record_header irh;
     struct ntfs_update_sequence seq;
@@ -1200,12 +1241,14 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
     size_t current_fname_size = 512;
     char* current_fname = malloc(current_fname_size);
     char name[32767];
-    struct bson_info* datas;
+    struct bson_info* datas, *bson2;
     struct bson_kv data_value, data_array;
     struct bson_info* sectors;
     struct bson_kv sector_value, sector_array;
-    uint32_t sector = 0;
+    static uint32_t sector = 0;
     char count[11];
+    uint64_t stream_len = 0;
+    uint64_t counter = 0;
 
     sectors = bson_init();
     sector_array.type = BSON_ARRAY;
@@ -1215,7 +1258,7 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
     data_array.type = BSON_ARRAY;
     data_array.key = "data";
 
-    snprintf(count, 11, "%"PRIu32, 0);
+    snprintf(count, 11, "%"PRIu32, sector);
     data_value.key = count;
     data_value.type = BSON_BINARY;
 
@@ -1226,24 +1269,108 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
     /* read index records off disk */
     if (ntfs_dispatch_data_attribute(data, offset, name, sah, bootf,
                                    partition_offset, disk, false, &stream,
-                                   false, bson))
+                                   false, bson, false, &stream_len))
         return EXIT_FAILURE;
 
-    /* fixup index record */
-    irh = *((struct ntfs_index_record_header*) stream);
-    stream_offset += sizeof(irh);
+    ostream = stream;
 
-    ntfs_print_index_record_header(&irh);
-    ntfs_read_update_sequence(stream, &stream_offset,
-                              irh.size_usn, irh.usn_num,
-                              &seq);
-    ntfs_fixup_data(stream, irh.allocated_size_of_index_entries + 0x18, &seq); 
-    
-    data_value.data = stream;
-    data_value.size = 0x18 + irh.allocated_size_of_index_entries;
+    while (stream_offset < stream_len)
+    {
+        fprintf_light_blue(stdout, "INDX Parsing stream_offset == %"PRIu64" and stream_len == %"PRIu64"\n",
+                stream_offset, stream_len);
 
-    bson_serialize(datas, &data_value);
-    bson_serialize(sectors, &sector_value);
+        data_value.data = stream;
+        ////hexdump(stream, 4096);
+
+        irh = *((struct ntfs_index_record_header*) stream);
+        stream_offset += sizeof(irh);
+
+        if ((irh.magic[0] != 'I') || 
+            (irh.magic[1] != 'N') ||
+            (irh.magic[2] != 'D') ||
+            (irh.magic[3] != 'X'))
+            break; /* TODO: why do these appear? */
+
+        ntfs_print_index_record_header(&irh);
+        ntfs_read_update_sequence(stream, &stream_offset,
+                                  irh.size_usn, irh.usn_num,
+                                  &seq);
+        if (ntfs_fixup_data(stream, irh.allocated_size_of_index_entries + 0x18, &seq))
+            break; /* TODO: why does this ever fail? */
+
+        ire.flags = 0;
+        stream_offset = irh.offset_to_index_entries + 0x18;
+        
+        data_value.size = 0x18 + irh.allocated_size_of_index_entries;
+
+        snprintf(count, 11, "%"PRIu32, sector);
+        bson_serialize(datas, &data_value);
+        bson_serialize(sectors, &sector_value);
+        sector++;
+
+        /* walk all entries */
+        while (!(ire.flags & 0x02))
+        {
+            assert(counter++ < 30000);
+            /* read index entries */
+            ntfs_read_index_record_entry(stream, &stream_offset, &ire);
+            ntfs_print_index_record_entry(&ire);
+
+            if (ntfs_get_reference_int(&(ire.ref)) < 15 ||
+                ntfs_get_reference_int(&(ire.parent)) == ntfs_get_reference_int(&(ire.ref)))
+            {
+                stream_offset += ire.size - sizeof(struct ntfs_index_record_entry);
+                continue;
+            }
+
+            utf16_fname = (char*) &(stream[stream_offset]);
+            utf16_fname_size = ire.filename_length * 2;
+            memset(current_fname, 0, current_fname_size);
+            ntfs_utf16_to_char(utf16_fname, utf16_fname_size,
+                               (char*) current_fname, current_fname_size);
+
+            fprintf_light_green(stdout, "Current fname: %s\n", current_fname);
+            memset(name, 0, 32767);
+            strncpy(name, prefix, strlen(prefix));
+            strcat(name, current_fname);
+
+            stream_offset += ire.size - sizeof(struct ntfs_index_record_entry);
+
+            if (ire.flags & 0x01)
+                fprintf_light_yellow(stdout, "Has sub-node!\n");
+
+            if (ire.flags & 0x02)
+                fprintf_light_yellow(stdout, "Is last entry; without file!\n");
+
+            if (ire.file_flags & NTFS_F_READ_ONLY)
+                fprintf_light_green(stdout, "NTFS_F_READONLY\n");
+            if (ire.file_flags & NTFS_F_HIDDEN)
+                fprintf_light_green(stdout, "NTFS_F_HIDDEN\n");
+            if (ire.file_flags & NTFS_F_SYSTEM)
+                fprintf_light_green(stdout, "NTFS_F_SYSTEM\n");
+            if (ire.file_flags & NTFS_F_DIRECTORY)
+            {
+                fprintf_light_green(stdout, "NTFS_F_DIRECTORY\n");
+                strcat(name, "/");
+            }
+
+            if (ntfs_get_reference_int(&(ire.ref)))
+            {
+                bson2 = bson_init();
+                if (ntfs_read_file_record(disk, ntfs_get_reference_int(&(ire.ref)), partition_offset, bootf,
+                                          file_record, bson2) == 0)
+                {
+                    fprintf_light_red(stderr, "Failed reading file record %"PRIu64"\n", ntfs_get_reference_int(&(ire.ref)));
+                    return EXIT_FAILURE;
+                }           
+
+                ntfs_serialize_file_record(disk, bootf, partition_offset, name, serializedf, file_record, bson2);
+            }
+
+        }
+        stream_offset += 4096 - stream_offset;
+        stream += stream_offset;
+    }
 
     bson_finalize(sectors);
     sector_array.data = sectors;
@@ -1259,74 +1386,11 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
     bson_writef(bson, serializedf);
     bson_cleanup(bson);
 
-    ire.flags = 0;
-    stream_offset = irh.offset_to_index_entries + 0x18;
-    hexdump((uint8_t*)stream, 4096); 
-    /* walk all entries */
-    while (!(ire.flags & 0x02))
-    {
-        /* read index entries */
-        ntfs_read_index_record_entry(stream, &stream_offset, &ire);
-        ntfs_print_index_record_entry(&ire);
-
-        if (ntfs_get_reference_int(&(ire.ref)) < 15 ||
-            ntfs_get_reference_int(&(ire.parent)) == ntfs_get_reference_int(&(ire.ref)))
-        {
-            stream_offset += ire.size - sizeof(struct ntfs_index_record_entry);
-            continue;
-        }
-
-        utf16_fname = (char*) &(stream[stream_offset]);
-        utf16_fname_size = ire.filename_length * 2;
-        memset(current_fname, 0, current_fname_size);
-        ntfs_utf16_to_char(utf16_fname, utf16_fname_size,
-                           (char*) current_fname, current_fname_size);
-
-        fprintf_light_green(stdout, "Current fname: %s\n", current_fname);
-        memset(name, 0, 32767);
-        strncpy(name, prefix, strlen(prefix));
-        strcat(name, current_fname);
-
-        stream_offset += ire.size - sizeof(struct ntfs_index_record_entry);
-
-        if (ire.flags & 0x01)
-            fprintf_light_yellow(stdout, "Has sub-node!\n");
-
-        if (ire.flags & 0x02)
-            fprintf_light_yellow(stdout, "Is last entry; without file!\n");
-
-        if (ire.file_flags & NTFS_F_READ_ONLY)
-            fprintf_light_green(stdout, "NTFS_F_READONLY\n");
-        if (ire.file_flags & NTFS_F_HIDDEN)
-            fprintf_light_green(stdout, "NTFS_F_HIDDEN\n");
-        if (ire.file_flags & NTFS_F_SYSTEM)
-            fprintf_light_green(stdout, "NTFS_F_SYSTEM\n");
-        if (ire.file_flags & NTFS_F_DIRECTORY)
-        {
-            fprintf_light_green(stdout, "NTFS_F_DIRECTORY\n");
-            strcat(name, "/");
-        }
-
-        if (ntfs_get_reference_int(&(ire.ref)))
-        {
-            bson = bson_init();
-            if (ntfs_read_file_record(disk, ntfs_get_reference_int(&(ire.ref)), partition_offset, bootf,
-                                      file_record, bson) == 0)
-            {
-                fprintf_light_red(stderr, "Failed reading file record %"PRIu64"\n", ntfs_get_reference_int(&(ire.ref)));
-                return EXIT_FAILURE;
-            }           
-
-            ntfs_serialize_file_record(disk, bootf, partition_offset, name, serializedf, file_record, bson);
-        }
-
-    }
-
     /* cleanup */
     if (seq.data)
         free(seq.data);
 
-    free(stream);
+    free(ostream);
 
     return EXIT_SUCCESS;
 }
@@ -1407,6 +1471,10 @@ int ntfs_get_attribute(uint8_t* data, void* attr, uint64_t* offset,
     struct ntfs_standard_attribute_header sah;
 
     ntfs_read_file_record_header(data, offset, &rec);
+
+    if (strncmp("FILE", (const char*) &rec.magic, (size_t) 4) != 0)
+        return EXIT_FAILURE;
+
     *offset = rec.offset_first_attribute;
 
     while (ntfs_read_attribute_header(data, offset, &sah) == 0)
@@ -1421,6 +1489,7 @@ int ntfs_get_attribute(uint8_t* data, void* attr, uint64_t* offset,
                        sizeof(struct ntfs_file_name)); 
                     return EXIT_SUCCESS;
                 case NTFS_INDEX_ALLOCATION:
+                case NTFS_INDEX_ROOT:
                 case NTFS_DATA:
                     memcpy(attr,
                        &(sah),
@@ -2061,7 +2130,7 @@ int ntfs_serialize_fs(struct ntfs_boot_file* bootf, int64_t partition_offset,
 
     value.type = BSON_INT64;
     value.key = "superblock_offset";
-    partition_offset = 0;
+    partition_offset %= SECTOR_SIZE;
     value.data = &(partition_offset);
 
     bson_serialize(serialized, &value);
@@ -2084,9 +2153,10 @@ int ntfs_serialize_fs(struct ntfs_boot_file* bootf, int64_t partition_offset,
 
 int ntfs_serialize_file_record(FILE* disk, struct ntfs_boot_file* bootf,
                                int64_t partition_offset, char* prefix,
-                               FILE* serializedf, uint8_t* data, struct bson_info* bson)
+                               FILE* serializedf, uint8_t* data,
+                               struct bson_info* bson)
 {
-    uint64_t fsize, data_offset = 0;
+    uint64_t fsize, data_offset = 0, stream_len;
     bool is_dir;
     struct bson_kv value;
     struct ntfs_file_record rec;
@@ -2119,7 +2189,10 @@ int ntfs_serialize_file_record(FILE* disk, struct ntfs_boot_file* bootf,
     ntfs_get_size(data, &sah, &data_offset, &fsize);
 
     value.type = BSON_STRING;
-    value.size = strlen(prefix);
+    if (strlen(prefix) > 1 && is_dir)
+        value.size = strlen(prefix) - 1;
+    else
+        value.size = strlen(prefix);
     value.key = "path";
     value.data = prefix;
 
@@ -2153,12 +2226,11 @@ int ntfs_serialize_file_record(FILE* disk, struct ntfs_boot_file* bootf,
         return EXIT_FAILURE;
     }
 
-
     if (!is_dir)
     {
         ntfs_dispatch_data_attribute(data, &data_offset, prefix, &sah, bootf,
                                      partition_offset, disk, false, NULL, false,
-                                     bson);
+                                     bson, true, &stream_len);
         bson_finalize(bson);
         bson_writef(bson, serializedf);
         bson_cleanup(bson);
@@ -2167,7 +2239,22 @@ int ntfs_serialize_file_record(FILE* disk, struct ntfs_boot_file* bootf,
     if (is_dir)
     {
         /* walk index allocation table */
-        fprintf_light_red(stderr, "--- Handling directory ---\n");
+        fprintf_light_red(stderr, "--- Handling directory [%s] ---\n", prefix);
+        data_offset = 0;
+
+
+        if (ntfs_get_attribute(data, &sah, &data_offset, NTFS_INDEX_ROOT))
+        {
+            fprintf_light_red(stderr, "Failed getting NTFS_INDEX_ROOT attr.\n");
+        }
+        else
+        {
+            ntfs_dispatch_index_root_attribute(data, (uint64_t*) &data_offset,
+                                               prefix, &sah, bootf,
+                                               partition_offset, disk,
+                                               bson, serializedf);
+        }
+
         data_offset = 0;
 
         if (ntfs_get_attribute(data, &sah, &data_offset, NTFS_INDEX_ALLOCATION))
