@@ -83,9 +83,9 @@ static int xrayfs_ntfs_getattr(const char* path, struct stat* stbuf)
     stbuf->st_size = fsize; 
     stbuf->st_blocks = (stbuf->st_size % 512) ? stbuf->st_size / 512 + 1 : 
                                                 stbuf->st_size / 512;
-    stbuf->st_atime = fdata.r_time;
-    stbuf->st_mtime = fdata.a_time;
-    stbuf->st_ctime = fdata.m_time;
+    stbuf->st_atime = (fdata.a_time - NTFS_FILETIME_TO_UNIX) / 10000000;
+    stbuf->st_mtime = (fdata.m_time - NTFS_FILETIME_TO_UNIX) / 10000000;
+    stbuf->st_ctime = (fdata.r_time - NTFS_FILETIME_TO_UNIX) / 10000000;
 
     return 0;
 }
