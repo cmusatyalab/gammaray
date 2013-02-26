@@ -147,4 +147,5 @@ memtest: default
 
 clean:
 	@rm -f inference_engine
+	@rm -f inference_engine_ntfs
 	@rm -f async_queuer
