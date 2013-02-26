@@ -14,5 +14,6 @@ void bitarray_unset_all(struct bitarray* bits);
 void bitarray_print(struct bitarray* bits);
 struct bitarray* bitarray_init(uint64_t len);
 void bitarray_destroy(struct bitarray* bits);
+uint64_t bitarray_get_array(struct bitarray* bits, uint8_t** array);
 
 #endif

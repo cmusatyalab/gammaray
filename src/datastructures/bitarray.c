@@ -68,3 +68,9 @@ void bitarray_destroy(struct bitarray* bits)
         free(bits);
     }
 }
+
+uint64_t bitarray_get_array(struct bitarray* bits, uint8_t** array)
+{
+    *array = bits->array;
+    return bits->len / 8;
+}
