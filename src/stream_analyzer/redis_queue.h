@@ -33,6 +33,7 @@
 #define REDIS_FILE_SECTORS_LGET "LRANGE filesectors:%"PRIu64" 0 -1"
 #define REDIS_FILE_SECTORS_LGET_VAR "LRANGE filesectors:%"PRIu64" %"PRIu64" %"PRIu64
 #define REDIS_FILE_SECTORS_LAST_SECTOR "LINDEX filesectors:%"PRIu64" -1"
+#define REDIS_FILE_SECTORS_DELETE "DEL filesectors:%"PRIu64
 #define REDIS_FILES_INSERT "RPUSH files:%"PRIu64" file:%"PRIu64
 #define REDIS_FILES_LGET "LRANGE files:%"PRIu64" 0 -1"
 #define REDIS_FILES_SECTOR_INSERT "SET sector:%"PRIu64" lfiles:%"PRIu64
@@ -121,4 +122,5 @@ int redis_path_set(struct kv_store* handle, const uint8_t* path, size_t len,
                    uint64_t id);
 int redis_path_get(struct kv_store* handle, const uint8_t* path, size_t len,
                    uint64_t* id);
+int redis_delete_key(struct kv_store* handle, char* fmt, uint64_t id);
 #endif

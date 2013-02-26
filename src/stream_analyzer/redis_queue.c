@@ -687,6 +687,21 @@ int redis_set_reset(struct kv_store* handle)
            check_redis_return(handle, reply2);
 }
 
+int redis_delete_key(struct kv_store* handle, char* fmt, uint64_t id)
+{
+    redisAppendCommand(handle->connection, fmt, id);
+    handle->outstanding_pipelined_cmds++;
+
+    if (handle->outstanding_pipelined_cmds >= REDIS_DEFAULT_PIPELINED)
+    {
+        if (redis_flush_pipeline(handle))
+        {
+            assert(true);
+        }
+    }
+    return EXIT_SUCCESS;
+}
+
 void redis_shutdown(int exit_value, struct kv_store* handle)
 {
     int outstanding = 0;
