@@ -328,7 +328,7 @@ int redis_hash_field_get(struct kv_store* handle, const char* fmt,
     }
     else
     {
-        fprintf(stdout, "reply->len = %zu\n", reply->len);
+        fprintf(stdout, "reply->len = %zu len = %zu\n", reply->len, *len);
         *len = 0;
     }
 
