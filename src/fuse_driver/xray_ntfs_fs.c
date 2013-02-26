@@ -16,6 +16,8 @@
 #include "xray_ntfs_fs.h"
 #include "util.h"
 
+#define NTFS_FILETIME_TO_UNIX ((uint64_t)(369 * 365 + 89) * 24 * 3600 * 10000000)
+
 static uint64_t partition_offset = 0;
 static uint64_t cluster_size = 0;
 static uint64_t file_record_size = 0;
