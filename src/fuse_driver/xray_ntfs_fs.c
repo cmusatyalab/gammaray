@@ -192,6 +192,7 @@ static int xrayfs_ntfs_read(const char* path, char* buf, size_t size,
     struct ntfs_standard_attribute_header sah;
     uint8_t data[file_record_size];
     size_t len2 = file_record_size;
+    ssize_t readb = 0, toread = 0, ret = 0;
 
 
     if (xrayfs_ntfs_getattr(path, &st))
@@ -208,6 +209,9 @@ static int xrayfs_ntfs_read(const char* path, char* buf, size_t size,
     if (redis_list_get_var(handle, REDIS_FILE_SECTORS_LGET_VAR,
                            inode_num, &list, &len, start, end))
         return -ENOENT;
+
+    if (len < end - start)
+        return -EINTR;
 
     /* loop through all blocks of file to size */
     for (i = 0; i < len; i++)
