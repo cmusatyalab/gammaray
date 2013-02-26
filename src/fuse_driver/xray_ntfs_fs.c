@@ -246,6 +246,12 @@ int main(int argc, char* argv[])
     on_exit((void (*) (int, void *)) redis_shutdown, handle);
 
     fd_disk = open(path, O_RDONLY);
+    if (fd_disk < 0)
+    {
+        fprintf_light_red(stderr, "Failed opening path: %s\n", path);
+        return EXIT_FAILURE;
+    }
+
     argc -= 1;
 
     if (qemu_get_bootf(handle, &bootf, (uint64_t) 1))
@@ -253,6 +259,10 @@ int main(int argc, char* argv[])
 
     cluster_size = bootf.bytes_per_sector * bootf.sectors_per_cluster;
     file_record_size = ntfs_file_record_size(&bootf);
+    fprintf(stdout, "CLUSTER_SIZE == %"PRIu64"\n", cluster_size);
+    fprintf(stdout, "FILE_RECORD_SIZE == %"PRIu64"\n", file_record_size);
+    assert(cluster_size == 4096 && file_record_size == 1024);
+
 
     if (qemu_get_pt_offset(handle, &partition_offset, (uint64_t) 1))
         return EXIT_FAILURE;
