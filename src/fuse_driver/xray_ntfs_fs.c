@@ -231,6 +231,33 @@ static int xrayfs_ntfs_read(const char* path, char* buf, size_t size,
 
             break;
         }
+        else
+        {
+            lseek(fd_disk, sector * 512 + offset % cluster_size, SEEK_SET);
+            readb = 0;
+
+            if (position + cluster_size - offset % cluster_size < size)
+                toread = cluster_size - offset % cluster_size;
+            else
+                toread = size - position;
+            
+            if (toread <= 0)
+                break;
+
+            while (readb < toread)
+            {
+                ret = read(fd_disk, (char*) &(buf[position]), toread - readb);
+                if (ret < 0)
+                {
+                    fprintf(stdout, "system read failed\n");
+                    return -EINVAL;
+                }
+                readb += ret;
+            }
+
+            offset += readb;
+            position += readb;
+        }
     }
 
     redis_free_list(list, len);
