@@ -1009,14 +1009,15 @@ int __diff_superblock_ntfs(uint8_t* write, struct kv_store* store,
 
     new = (struct ntfs_boot_file *) &(write[superblock_offset]);
 
-    len = sizeof(*new);
-    if (redis_hash_field_set(store, REDIS_SUPERBLOCK_SECTOR_INSERT, fs,
-                             "superblock", (uint8_t*) new, len))
-    {
-        fprintf_light_red(stderr, "Error writing new superblock back: %"
-                                  PRIu64"\n", fs);
-        return EXIT_FAILURE;
-    }
+    len = sizeof(struct ntfs_boot_file);
+    /* TODO */
+    //if (redis_hash_field_set(store, REDIS_SUPERBLOCK_SECTOR_INSERT, fs,
+    //                         "superblock", (uint8_t*) new, len))
+    //{
+    //    fprintf_light_red(stderr, "Error writing new superblock back: %"
+    //                              PRIu64"\n", fs);
+    //    return EXIT_FAILURE;
+    //}
 
     return EXIT_SUCCESS;
 }

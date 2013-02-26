@@ -1421,10 +1421,10 @@ int ntfs_attribute_dispatcher(uint8_t* data, uint64_t* offset, char** fname,
     {
         fprintf_light_yellow(stdout, "Dispatching data attribute.\n");
         fprintf(stdout, "with fname: %s\n", *fname);
-        if (ntfs_dispatch_data_attribute(data, offset, *fname, sah, bootf,
-                                         partition_offset, disk,
-                                         extension, NULL, true, NULL))
-            ret = -1;
+        //if (ntfs_dispatch_data_attribute(data, offset, *fname, sah, bootf,
+        //                                 partition_offset, disk,
+        //                                 extension, NULL, true, NULL, false))
+        //    ret = -1;
     }
     else if (sah->attribute_type == 0x90 && *fname)
     {
