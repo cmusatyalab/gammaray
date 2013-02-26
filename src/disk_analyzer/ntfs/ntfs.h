@@ -274,4 +274,12 @@ int ntfs_read_index_record_entry(uint8_t* data, uint64_t* offset,
 uint64_t ntfs_get_reference_int(struct ntfs_file_reference* ref);
 int ntfs_utf16_to_char(char* utf16_fname, size_t inlen, char* char_fname,
                        size_t outlen);
+int ntfs_read_non_resident_attribute_header(uint8_t* data, uint64_t* offset,
+                                            struct ntfs_non_resident_header* nrh);
+
+int ntfs_print_non_resident_header(struct ntfs_non_resident_header* header);
+int ntfs_parse_data_run(uint8_t* data, uint64_t* offset,
+                        uint64_t* length, int64_t* lcn);
+uint64_t ntfs_lcn_to_offset(struct ntfs_boot_file* bootf, int64_t partition_offset,
+                            uint64_t lcn);
 #endif
