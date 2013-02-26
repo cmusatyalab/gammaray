@@ -307,6 +307,8 @@ int ntfs_print_index_entry(struct ntfs_index_entry* entry, uint8_t* data)
                                                    entry->stream_length);
     fprintf_yellow(stdout, "entry.flags: %"PRIu16"\n",
                                                    entry->flags);
+    if (entry->flags & 0x1)
+        fprintf_yellow(stdout, "entry.vcn: %"PRIu64"\n", *((uint64_t*) &(data[entry->length - 8])));
     return EXIT_SUCCESS;
 }
 
