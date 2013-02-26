@@ -112,34 +112,42 @@ static int xrayfs_ntfs_readdir(const char* path, void* buf,
 
     for (i = 0; i < len; i++)
     {
+        fprintf(stdout, "--------> FOR LOOP len == %zu\n", len);
         strtok((char*) (list)[i], ":");
         sscanf(strtok(NULL, ":"), "%"SCNu64, &sector);
         len2 = cluster_size;
-        fprintf(stdout, "sector: %"PRIu64" size=%"PRIu64"\n", sector, len2);
+        memset(data_buf, 0, cluster_size);
+        memset(&ire, 0, sizeof(ire));
 
         if (redis_hash_field_get(handle, REDIS_DIR_SECTOR_GET, sector, "data",
                                  data_buf, &len2))
             return -ENOENT;
 
-        fprintf(stdout, "sector: %"PRIu64" size=%"PRIu64"\n", sector, len2);
         position = 0;
         hexdump(data_buf, 128);
         irh = *((struct ntfs_index_record_header*) data_buf);
+
+        if ((irh.magic[0] != 'I') || 
+            (irh.magic[1] != 'N') ||
+            (irh.magic[2] != 'D') ||
+            (irh.magic[3] != 'X'))
+        {
+            fprintf(stdout, "IRH Header MISMATCH!\n");
+            continue; /* TODO: why do these appear? */
+        }
+
         position = irh.offset_to_index_entries + 0x18;
         /* walk all entries */
-        while (!(ire.flags & 0x02) && counter++ < 20)
+        while (!(ire.flags & 0x02) && counter++ < 2000)
         {
             /* read index entries */
-            hexdump(&(data_buf[position]), 128);
             ntfs_read_index_record_entry(data_buf, &position, &ire);
-            fprintf(stdout, "xray_ntfs_fs: walking index record entry...\n");
 
             if (ntfs_get_reference_int(&(ire.ref)) < 15 ||
                 ntfs_get_reference_int(&(ire.parent)) == ntfs_get_reference_int(&(ire.ref)))
             {
+                fprintf(stdout, "IGNORING ENTRY\n");
                 position += ire.size - sizeof(struct ntfs_index_record_entry);
-                fprintf(stdout, "xray_ntfs_fs: ignoring entry... ire.ref = %"PRIu64"\n", ntfs_get_reference_int(&(ire.ref)));
-                fprintf(stdout, "xray_ntfs_fs: ignoring entry... ire.parent = %"PRIu64"\n", ntfs_get_reference_int(&(ire.parent)));
                 continue;
             }
 
@@ -150,14 +158,15 @@ static int xrayfs_ntfs_readdir(const char* path, void* buf,
                                (char*) current_fname, current_fname_size);
 
             position += ire.size - sizeof(struct ntfs_index_record_entry);
-            fprintf(stdout, "new entry: %s\n", current_fname);
 
+            fprintf(stdout, "current_fname: %s\n", current_fname);
             if (ntfs_get_reference_int(&(ire.ref)))
             {
+                fprintf(stdout, "adding: %s\n", current_fname);
                 filler(buf, current_fname, NULL, 0);
-                fprintf(stdout, "added new entry!\n");
             }
         }
+        fprintf(stdout, "broke while: flags = 0x%"PRIx32" counter == %"PRIu32"\n", ire.flags, counter);
     }
 
     redis_free_list(list, len);
