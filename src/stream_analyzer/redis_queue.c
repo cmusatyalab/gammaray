@@ -21,6 +21,10 @@
 #define REDIS_DEFAULT_PIPELINED 16384 /* unitless; 16384 (4096*16384=64MB) */
 #define REDIS_DEFAULT_BYTES 262144000 /* bytes; 250 MiB */
 
+#define REDIS_MD_FILTER_SET "SET metadata_filter %b"
+#define REDIS_MD_FILTER_GET "GET metadata_filter"
+#define REDIS_MD_FILTER_SETBIT "SETBIT metadata_filter %"PRIu64
+#define REDIS_MD_FILTER_GETBIT "GETBIT metadata_filter %"PRIu64
 
 #define REDIS_SECTOR_GET "GET sector:%"PRIu64
 
@@ -423,6 +427,40 @@ int redis_path_get(struct kv_store* handle, const uint8_t* path, size_t len,
         reply->len > 0)
     {
         sscanf(reply->str, "%"SCNu64, id);
+    }
+
+    return check_redis_return(handle, reply);
+}
+
+int redis_metadata_set(struct kv_store* handle, const uint8_t* data,
+                       size_t len)
+{
+    redisAppendCommand(handle->connection, REDIS_MD_FILTER_SET, data, len);
+    handle->outstanding_pipelined_cmds++;
+
+    if (handle->outstanding_pipelined_cmds >= REDIS_DEFAULT_PIPELINED)
+    {
+        if (redis_flush_pipeline(handle))
+        {
+            assert(true);
+        }
+    }
+    return EXIT_SUCCESS;
+}
+
+int redis_metadata_get(struct kv_store* handle, uint8_t** data,
+                       size_t* len)
+{
+    redisReply* reply;
+    redis_flush_pipeline(handle);
+    reply = redisCommand(handle->connection, REDIS_MD_FILTER_GET);
+
+    if (reply->type == REDIS_REPLY_STRING &&
+        reply->len > 0)
+    {
+        *data = (uint8_t*) malloc(reply->len);
+        memcpy(*data, reply->str, reply->len);
+        *len = reply->len;
     }
 
     return check_redis_return(handle, reply);

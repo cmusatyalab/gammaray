@@ -122,5 +122,9 @@ int redis_path_set(struct kv_store* handle, const uint8_t* path, size_t len,
                    uint64_t id);
 int redis_path_get(struct kv_store* handle, const uint8_t* path, size_t len,
                    uint64_t* id);
+int redis_metadata_set(struct kv_store* handle, const uint8_t* data,
+                       size_t len);
+int redis_metadata_get(struct kv_store* handle, uint8_t** data,
+                       size_t* len);
 int redis_delete_key(struct kv_store* handle, char* fmt, uint64_t id);
 #endif

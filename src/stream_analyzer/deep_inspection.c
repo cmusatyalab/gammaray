@@ -1,12 +1,12 @@
 #define _GNU_SOURCE
+#include "__bson.h"
+#include "bson.h"
 #include "color.h"
-#include "util.h"
 #include "deep_inspection.h"
 #include "ext4.h"
 #include "ntfs.h"
-#include "__bson.h"
-#include "bson.h"
 #include "redis_queue.h"
+#include "util.h"
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -2376,6 +2376,31 @@ int __deserialize_bgd(struct bson_info* bson, struct kv_store* store,
     return EXIT_SUCCESS;
 }
 
+int __deserialize_bitarray(struct bson_info* bson, struct kv_store* store)
+{
+    struct bson_kv value1, value2;
+
+    while (bson_deserialize(bson, &value1, &value2))
+    {
+        if (strcmp(value1.key, "bitarray") == 0)
+        {
+            if (redis_metadata_set(store, value1.data, value1.size))
+            {
+                fprintf_light_red(stderr, "Error setting metadata field.\n");
+                return EXIT_FAILURE;
+            }
+        }
+        else
+        {
+            fprintf_light_red(stderr, "Unkown field for metadata filter: %s\n",
+                                                                   value1.key);
+            return EXIT_FAILURE;
+        }
+    }
+
+    return EXIT_SUCCESS;
+}
+
 int __deserialize_file(struct ext4_superblock* superblock,
                        struct bson_info* bson, struct kv_store* store,
                        uint64_t id)
@@ -2622,6 +2647,13 @@ int qemu_load_index(FILE* index, struct kv_store* store)
         {
             fprintf_light_yellow(stdout, "-- Deserializing a mbr record --\n");
             if (__deserialize_mbr(bson, store, (uint64_t) 0))
+                return EXIT_FAILURE;
+        }
+        else if (strcmp(value1.data, "metadata_filter") == 0)
+        {
+            fprintf_light_yellow(stdout, "-- Deserializing a bitarray record "
+                                         "--\n");
+            if (__deserialize_bitarray(bson, store))
                 return EXIT_FAILURE;
         }
         else
