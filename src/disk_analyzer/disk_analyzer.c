@@ -25,6 +25,40 @@
 #include "ntfs.h"
 #include "mbr.h"
 
+int disk_analyzer_serialize_bitarray(struct bitarray* bits, FILE* serializef)
+{
+    struct bson_info* serialized;
+    struct bson_kv value;
+    uint8_t* array;
+    uint64_t size;
+    int ret;
+
+    serialized = bson_init();
+    size = bitarray_get_array(bits, &array);
+
+    if (size == 0)
+        return EXIT_FAILURE;
+
+    value.type = BSON_STRING;
+    value.size = strlen("metadata_filter");
+    value.key = "type";
+    value.data = "metadata_filter";
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_BINARY;
+    value.size = size;
+    value.key = "bitarray";
+    value.data = array;
+
+    bson_serialize(serialized, &value);
+    bson_finalize(serialized);
+    ret = bson_writef(serialized, serializef);
+    bson_cleanup(serialized);
+    
+    return ret;
+}
+
 /* main thread of execution */
 int main(int argc, char* args[])
 {
@@ -272,6 +306,7 @@ int main(int argc, char* args[])
                                        bits,
                                        "journal",
                                        serializef);
+                disk_analyzer_serialize_bitarray(bits, serializef);
             }
 
             if (ntfs_probe(disk, partition_offset, &ntfs_bootf))

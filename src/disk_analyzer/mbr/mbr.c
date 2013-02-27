@@ -224,6 +224,8 @@ int mbr_serialize_mbr(struct disk_mbr mbr, struct bitarray* bits,
     value.key = "sector";
     value.data = &sector;
 
+    bitarray_set_bit(bits, sector);
+
     bson_serialize(serialized, &value);
 
     value.type = BSON_INT32;
