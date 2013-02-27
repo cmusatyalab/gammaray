@@ -4,9 +4,11 @@
  *                                                                           *
  *****************************************************************************/
 
+#include "bitarray.h"
 #include "color.h"
 #include "util.h"
 
+#include "deep_inspection.h"
 #include "redis_queue.h"
 #include "qemu_common.h"
 
@@ -22,7 +24,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-int read_loop(int fd, struct kv_store* handle)
+int read_loop(int fd, struct kv_store* handle, struct bitarray* bits)
 {
     struct timeval start, end;
     uint8_t buf[QEMU_HEADER_SIZE];
@@ -112,6 +114,9 @@ int read_loop(int fd, struct kv_store* handle)
     if (write.data)
         free(write.data);
 
+    if (bits)
+        bitarray_destroy(bits);
+
     return EXIT_SUCCESS;
 }
 
@@ -119,22 +124,25 @@ int read_loop(int fd, struct kv_store* handle)
 int main(int argc, char* args[])
 {
     int fd;
-    char* db, *stream;
+    char* index, *db, *stream;
+    FILE* indexf;
+    struct bitarray* bits;
 
     fprintf_blue(stdout, "Async Qemu Queue Pusher -- "
                          "By: Wolfgang Richter "
                          "<wolf@cs.cmu.edu>\n");
     redis_print_version();
 
-    if (argc < 3)
+    if (argc < 4)
     {
-        fprintf_light_red(stderr, "Usage: %s <stream file>"
+        fprintf_light_red(stderr, "Usage: %s <index file> <stream file>"
                                   " <redis db num>\n", args[0]);
         return EXIT_FAILURE;
     }
 
-    stream = args[1];
-    db = args[2];
+    index = args[1];
+    stream = args[2];
+    db = args[3];
 
     /* ----------------- hiredis ----------------- */
     struct kv_store* handle = redis_init(db, true);
@@ -144,6 +152,29 @@ int main(int argc, char* args[])
                                   "(connection failure?).\n");
         return EXIT_FAILURE;
     }
+
+    fprintf_cyan(stdout, "Loading MD filter from: %s\n\n", index);
+    indexf = fopen(index, "r");
+
+    if (indexf == NULL)
+    {
+        fprintf_light_red(stderr, "Error opening index file to get MD filter.\n");
+        return EXIT_FAILURE;
+    }
+
+    if (qemu_load_md_filter(indexf, &bits))
+    {
+        fprintf_light_red(stderr, "Error getting MD filter from BSON file.\n");
+        return EXIT_FAILURE;
+    }
+
+    if (bits == NULL)
+    {
+        fprintf_light_red(stderr, "Bitarray is NULL!\n");
+        return EXIT_FAILURE;
+    }
+
+    fclose(indexf);
 
     fprintf_cyan(stdout, "Attaching to stream: %s\n\n", stream);
 
@@ -165,7 +196,7 @@ int main(int argc, char* args[])
         return EXIT_FAILURE;
     }
 
-    read_loop(fd, handle);
+    read_loop(fd, handle, bits);
     close(fd);
     return EXIT_SUCCESS;
 }
