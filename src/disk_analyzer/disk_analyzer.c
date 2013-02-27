@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "bitarray.h"
 #include "color.h"
 #include "ext2.h"
 #include "ext4.h"

@@ -7,6 +7,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include "bitarray.h"
+
 #define SECTOR_SIZE 512
 #define EXT4_SUPERBLOCK_OFFSET 1024
 

@@ -2,71 +2,89 @@ default:
 	@clang disk_analyzer.c ../util/color.c ext2/ext2.c ext4/ext4.c ntfs/ntfs.c mbr/mbr.c \
 		   ../bson/bson-encoder.c \
 		   ../util/util.c \
+		   ../datastructures/bitarray.c \
 		   -o disk_analyzer \
 		   -Wall \
 		   -Werror \
 		   -I../util \
 		   -I../bson \
+		   -I../datastructures \
 		   -I./ext2/ \
 		   -I./ext4/ \
 		   -I./ntfs/ \
 		   -I./mbr/ \
-		   -g
+		   -g \
+		   -lm
 	@clang ext2/tools/inode_explorer.c ext2/ext2.c \
 		   ../util/color.c mbr/mbr.c \
 		   ../bson/bson-encoder.c \
 		   ../util/util.c \
+		   ../datastructures/bitarray.c \
 		   -o ext2_inode_explorer \
 		   -Wall \
 		   -Werror \
 		   -I../util \
 		   -I../bson \
+		   -I../datastructures \
 		   -I./ext2/ \
-		   -I./mbr/
+		   -I./mbr/ \
+		   -lm
 	@clang ext2/tools/data_block_explorer.c ext2/ext2.c \
 		   ../util/color.c mbr/mbr.c \
 		   ../bson/bson-encoder.c \
 		   ../util/util.c \
+		   ../datastructures/bitarray.c \
 		   -o ext2_data_block_explorer \
 		   -Wall \
 		   -Werror \
 		   -I../util \
 		   -I../bson \
+		   -I../datastructures \
 		   -I./ext2/ \
-		   -I./mbr	
+		   -I./mbr \
+		   -lm
 	@clang ext4/tools/inode_explorer.c ext4/ext4.c \
 		   ../util/color.c mbr/mbr.c \
 		   ../bson/bson-encoder.c \
 		   ../util/util.c \
+		   ../datastructures/bitarray.c \
 		   -o ext4_inode_explorer \
 		   -Wall \
 		   -Werror \
 		   -I../util \
 		   -I../bson \
+		   -I../datastructures \
 		   -I./ext4/ \
-		   -I./mbr/
+		   -I./mbr/ \
+		   -lm
 	@clang ext4/tools/data_block_explorer.c ext4/ext4.c \
 		   ../util/color.c mbr/mbr.c \
 		   ../bson/bson-encoder.c \
 		   ../util/util.c \
+		   ../datastructures/bitarray.c \
 		   -o ext4_data_block_explorer \
 		   -Wall \
 		   -Werror \
 		   -I../util \
 		   -I../bson \
+		   -I../datastructures \
 		   -I./ext4/ \
-		   -I./mbr//
+		   -I./mbr/ \
+		   -lm
 	@clang ntfs/tools/file_record_differ.c ntfs/ntfs.c \
 		   ../util/color.c mbr/mbr.c \
 		   ../bson/bson-encoder.c \
 		   ../util/util.c \
+		   ../datastructures/bitarray.c \
 		   -o ntfs_file_record_differ \
 		   -Wall \
 		   -Werror \
 		   -I../util \
 		   -I../bson \
+		   -I../datastructures \
 		   -I./ntfs/ \
-		   -I./mbr/
+		   -I./mbr/ \
+		   -lm
 
 test: default
 	@rm -rf /tmp/win7
