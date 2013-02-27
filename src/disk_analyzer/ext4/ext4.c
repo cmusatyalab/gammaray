@@ -1996,7 +1996,7 @@ int ext4_serialize_bgd_sectors(struct bson_info* serialized,
                                int64_t offset)
 {
     uint64_t block_size = ext4_block_size(*superblock);
-    uint64_t sector;
+    uint64_t sector, inode_table_start, i;
     struct bson_kv value;
 
     value.type = BSON_INT64;
@@ -2005,17 +2005,21 @@ int ext4_serialize_bgd_sectors(struct bson_info* serialized,
     value.key = "block_bitmap_sector_start";
     value.data = &sector; 
 
+    bitarray_set_bit(bits, sector / block_size);
     bson_serialize(serialized, &value);
 
     sector = (ext4_bgd_inode_bitmap(bgd) * block_size + offset) / SECTOR_SIZE;
     value.key = "inode_bitmap_sector_start";
     value.data = &sector; 
 
+    bitarray_set_bit(bits, sector / block_size);
     bson_serialize(serialized, &value);
     
     sector = (ext4_bgd_inode_table(bgd) * block_size + offset) / SECTOR_SIZE;
     value.key = "inode_table_sector_start";
     value.data = &sector; 
+
+    inode_table_start = sector;
 
     bson_serialize(serialized, &value);
     
@@ -2024,6 +2028,11 @@ int ext4_serialize_bgd_sectors(struct bson_info* serialized,
               sizeof(struct ext4_inode)) / SECTOR_SIZE - 1;
     value.key = "inode_table_sector_end";
     value.data = &sector; 
+
+    for (i = 0; i < sector; i += block_size /  SECTOR_SIZE)
+    {
+        bitarray_set_bit(bits, (inode_table_start + i) / block_size);
+    }
 
     bson_serialize(serialized, &value);
     
@@ -2051,6 +2060,7 @@ int ext4_serialize_fs(struct ext4_superblock* superblock,
     int32_t num_files = superblock->s_inodes_count -
                         superblock->s_free_inodes_count -
                         superblock->s_first_ino + 2;
+    uint64_t block_size = ext4_block_size(*superblock);
     struct bson_info* serialized;
     struct bson_info* sectors;
     struct bson_kv value;
@@ -2102,6 +2112,8 @@ int ext4_serialize_fs(struct ext4_superblock* superblock,
     offset /= SECTOR_SIZE;
     value.data = &(offset);
 
+    bitarray_set_bit(bits, offset / block_size);
+
     bson_serialize(serialized, &value);
 
     value.type = BSON_INT64;
@@ -2135,6 +2147,7 @@ int ext4_serialize_bgds(FILE* disk, int64_t partition_offset,
     struct bson_info* serialized;
     struct bson_kv v_type, v_bgd, v_sector, v_offset;
     uint32_t sector = 0, offset = 0;
+    uint64_t block_size = ext4_block_size(*superblock);
 
     serialized = bson_init();
     
@@ -2170,6 +2183,7 @@ int ext4_serialize_bgds(FILE* disk, int64_t partition_offset,
         bson_serialize(serialized, &v_sector);
         bson_serialize(serialized, &v_offset);
 
+        bitarray_set_bit(bits, sector / block_size);
         ext4_serialize_bgd_sectors(serialized, bgd, superblock, bits,
                                    partition_offset);
 
@@ -2200,11 +2214,12 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
     struct ext4_extent_idx idx;
     struct ext4_extent_idx idx2; /* lookahead when searching for block_num */
     struct ext4_extent extent;
-    uint8_t buf[ext4_block_size(superblock)];
+    uint64_t block_size = ext4_block_size(superblock);
+    uint8_t buf[block_size];
 
     struct bson_kv value, data_value, extent_value;
     uint64_t sector;
-    uint64_t sectors_per_block = ext4_block_size(superblock) / SECTOR_SIZE;
+    uint64_t sectors_per_block = block_size / SECTOR_SIZE;
     char count[32];
     value.type = BSON_INT32;
     value.key = count;
@@ -2214,7 +2229,7 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
         data_value.key = count;
         data_value.type = BSON_BINARY;
         data_value.data = buf;
-        data_value.size = ext4_block_size(superblock);
+        data_value.size = block_size;
     }
 
     if (save_extents)
@@ -2222,7 +2237,7 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
         extent_value.key = count;
         extent_value.type = BSON_BINARY;
         extent_value.data = buf;
-        extent_value.size = ext4_block_size(superblock);
+        extent_value.size = block_size;
     }
 
     memcpy(buf, inode.i_block, (size_t) 60);
@@ -2245,6 +2260,8 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
                 {
                     sector = ext4_extent_index_leaf(idx2) * sectors_per_block +
                              partition_offset / SECTOR_SIZE;
+
+                    bitarray_set_bit(bits, sector / block_size);
                     
                     snprintf(count, 32, "%"PRIu64, sector);
                     bson_serialize(extents, &extent_value);
@@ -2266,6 +2283,8 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
                 {
                     sector = ext4_extent_index_leaf(idx) * sectors_per_block +
                              partition_offset / SECTOR_SIZE;
+
+                    bitarray_set_bit(bits, sector / block_size);
                     
                     snprintf(count, 32, "%"PRIu64, sector);
                     bson_serialize(extents, &extent_value);
@@ -2299,6 +2318,7 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
                 if (save_data)
                 {
                     snprintf(count, 32, "%"PRIu64, sector);
+                    bitarray_set_bit(bits, sector / block_size);
                     ext4_read_block(disk, partition_offset, superblock,
                                     (ext4_extent_start(extent) + block_num),
                                     (uint8_t*) buf);
@@ -2382,6 +2402,7 @@ int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
 
         if (data_save)
         {
+            bitarray_set_bit(bits, sector / block_size);
             ext4_read_block(disk, partition_offset, superblock,
                             inode.i_block[block_num], (uint8_t*) buf);
             bson_serialize(data, &data_value);
@@ -2403,9 +2424,10 @@ int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
 
         if (save_extents && block_num == 0)
         {
-            snprintf(count, 11, "%"PRIu32, (uint32_t) (inode.i_block[12] *
-                                            sectors_per_block +
-                                            partition_offset / SECTOR_SIZE));
+            sector = (uint32_t) (inode.i_block[12] * sectors_per_block +
+                                 partition_offset / SECTOR_SIZE);
+            bitarray_set_bit(bits, sector / block_size);
+            snprintf(count, 11, "%"PRIu32, sector);
             bson_serialize(extents, &extent_value);
         }
 
@@ -2422,6 +2444,7 @@ int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
 
         if (data_save)
         {
+            bitarray_set_bit(bits, sector / block_size);
             ext4_read_block(disk, partition_offset, superblock,
                             buf[block_num], (uint8_t*) buf);
             bson_serialize(data, &data_value);
@@ -2446,9 +2469,10 @@ int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
 
         if (save_extents && block_num / addresses_in_block == 0)
         {
-            snprintf(count, 11, "%"PRIu32, (uint32_t) (inode.i_block[13] *
-                                            sectors_per_block +
-                                            partition_offset / SECTOR_SIZE));
+            sector = (uint32_t) (inode.i_block[13] * sectors_per_block +
+                                 partition_offset / SECTOR_SIZE);
+            bitarray_set_bit(bits, sector / block_size);
+            snprintf(count, 11, "%"PRIu32, sector);
             bson_serialize(extents, &extent_value);
         }
 
@@ -2465,6 +2489,7 @@ int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
 
         if (save_extents && block_num % addresses_in_block == 0)
         {
+            bitarray_set_bit(bits, sector / block_size);
             snprintf(count, 11, "%"PRIu32, sector);
             bson_serialize(extents, &extent_value);
         }
@@ -2480,6 +2505,7 @@ int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
     
         if (data_save)
         {
+            bitarray_set_bit(bits, sector / block_size);
             ext4_read_block(disk, partition_offset, superblock,
                             buf[block_num % addresses_in_block],
                             (uint8_t*) buf);
@@ -2506,9 +2532,10 @@ int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
         
         if (save_extents && block_num / (addresses_in_block*addresses_in_block) == 0)
         {
-            snprintf(count, 11, "%"PRIu32, (uint32_t) (inode.i_block[14] *
-                                            sectors_per_block +
-                                            partition_offset / SECTOR_SIZE));
+            sector = (uint32_t) (inode.i_block[14] * sectors_per_block +
+                                 partition_offset / SECTOR_SIZE);
+            bitarray_set_bit(bits, sector / block_size);
+            snprintf(count, 11, "%"PRIu32, sector);
             bson_serialize(extents, &extent_value);
         }
         
@@ -2527,6 +2554,7 @@ int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
         
         if (save_extents && block_num / addresses_in_block == 0)
         {
+            bitarray_set_bit(bits, sector / block_size);
             snprintf(count, 11, "%"PRIu32, sector);
             bson_serialize(extents, &extent_value);
         }
@@ -2544,6 +2572,7 @@ int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
         
         if (save_extents && block_num % addresses_in_block == 0)
         {
+            bitarray_set_bit(bits, sector / block_size);
             snprintf(count, 11, "%"PRIu32, sector);
             bson_serialize(extents, &extent_value);
         }
@@ -2559,6 +2588,7 @@ int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
     
         if (data_save)
         {
+            bitarray_set_bit(bits, sector / block_size);
             ext4_read_block(disk, partition_offset, superblock,
                             buf[block_num % addresses_in_block],
                             (uint8_t*) buf);
@@ -2969,7 +2999,7 @@ int ext4_serialize_journal(FILE* disk, int64_t partition_offset,
                                    &root, bson))
     {
         free(buf);
-        fprintf(stderr, "Failed getting root fs inode.\n");
+        fprintf(stderr, "Failed getting journal inode.\n");
         return -1;
     }
 
@@ -2977,7 +3007,7 @@ int ext4_serialize_journal(FILE* disk, int64_t partition_offset,
                             buf, serializef, bson))
     {
         free(buf);
-        fprintf(stdout, "Error listing fs tree from root inode.\n");
+        fprintf(stdout, "Error listing fs tree from journal inode.\n");
         return -1;
     }
 

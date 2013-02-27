@@ -86,25 +86,25 @@ default:
 		   -I./mbr/ \
 		   -lm
 
-test: default
+test_ntfs: default
 	@rm -rf /tmp/win7
 	@mkdir /tmp/win7
 	@./disk_analyzer \
 		/home/wolf/VM/vm_ntfs_test/win7enterprise.raw.pristine \
 		/tmp/win7enterprise.bson #| grep found > fnames
 
-test_ext4: default
+test: default
 	@time ./disk_analyzer \
 		/home/wolf/VM/vm_ext4_test/vm_ext4_test.raw.pristine \
 		/home/wolf/Dropbox/Projects/xray/sample/ext4_index.bson
 	#@../bson/bson_printer \
 	#	/home/wolf/Dropbox/Projects/xray/sample/ext4_index.bson | \
- 	#	head -n 200
+ 	#	tail -n 32775 | head -n 10
 	@ls -lah /home/wolf/Dropbox/Projects/xray/sample/ext4_index.bson
-	@gzip --best -c \
-		/home/wolf/Dropbox/Projects/xray/sample/ext4_index.bson \
-	 	> /tmp/ext4_index.bson.gz
-	@ls -lah /tmp/ext4_index.bson.gz
+	#@gzip --best -c \
+	#	/home/wolf/Dropbox/Projects/xray/sample/ext4_index.bson \
+	# 	> /tmp/ext4_index.bson.gz
+	#@ls -lah /tmp/ext4_index.bson.gz
 
 test_tinycore: default
 	@valgrind --track-origins=yes ./disk_analyzer \
