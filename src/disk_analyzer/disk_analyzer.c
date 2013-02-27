@@ -101,6 +101,7 @@ int main(int argc, char* args[])
         fprintf_light_red(stderr, "Error allocating bitarray.\n");
         return EXIT_FAILURE;
     }
+
     memset(buf, 0, sizeof(buf));
 
     /* active partitions count */
@@ -121,7 +122,7 @@ int main(int argc, char* args[])
         }
     }
 
-    if (mbr_serialize_mbr(mbr, active_count, serializef))
+    if (mbr_serialize_mbr(mbr, bits, active_count, serializef))
     {
         fprintf_light_red(stderr, "Error serializing MBR.\n");
         return EXIT_FAILURE;
@@ -146,7 +147,7 @@ int main(int argc, char* args[])
                 fprintf_light_blue(stdout, "Serializing Partition Data to: "
                                           "%s\n\n", args[2]);
 
-                if (mbr_serialize_partition(i, pte, serializef))
+                if (mbr_serialize_partition(i, pte, bits, serializef))
                 {
                     fprintf_light_red(stderr, "Error writing serialized "
                                               "partition table entry.\n");
@@ -191,7 +192,7 @@ int main(int argc, char* args[])
                 fprintf_light_blue(stdout, "Serializing Partition Data to: "
                                           "%s\n\n", args[2]);
 
-                if (mbr_serialize_partition(i, pte, serializef))
+                if (mbr_serialize_partition(i, pte, bits, serializef))
                 {
                     fprintf_light_red(stderr, "Error writing serialized "
                                               "partition table entry.\n");
@@ -236,7 +237,7 @@ int main(int argc, char* args[])
                 fprintf_light_blue(stdout, "Serializing Partition Data to: "
                                           "%s\n\n", args[2]);
 
-                if (mbr_serialize_partition(i, pte, serializef))
+                if (mbr_serialize_partition(i, pte, bits, serializef))
                 {
                     fprintf_light_red(stderr, "Error writing serialized "
                                               "partition table entry.\n");
@@ -288,7 +289,7 @@ int main(int argc, char* args[])
                 fprintf_light_blue(stdout, "Serializing Partition Data to: "
                                           "%s\n\n", args[2]);
 
-                if (mbr_serialize_partition(i, pte, serializef))
+                if (mbr_serialize_partition(i, pte, bits, serializef))
                 {
                     fprintf_light_red(stderr, "Error writing serialized "
                                               "partition table entry.\n");

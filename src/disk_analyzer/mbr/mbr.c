@@ -194,7 +194,8 @@ int print_partition_sectors(struct partition_table_entry pte)
     return 0;
 }
 
-int mbr_serialize_mbr(struct disk_mbr mbr, uint32_t active, FILE* serializef)
+int mbr_serialize_mbr(struct disk_mbr mbr, struct bitarray* bits,
+                      uint32_t active, FILE* serializef)
 {
     struct bson_info* serialized;
     struct bson_kv value;
@@ -246,7 +247,7 @@ int mbr_serialize_mbr(struct disk_mbr mbr, uint32_t active, FILE* serializef)
 }
 
 int mbr_serialize_partition(uint32_t pte_num, struct partition_table_entry pte,
-                            FILE* serializef)
+                            struct bitarray* bits, FILE* serializef)
 {
     struct bson_info* serialized;
     struct bson_kv value;
