@@ -101,8 +101,9 @@ int read_loop(int fd, struct kv_store* handle, struct bitarray* bits)
         }
 
         /* the mountain of things i still regret ! */
-        redis_async_write_enqueue(handle, write.header.sector_num, write.data,
-                                  len);
+        if (redis_async_write_enqueue(handle, bits, write.header.sector_num,
+                                  write.data, len))
+            fprintf_light_red(stderr, "\tqueue would block: dropping write\n");
 
         gettimeofday(&end, NULL);
         fprintf(stderr, "[%"PRIu64"]read_loop finished in %"PRIu64

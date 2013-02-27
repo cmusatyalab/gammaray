@@ -581,13 +581,20 @@ void redis_free_list(uint8_t* list[], size_t len)
     }
 }
 
-int redis_async_write_enqueue(struct kv_store* handle, int64_t sector,
-                                                       uint8_t* data,
-                                                       size_t len)
+int redis_async_write_enqueue(struct kv_store* handle, struct bitarray* bits,
+                              int64_t sector, uint8_t* data, size_t len)
 {
     struct thread_job* job;
     pthread_t thread;
-    pthread_mutex_lock(&(handle->conn_lock));
+
+    if (pthread_mutex_trylock(&(handle->conn_lock)))
+    {
+        if (!bitarray_get_bit(bits, sector / 4096))
+            return EXIT_FAILURE;
+        else
+            pthread_mutex_lock(&(handle->conn_lock));
+    }
+
     redisAppendCommand(handle->connection, REDIS_ASYNC_QUEUE_PUSH,
                                            &sector,
                                            sizeof(sector));
