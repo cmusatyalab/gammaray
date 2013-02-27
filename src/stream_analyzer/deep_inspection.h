@@ -60,6 +60,7 @@ struct ext4_bgd
 
 /* functions */
 int qemu_load_index(FILE* index, struct kv_store* store);
+int qemu_load_md_filter(FILE* index, struct bitarray** bits);
 int qemu_print_write(struct qemu_bdrv_write* write);
 enum SECTOR_TYPE qemu_infer_sector_type(struct ext4_superblock* super,
                                         struct qemu_bdrv_write* write, 
