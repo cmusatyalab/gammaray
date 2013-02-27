@@ -13,6 +13,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #include "bitarray.h"
 #include "color.h"
@@ -33,6 +37,8 @@ int main(int argc, char* args[])
     int64_t partition_offset;
     int32_t i, active_count = 0;
     char buf[4096];
+    struct bitarray* bits;
+    struct stat fstats;
 
     fprintf_blue(stdout, "Raw Disk Analyzer -- By: Wolfgang Richter "
                          "<wolf@cs.cmu.edu>\n");
@@ -78,6 +84,23 @@ int main(int argc, char* args[])
 
     mbr_print_mbr(mbr);
 
+    if (fstat(fileno(disk), &fstats))
+    {
+        fclose(disk);
+        fclose(serializef);
+        fprintf_light_red(stderr, "Error getting fstat info on disk image.\n");
+        return EXIT_FAILURE;
+    }
+
+    bits = bitarray_init(fstats.st_size / 4096);
+
+    if (bits == NULL)
+    {
+        fclose(disk);
+        fclose(serializef);
+        fprintf_light_red(stderr, "Error allocating bitarray.\n");
+        return EXIT_FAILURE;
+    }
     memset(buf, 0, sizeof(buf));
 
     /* active partitions count */
