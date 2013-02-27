@@ -66,6 +66,20 @@ struct bitarray* bitarray_init(uint64_t len)
     return bits;
 }
 
+struct bitarray* bitarray_init_data(uint8_t* data, uint64_t len)
+{
+    struct bitarray* bits = (struct bitarray*) malloc(sizeof(struct bitarray));
+
+    if (bits)
+    {
+        bits->len = ((uint64_t) 1) << (uint64_t) ((log((double) len) / log(2)) + 0.5);
+        bits->array = (uint8_t*) malloc((bits->len + 7) / 8);
+        memcpy(bits->array, data, len / 8);
+    }
+
+    return bits;
+}
+
 void bitarray_destroy(struct bitarray* bits)
 {
     if (bits)
