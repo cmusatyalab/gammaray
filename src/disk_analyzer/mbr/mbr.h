@@ -46,5 +46,5 @@ int mbr_print_numbers(struct disk_mbr mbr);
 int mbr_serialize_mbr(struct disk_mbr mbr, struct bitarray* bits,
                       uint32_t active, FILE* serializef);
 int mbr_serialize_partition(uint32_t pte_num, struct partition_table_entry pte,
-                            struct bitarray* bits, FILE* serializef);
+                            FILE* serializef);
 #endif

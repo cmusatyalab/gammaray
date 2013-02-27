@@ -147,7 +147,7 @@ int main(int argc, char* args[])
                 fprintf_light_blue(stdout, "Serializing Partition Data to: "
                                           "%s\n\n", args[2]);
 
-                if (mbr_serialize_partition(i, pte, bits, serializef))
+                if (mbr_serialize_partition(i, pte, serializef))
                 {
                     fprintf_light_red(stderr, "Error writing serialized "
                                               "partition table entry.\n");
@@ -192,7 +192,7 @@ int main(int argc, char* args[])
                 fprintf_light_blue(stdout, "Serializing Partition Data to: "
                                           "%s\n\n", args[2]);
 
-                if (mbr_serialize_partition(i, pte, bits, serializef))
+                if (mbr_serialize_partition(i, pte, serializef))
                 {
                     fprintf_light_red(stderr, "Error writing serialized "
                                               "partition table entry.\n");
@@ -235,9 +235,9 @@ int main(int argc, char* args[])
                 mbr_get_partition_table_entry(mbr, i, &pte);
 
                 fprintf_light_blue(stdout, "Serializing Partition Data to: "
-                                          "%s\n\n", args[2]);
+                                           "%s\n\n", args[2]);
 
-                if (mbr_serialize_partition(i, pte, bits, serializef))
+                if (mbr_serialize_partition(i, pte, serializef))
                 {
                     fprintf_light_red(stderr, "Error writing serialized "
                                               "partition table entry.\n");
@@ -292,7 +292,7 @@ int main(int argc, char* args[])
                 fprintf_light_blue(stdout, "Serializing Partition Data to: "
                                           "%s\n\n", args[2]);
 
-                if (mbr_serialize_partition(i, pte, bits, serializef))
+                if (mbr_serialize_partition(i, pte, serializef))
                 {
                     fprintf_light_red(stderr, "Error writing serialized "
                                               "partition table entry.\n");
