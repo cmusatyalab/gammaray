@@ -284,7 +284,7 @@ int main(int argc, char* args[])
                 fprintf_light_green(stdout, "--- Analyzing NTFS Partition at "
                                             "Offset 0x%.16"PRIx64" ---\n",
                                             partition_offset);
-                if (i == 0)
+                if (i == 0) /* HACK: skip boot partition for now... */
                     continue;
 
                 mbr_get_partition_table_entry(mbr, i, &pte);
@@ -299,16 +299,16 @@ int main(int argc, char* args[])
                     return EXIT_FAILURE;
                 }
 
-                if (ntfs_serialize_fs(&ntfs_bootf, partition_offset, i, "/",
-                                      serializef))
+                if (ntfs_serialize_fs(&ntfs_bootf, bits, partition_offset, i,
+                                      "/", serializef))
                 {
                     fprintf_light_red(stderr, "Error writing serialized fs "
                                               "entry.\n");
                     return EXIT_FAILURE;
                 }
 
-                ntfs_serialize_fs_tree(disk, &ntfs_bootf, partition_offset,
-                                       "/", serializef);
+                ntfs_serialize_fs_tree(disk, &ntfs_bootf, bits,
+                                       partition_offset, "/", serializef);
             }
         }
     }

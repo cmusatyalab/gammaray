@@ -110,7 +110,7 @@ int main(int argc, char* argv[])
                             fscanf(stdin, "%"PRIu64, &recorda);
                             fscanf(stdin, "%s", filename);
                             fprintf_light_cyan(stdout, "Saving FILE record [%"PRId64"] to file '%s'\n", recorda, filename);
-                            ntfs_read_file_record(disk, recorda, partition_offset, &bootf, buf_record, NULL);
+                            ntfs_read_file_record(disk, recorda, partition_offset, &bootf, NULL, buf_record, NULL);
                             save_file_record(filename, buf_record, ntfs_file_record_size(&bootf));
                         }
 
@@ -120,7 +120,7 @@ int main(int argc, char* argv[])
                             fscanf(stdin, "%"PRIu64, &recordb);
                             fprintf_cyan(stdout, "Examining FILE Records: %"PRIu64
                                                  " and %"PRIu64".\n", recorda, recordb);
-                            ntfs_diff_file_records(disk, recorda, recordb, partition_offset, &bootf);
+                            ntfs_diff_file_records(disk, recorda, recordb, partition_offset, &bootf, NULL);
                         }
                         
                         if (strcmp(buf, "exit") == 0 || strcmp(buf, "quit") == 0)

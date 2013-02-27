@@ -371,6 +371,7 @@ uint64_t ntfs_file_record_size(struct ntfs_boot_file* bootf)
 int ntfs_read_file_record(FILE* disk, uint64_t record_num,
                           int64_t partition_offset, 
                           struct ntfs_boot_file* bootf,
+                          struct bitarray* bits,
                           uint8_t* buf, struct bson_info* bson)
 {
     uint64_t record_size = ntfs_file_record_size(bootf); 
@@ -658,6 +659,7 @@ int ntfs_handle_non_resident_data_attribute(uint8_t* data, uint64_t* offset,
                                             char* name,
                                             struct ntfs_standard_attribute_header* sah,
                                             struct ntfs_boot_file* bootf,
+                                            struct bitarray* bits,
                                             int64_t partition_offset,
                                             FILE* disk,
                                             bool extension,
@@ -1083,6 +1085,7 @@ int ntfs_dispatch_index_root_attribute(uint8_t* data, uint64_t* offset,
                                        char* name,
                                        struct ntfs_standard_attribute_header* sah,
                                        struct ntfs_boot_file* bootf,
+                                       struct bitarray* bits,
                                        int64_t partition_offset,
                                        FILE* disk,
                                        struct bson_info* bson, FILE* serializedf)
@@ -1146,6 +1149,7 @@ int ntfs_dispatch_data_attribute(uint8_t* data, uint64_t* offset,
                                  char* name,
                                  struct ntfs_standard_attribute_header* sah,
                                  struct ntfs_boot_file* bootf,
+                                 struct bitarray* bits,
                                  int64_t partition_offset,
                                  FILE* disk,
                                  bool extension,
@@ -1188,7 +1192,7 @@ int ntfs_dispatch_data_attribute(uint8_t* data, uint64_t* offset,
     if (sah->non_resident_flag)
     {
         fprintf_light_red(stdout, "fname to non-resident data handler: %s\n", name);
-        ntfs_handle_non_resident_data_attribute(data, offset, name, sah, bootf,
+        ntfs_handle_non_resident_data_attribute(data, offset, name, sah, bootf, bits,
                                                 partition_offset, disk,
                                                 extension, stream, reconstruct, bson, save_sectors, stream_len);
     }
@@ -1228,6 +1232,7 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
                                  char* prefix,
                                  struct ntfs_standard_attribute_header* sah,
                                  struct ntfs_boot_file* bootf,
+                                 struct bitarray* bits,
                                  int64_t partition_offset,
                                  FILE* disk,
                                  struct bson_info* bson,
@@ -1269,7 +1274,7 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
     sector_value.data = &sector;
 
     /* read index records off disk */
-    if (ntfs_dispatch_data_attribute(data, offset, name, sah, bootf,
+    if (ntfs_dispatch_data_attribute(data, offset, name, sah, bootf, bits,
                                    partition_offset, disk, false, &stream,
                                    false, bson, false, &stream_len))
         return EXIT_FAILURE;
@@ -1359,14 +1364,20 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
             if (ntfs_get_reference_int(&(ire.ref)))
             {
                 bson2 = bson_init();
-                if (ntfs_read_file_record(disk, ntfs_get_reference_int(&(ire.ref)), partition_offset, bootf,
+                if (ntfs_read_file_record(disk,
+                                          ntfs_get_reference_int(&(ire.ref)),
+                                          partition_offset, bootf, bits,
                                           file_record, bson2) == 0)
                 {
-                    fprintf_light_red(stderr, "Failed reading file record %"PRIu64"\n", ntfs_get_reference_int(&(ire.ref)));
+                    fprintf_light_red(stderr, "Failed reading file record %"
+                                           PRIu64"\n",
+                                           ntfs_get_reference_int(&(ire.ref)));
                     return EXIT_FAILURE;
                 }           
 
-                ntfs_serialize_file_record(disk, bootf, partition_offset, name, serializedf, file_record, bson2);
+                ntfs_serialize_file_record(disk, bootf, bits, partition_offset,
+                                           name, serializedf, file_record,
+                                           bson2);
             }
 
         }
@@ -1518,7 +1529,7 @@ int ntfs_get_attribute(uint8_t* data, void* attr, uint64_t* offset,
 
 
 /* meta-walk MFT */
-int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf,
+int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf, struct bitarray* bits,
                   int64_t partition_offset)
 {
     struct ntfs_file_record rec;
@@ -1539,7 +1550,7 @@ int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf,
                               PRId64"\n",
                               file_record_counter,
                               file_record_offset);
-    while (ntfs_read_file_record(disk, file_record_counter, partition_offset, bootf, data, NULL) &&
+    while (ntfs_read_file_record(disk, file_record_counter, partition_offset, bootf, bits, data, NULL) &&
            file_record_counter <= 5)
     {
         extension = false;
@@ -2043,7 +2054,8 @@ int ntfs_diff_file_record_buffs(uint8_t* bufa, uint8_t* bufb,
 
 int ntfs_diff_file_records(FILE* disk, uint64_t recorda, uint64_t recordb,
                            int64_t partition_offset,
-                           struct ntfs_boot_file* bootf)
+                           struct ntfs_boot_file* bootf,
+                           struct bitarray* bits)
 {
     uint64_t file_record_size = ntfs_file_record_size(bootf);
     uint8_t* data_a = malloc(file_record_size);
@@ -2061,8 +2073,8 @@ int ntfs_diff_file_records(FILE* disk, uint64_t recorda, uint64_t recordb,
         return EXIT_FAILURE;
     }
 
-    ntfs_read_file_record(disk, recorda, partition_offset, bootf, data_a, NULL);
-    ntfs_read_file_record(disk, recordb, partition_offset, bootf, data_b, NULL);
+    ntfs_read_file_record(disk, recorda, partition_offset, bootf, bits, data_a, NULL);
+    ntfs_read_file_record(disk, recordb, partition_offset, bootf, bits, data_b, NULL);
 
     ntfs_diff_raw_file_records(data_a, data_b, partition_offset, bootf);
 
@@ -2072,8 +2084,9 @@ int ntfs_diff_file_records(FILE* disk, uint64_t recorda, uint64_t recordb,
     return EXIT_SUCCESS;
 }
 
-int ntfs_serialize_fs(struct ntfs_boot_file* bootf, int64_t partition_offset,
-                      uint32_t pte_num, char* mount_point, FILE* serializedf)
+int ntfs_serialize_fs(struct ntfs_boot_file* bootf, struct bitarray* bits,
+                      int64_t partition_offset, uint32_t pte_num,
+                      char* mount_point, FILE* serializedf)
 {
     int32_t num_block_groups = 0;
     int32_t num_files = -1;
@@ -2154,6 +2167,7 @@ int ntfs_serialize_fs(struct ntfs_boot_file* bootf, int64_t partition_offset,
 }
 
 int ntfs_serialize_file_record(FILE* disk, struct ntfs_boot_file* bootf,
+                               struct bitarray* bits,
                                int64_t partition_offset, char* prefix,
                                FILE* serializedf, uint8_t* data,
                                struct bson_info* bson)
@@ -2230,7 +2244,7 @@ int ntfs_serialize_file_record(FILE* disk, struct ntfs_boot_file* bootf,
 
     if (!is_dir)
     {
-        ntfs_dispatch_data_attribute(data, &data_offset, prefix, &sah, bootf,
+        ntfs_dispatch_data_attribute(data, &data_offset, prefix, &sah, bootf, bits,
                                      partition_offset, disk, false, NULL, false,
                                      bson, true, &stream_len);
         bson_finalize(bson);
@@ -2252,7 +2266,7 @@ int ntfs_serialize_file_record(FILE* disk, struct ntfs_boot_file* bootf,
         else
         {
             ntfs_dispatch_index_root_attribute(data, (uint64_t*) &data_offset,
-                                               prefix, &sah, bootf,
+                                               prefix, &sah, bootf, bits,
                                                partition_offset, disk,
                                                bson, serializedf);
         }
@@ -2266,7 +2280,7 @@ int ntfs_serialize_file_record(FILE* disk, struct ntfs_boot_file* bootf,
         else
         {
             ntfs_dispatch_index_allocation_attribute(data, (uint64_t*) &data_offset,
-                                                     prefix, &sah, bootf,
+                                                     prefix, &sah, bootf, bits,
                                                      partition_offset, disk,
                                                      bson, serializedf);
         }
@@ -2276,21 +2290,21 @@ int ntfs_serialize_file_record(FILE* disk, struct ntfs_boot_file* bootf,
     return EXIT_SUCCESS;
 }
 
-int ntfs_serialize_fs_tree(FILE* disk, struct ntfs_boot_file* bootf,
+int ntfs_serialize_fs_tree(FILE* disk, struct ntfs_boot_file* bootf, struct bitarray* bits,
                            int64_t partition_offset, char* mount_point,
                            FILE* serializedf)
 {
     uint8_t data[ntfs_file_record_size(bootf)];
     struct bson_info* bson = bson_init();
 
-    if (ntfs_read_file_record(disk, 5, partition_offset, bootf,
+    if (ntfs_read_file_record(disk, 5, partition_offset, bootf, bits,
                               data, bson) == 0)
     {
         fprintf_light_red(stderr, "Failed reading file record 5\n");
         return EXIT_FAILURE;
     }
 
-    ntfs_serialize_file_record(disk, bootf, partition_offset, 
+    ntfs_serialize_file_record(disk, bootf, bits, partition_offset, 
                                mount_point, serializedf, data, bson);
 
     return EXIT_SUCCESS;
