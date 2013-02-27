@@ -1,28 +1,4 @@
 default:
-	@#clang inference_engine_ntfs_demo.c -g \
-	#	 ../util/color.c \
-	#	 ../util/util.c \
-	#	 ../bson/bson-encoder.c \
-	#	 ../bson/bson-decoder.c \
-	#	 ../disk_analyzer/ext2/ext2.c \
-	#	 ../disk_analyzer/ntfs/ntfs.c \
-	#	 ../datastructures/bst.c \
-	#	 ../datastructures/linkedlist.c \
-	#	 deep_inspection.c \
-	#	 redis_queue.c \
-	#	 -lhiredis \
-	#	 -o inference_engine_ntfs \
-	#	 -Wall \
-	#	 -Werror \
-	#	 -I../disk_analyzer/ext2 \
-	#	 -I../disk_analyzer/mbr \
-	#	 -I../disk_analyzer/ntfs \
-	#	 -I../util \
-	#	 -I../bson \
-	#	 -I../datastructures \
-	#	 -I/usr/include/hiredis \
-	#	 #-DNOCOLOR
-
 	@clang async_queuer.c -g \
 		 qemu_common.c \
 		 ../util/color.c \
