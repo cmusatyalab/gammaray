@@ -1992,6 +1992,7 @@ int print_sectors_ext4_block_group_descriptor(int64_t offset, struct ext4_block_
 int ext4_serialize_bgd_sectors(struct bson_info* serialized,
                                struct ext4_block_group_descriptor bgd,
                                struct ext4_superblock* superblock,
+                               struct bitarray* bits, 
                                int64_t offset)
 {
     uint64_t block_size = ext4_block_size(*superblock);
@@ -2037,6 +2038,7 @@ char* ext4_last_mount_point(struct ext4_superblock* superblock)
 int ext4_serialize_fs(struct ext4_superblock* superblock,
                       int64_t offset,
                       int32_t pte_num,
+                      struct bitarray* bits,
                       char* mount_point, 
                       FILE* serializedf)
 {
@@ -2126,7 +2128,8 @@ int ext4_serialize_fs(struct ext4_superblock* superblock,
 }
 
 int ext4_serialize_bgds(FILE* disk, int64_t partition_offset,
-                        struct ext4_superblock* superblock, FILE* serializef)
+                        struct ext4_superblock* superblock,
+                        struct bitarray* bits, FILE* serializef)
 {
     struct ext4_block_group_descriptor bgd;
     struct bson_info* serialized;
@@ -2167,7 +2170,7 @@ int ext4_serialize_bgds(FILE* disk, int64_t partition_offset,
         bson_serialize(serialized, &v_sector);
         bson_serialize(serialized, &v_offset);
 
-        ext4_serialize_bgd_sectors(serialized, bgd, superblock,
+        ext4_serialize_bgd_sectors(serialized, bgd, superblock, bits,
                                    partition_offset);
 
         bson_finalize(serialized);
@@ -2183,6 +2186,7 @@ int ext4_serialize_bgds(FILE* disk, int64_t partition_offset,
 
 int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
                                        struct ext4_superblock superblock,
+                                       struct bitarray* bits,
                                        uint32_t block_num,
                                        struct ext4_inode inode,
                                        struct bson_info* sectors,
@@ -2310,7 +2314,8 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
 }
 
 int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
-                                 struct ext4_superblock superblock, uint32_t block_num,
+                                 struct ext4_superblock superblock,
+                                 struct bitarray* bits, uint32_t block_num,
                                  struct ext4_inode inode, struct bson_info* sectors,
                                  struct bson_info* data, struct bson_info* extents,
                                  bool data_save, bool save_extents)
@@ -2568,6 +2573,7 @@ int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
 
 int ext4_serialize_file_sectors(FILE* disk, int64_t partition_offset,
                                 struct ext4_superblock superblock, 
+                                struct bitarray* bits,
                                 struct ext4_inode inode,
                                 struct bson_info* serialized,
                                 bool save_data, bool save_extents)
@@ -2626,12 +2632,12 @@ int ext4_serialize_file_sectors(FILE* disk, int64_t partition_offset,
     {
         if (inode.i_flags & 0x80000) /* check if extents in use */
             ret_check = ext4_serialize_file_extent_sectors(disk, partition_offset,
-                                                          superblock, count, inode,
+                                                          superblock, bits, count, inode,
                                                           sectors, data, extents, save_data,
                                                           save_extents);
         else
             ret_check = ext4_serialize_file_block_sectors(disk, partition_offset,
-                                                          superblock, count, inode,
+                                                          superblock, bits, count, inode,
                                                           sectors, data, extents, save_data,
                                                           save_extents);
         
@@ -2680,6 +2686,7 @@ skip:
 
 int ext4_serialize_tree(FILE* disk, int64_t partition_offset, 
                         struct ext4_superblock superblock,
+                        struct bitarray* bits,
                         struct ext4_inode root_inode,
                         char* prefix,
                         FILE* serializef,
@@ -2726,7 +2733,7 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
 
         bson_serialize(bson, &value);
 
-        ext4_serialize_file_sectors(disk, partition_offset, superblock,
+        ext4_serialize_file_sectors(disk, partition_offset, superblock, bits,
                                     root_inode, bson, false, true);
 
         bson_finalize(bson);
@@ -2763,7 +2770,7 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
 
         bson_serialize(bson, &value);
 
-        ext4_serialize_file_sectors(disk, partition_offset, superblock,
+        ext4_serialize_file_sectors(disk, partition_offset, superblock, bits,
                                     root_inode, bson, false, true);
         
         bson_finalize(bson);
@@ -2802,7 +2809,7 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
 
         /* true, serialize data with sectors */
         ext4_serialize_file_sectors(disk, partition_offset,
-                                    superblock, root_inode, bson, true, true);
+                                    superblock, bits, root_inode, bson, true, true);
         
         bson_finalize(bson);
         bson_writef(bson, serializef);
@@ -2885,7 +2892,7 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
                 {
                     fprintf_red(stderr, "Not directory or file: %s\n", path);
                 }
-                ext4_serialize_tree(disk, partition_offset, superblock,
+                ext4_serialize_tree(disk, partition_offset, superblock, bits,
                                     child_inode, path, serializef,
                                     bson); /* recursive call */
             }
@@ -2898,7 +2905,8 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
 }
 
 int ext4_serialize_fs_tree(FILE* disk, int64_t partition_offset,
-                           struct ext4_superblock* superblock, char* mount,
+                           struct ext4_superblock* superblock,
+                           struct bitarray* bits, char* mount,
                            FILE* serializef)
 {
     struct ext4_inode root;
@@ -2924,7 +2932,7 @@ int ext4_serialize_fs_tree(FILE* disk, int64_t partition_offset,
         return -1;
     }
 
-    if (ext4_serialize_tree(disk, partition_offset, *superblock, root,
+    if (ext4_serialize_tree(disk, partition_offset, *superblock, bits, root,
                             buf, serializef, bson))
     {
         free(buf);
@@ -2938,7 +2946,8 @@ int ext4_serialize_fs_tree(FILE* disk, int64_t partition_offset,
 }
 
 int ext4_serialize_journal(FILE* disk, int64_t partition_offset,
-                            struct ext4_superblock* superblock, char* mount,
+                            struct ext4_superblock* superblock,
+                            struct bitarray* bits, char* mount,
                             FILE* serializef)
 {
     struct ext4_inode root;
@@ -2964,7 +2973,7 @@ int ext4_serialize_journal(FILE* disk, int64_t partition_offset,
         return -1;
     }
 
-    if (ext4_serialize_tree(disk, partition_offset, *superblock, root,
+    if (ext4_serialize_tree(disk, partition_offset, *superblock, bits, root,
                             buf, serializef, bson))
     {
         free(buf);

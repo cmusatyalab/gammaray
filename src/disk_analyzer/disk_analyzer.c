@@ -245,6 +245,7 @@ int main(int argc, char* args[])
                 }
 
                 if (ext4_serialize_fs(&ext4_superblock, partition_offset, i,
+                                      bits,
                                       ext4_last_mount_point(&ext4_superblock),
                                       serializef))
                 {
@@ -254,7 +255,7 @@ int main(int argc, char* args[])
                 }
 
                 if (ext4_serialize_bgds(disk, partition_offset,
-                                        &ext4_superblock, serializef))
+                                        &ext4_superblock, bits, serializef))
                 {
                     fprintf_light_red(stderr, "Error writing serialized "
                                               "BGDs\n");
@@ -263,10 +264,12 @@ int main(int argc, char* args[])
 
                 ext4_serialize_fs_tree(disk, partition_offset, 
                                        &ext4_superblock,
+                                       bits,
                                        ext4_last_mount_point(&ext4_superblock),
                                        serializef);
                 ext4_serialize_journal(disk, partition_offset, 
                                        &ext4_superblock,
+                                       bits,
                                        "journal",
                                        serializef);
             }
