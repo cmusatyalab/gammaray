@@ -15,17 +15,22 @@ struct bitarray
 
 bool bitarray_get_bit(struct bitarray* bits, uint64_t bit)
 {
-    return bits->array[bit/8] & (1 << (bit & 0x07));
+    if (bit < bits->len)
+        return bits->array[bit/8] & (1 << (bit & 0x07));
+    else
+        return false;
 }
 
 void bitarray_set_bit(struct bitarray* bits, uint64_t bit)
 {
-    bits->array[bit/8] |= 1 << (bit & 0x07);
+    if (bit < bits->len)
+        bits->array[bit/8] |= 1 << (bit & 0x07);
 }
 
 void bitarray_unset_bit(struct bitarray* bits, uint64_t bit)
 {
-    bits->array[bit/8] &= (0xff ^ (1 << (bit & 0x07)));
+    if (bit < bits->len)
+        bits->array[bit/8] &= (0xff ^ (1 << (bit & 0x07)));
 }
 
 void bitarray_set_all(struct bitarray* bits)
@@ -51,9 +56,12 @@ struct bitarray* bitarray_init(uint64_t len)
 {
     struct bitarray* bits = (struct bitarray*) malloc(sizeof(struct bitarray));
 
-    bits->len = ((uint64_t) 1) << (uint64_t) ((log((double) len) / log(2)) + 0.5);
-    bits->array = (uint8_t*) malloc((bits->len + 7) / 8);
-    bitarray_unset_all(bits);
+    if (bits)
+    {
+        bits->len = ((uint64_t) 1) << (uint64_t) ((log((double) len) / log(2)) + 0.5);
+        bits->array = (uint8_t*) malloc((bits->len + 7) / 8);
+        bitarray_unset_all(bits);
+    }
 
     return bits;
 }
