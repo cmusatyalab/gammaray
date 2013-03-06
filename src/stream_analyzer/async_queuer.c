@@ -166,7 +166,8 @@ int main(int argc, char* args[])
     if (qemu_load_md_filter(indexf, &bits))
     {
         fprintf_light_red(stderr, "Error getting MD filter from BSON file.\n");
-        return EXIT_FAILURE;
+        bits = bitarray_init(5242880);
+        bitarray_set_all(bits);
     }
 
     if (bits == NULL)
