@@ -10,6 +10,7 @@ default:
 		   ../util/util.c \
 		   ../bson/bson-encoder.c \
 		   ../bson/bson-decoder.c \
+		   ../datastructures/bitarray.c \
 		   -o xray_fs \
 		   -lhiredis \
 		   -I../disk_analyzer/ext4 \
@@ -18,9 +19,11 @@ default:
 		   -I../disk_analyzer/mbr \
 		   -I../util \
 		   -I../bson \
+		   -I../datastructures \
 		   -I../stream_analyzer \
 		   -I/usr/include/hiredis \
-		   `pkg-config fuse --cflags --libs`
+		   `pkg-config fuse --cflags --libs` \
+		   -lm
 	@clang -Wall \
 		   -Werror \
 		   xray_ntfs_fs.c \
@@ -32,6 +35,7 @@ default:
 		   ../util/util.c \
 		   ../bson/bson-encoder.c \
 		   ../bson/bson-decoder.c \
+		   ../datastructures/bitarray.c \
 		   -o xray_ntfs_fs \
 		   -lhiredis \
 		   -I../disk_analyzer/ext4 \
@@ -39,16 +43,16 @@ default:
 		   -I../disk_analyzer/ntfs \
 		   -I../disk_analyzer/mbr \
 		   -I../util \
+		   -I../datastructures \
 		   -I../bson \
 		   -I../stream_analyzer \
 		   -I/usr/include/hiredis \
-		   `pkg-config fuse --cflags --libs`
+		   `pkg-config fuse --cflags --libs` \
+		   -lm
 
 test_ntfs: default
 	@mkdir -p /tmp/FUSE/test_ntfs
 	@./xray_ntfs_fs -d -s -oallow_other /tmp/FUSE/test_ntfs /home/wolf/VM/vm_ntfs_test/win7enterprise.raw
-	@ls /tmp/test_ntfs
-	@sleep 0.25
 	#@sudo umount /tmp/test
 	#@rm -rf /tmp/test
 
