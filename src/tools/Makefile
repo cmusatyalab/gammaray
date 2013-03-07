@@ -1,12 +1,4 @@
-default: probe
 
-test: probe
-	@make clean
-	@make
-	@./probe /var/lib/libvirt/images/ubuntu-ext4.img
-
-probe:
-	@clang probe.c \
 		../bson/bson-encoder.c \
 		../disk_analyzer/ebr.c \
 		../disk_analyzer/ext2.c \
@@ -21,7 +13,6 @@ probe:
 		-Werror
 
 clean:
-	@rm probe
 
 test_tail:
 	@python ./tail.py \
