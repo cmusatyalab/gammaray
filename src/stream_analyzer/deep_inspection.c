@@ -2532,14 +2532,6 @@ int __deserialize_file(struct ext4_superblock* superblock,
                     return EXIT_FAILURE;
                 }
 
-                if (redis_hash_field_set(store, REDIS_EXTENT_SECTOR_INSERT, sector,
-                                 "data", (const uint8_t*) value1.data,
-                                 (size_t) value1.size))
-                {
-                    bson_cleanup(bson2);
-                    return EXIT_FAILURE;
-                }
-
                 if (redis_reverse_pointer_set(store, REDIS_EXTENTS_INSERT,
                                       id,
                                       sector))
