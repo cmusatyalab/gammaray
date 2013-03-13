@@ -97,14 +97,11 @@ test: default
 	@time ./disk_analyzer \
 		/home/wolf/VM/vm_ext4_test/vm_ext4_test.raw.pristine \
 		/home/wolf/Dropbox/Projects/xray/sample/ext4_index.bson
-	#@../bson/bson_printer \
-	#	/home/wolf/Dropbox/Projects/xray/sample/ext4_index.bson | \
- 	#	tail -n 32775 | head -n 10
 	@ls -lah /home/wolf/Dropbox/Projects/xray/sample/ext4_index.bson
-	#@gzip --best -c \
-	#	/home/wolf/Dropbox/Projects/xray/sample/ext4_index.bson \
-	# 	> /tmp/ext4_index.bson.gz
-	#@ls -lah /tmp/ext4_index.bson.gz
+	@gzip --best -c \
+		/home/wolf/Dropbox/Projects/xray/sample/ext4_index.bson \
+	 	> /tmp/ext4_index.bson.gz
+	@ls -lah /tmp/ext4_index.bson.gz
 
 test_tinycore: default
 	@valgrind --track-origins=yes ./disk_analyzer \
