@@ -234,13 +234,6 @@ int mbr_serialize_mbr(struct disk_mbr mbr, struct bitarray* bits,
 
     bson_serialize(serialized, &value);
 
-    value.type = BSON_BINARY;
-    value.size = sizeof(mbr);
-    value.key = "mbr";
-    value.data = &mbr;
-
-    bson_serialize(serialized, &value);
-
     bson_finalize(serialized);
     ret = bson_writef(serialized, serializef);
     bson_cleanup(serialized);

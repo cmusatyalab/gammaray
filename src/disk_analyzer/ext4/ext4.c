@@ -2123,11 +2123,9 @@ int ext4_serialize_fs(struct ext4_superblock* superblock,
 
     bson_serialize(serialized, &value);
 
-    value.key = "superblock";
-    value.type = BSON_BINARY;
-    value.size = sizeof(struct ext4_superblock);
-    value.subtype = BSON_BINARY_GENERIC;
-    value.data = superblock;
+    value.key = "block_size";
+    value.type = BSON_INT64;
+    value.data = &(block_size);
 
     bson_serialize(serialized, &value);
 
@@ -2155,12 +2153,6 @@ int ext4_serialize_bgds(FILE* disk, int64_t partition_offset,
     v_type.key = "type";
     v_type.size = strlen("bgd");
     v_type.data = "bgd";
-
-    v_bgd.type = BSON_BINARY;
-    v_bgd.key = "bgd";
-    v_bgd.subtype = BSON_BINARY_GENERIC;
-    v_bgd.size = sizeof(struct ext4_block_group_descriptor);
-    v_bgd.data = &bgd;
     
     v_sector.type = BSON_INT32;
     v_sector.key = "sector";
@@ -2727,11 +2719,14 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
     uint64_t block_size = ext4_block_size(superblock), position = 0;
     uint8_t buf[block_size];
     uint64_t num_blocks, fsize = ext4_file_size(root_inode);
-    uint64_t i, mode, link_count, uid, gid, atime, mtime, ctime;
+    uint64_t i, mode, link_count, uid, gid, atime, mtime, ctime, inode_num, counter;
     int ret_check;
     char path[8192];
+    char count[32];
+    uint8_t xray_dentry_buf[4096];
 
-    struct bson_kv value;
+    struct bson_info* dentries = NULL, *bson2 = NULL;
+    struct bson_kv value, dentry_value;
     bool is_dir = (root_inode.i_mode & 0x4000) == 0x4000;
     
     if ((root_inode.i_mode & 0xa000) == 0xa000) /* symlink */
@@ -2813,11 +2808,15 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
             value.data = root_inode.i_block;
 
         }
-        else
+        else if (fsize < 4096)
         {
             ext4_read_extent_block(disk, partition_offset, superblock, 0,
                                    root_inode, buf);
             value.data = buf;
+        }
+        else
+        {
+            fprintf_light_red(stderr, "Warning: link name >= 4096!\n");
         }
 
         bson_serialize(bson, &value);
@@ -2905,7 +2904,7 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
         
         bson_finalize(bson);
         bson_writef(bson, serializef);
-        bson_cleanup(bson);        
+        bson_cleanup(bson);
         return 0;
     }
     else if ((root_inode.i_mode & 0x4000) == 0x4000) /* dir */
@@ -2980,11 +2979,8 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
 
         /* true, serialize data with sectors */
         ext4_serialize_file_sectors(disk, partition_offset,
-                                    superblock, bits, root_inode, bson, true, true);
-        
-        bson_finalize(bson);
-        bson_writef(bson, serializef);
-        bson_cleanup(bson);
+                                    superblock, bits, root_inode, bson, false, true);
+
     }
 
     if (ext4_file_size(root_inode) == 0)
@@ -2997,6 +2993,17 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
         if (ext4_file_size(root_inode) % block_size != 0)
             num_blocks += 1;
     }
+
+    value.type = BSON_ARRAY;
+    value.key = "files";
+
+    dentry_value.key = count;
+    dentry_value.type = BSON_BINARY;
+    dentry_value.data = xray_dentry_buf;
+
+    dentries = bson_init();
+
+    counter = 0;
 
     /* go through each valid block of the inode */
     for (i = 0; i < num_blocks; i++)
@@ -3038,10 +3045,17 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
                 continue;
             }
 
-            bson = bson_init();
+            dentry_value.size = sizeof(uint64_t) + dir.name_len;
+            inode_num = dir.inode;
+            memcpy(xray_dentry_buf, &inode_num, sizeof(uint64_t));
+            memcpy(&(xray_dentry_buf[sizeof(uint64_t)]), dir.name, dir.name_len);
+            snprintf(count, 32, "%"PRIu64, counter++);
+            bson_serialize(dentries, &dentry_value);
+
+            bson2 = bson_init();
 
             if (ext4_read_inode_serialized(disk, partition_offset, superblock,
-                                           dir.inode, &child_inode, bson))
+                                           dir.inode, &child_inode, bson2))
             {
                fprintf_light_red(stderr, "Error reading child inode.\n");
                return -1;
@@ -3065,12 +3079,21 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
                 }
                 ext4_serialize_tree(disk, partition_offset, superblock, bits,
                                     child_inode, path, serializef,
-                                    bson); /* recursive call */
+                                    bson2); /* recursive call */
             }
 
             position += dir.rec_len;
         }
     }
+
+    bson_finalize(dentries);
+    value.data = dentries;
+    bson_serialize(bson, &value);
+    bson_cleanup(dentries);
+        
+    bson_finalize(bson);
+    bson_writef(bson, serializef);
+    bson_cleanup(bson);
 
     return 0;
 }
