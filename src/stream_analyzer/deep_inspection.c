@@ -2437,7 +2437,7 @@ int __deserialize_file(struct ext4_superblock* superblock,
                                  (size_t) value1.size))
                 return EXIT_FAILURE;
         }
-        else if (strcmp(value1.key, "data") == 0)
+        else if (strcmp(value1.key, "files") == 0)
         {
             bson2 = bson_init();
             free(bson2->buffer);
@@ -2460,9 +2460,9 @@ int __deserialize_file(struct ext4_superblock* superblock,
                     return EXIT_FAILURE;
                 }
 
-                if (redis_hash_field_set(store, REDIS_DIR_SECTOR_INSERT, sector,
-                                 "data", (const uint8_t*) value1.data,
-                                 (size_t) value1.size))
+                if (redis_binary_insert(store, REDIS_DIR_FILES_INSERT, sector,
+                                        (const uint8_t*) value1.data,
+                                        (size_t) value1.size))
                 {
                     bson_cleanup(bson2);
                     return EXIT_FAILURE;
