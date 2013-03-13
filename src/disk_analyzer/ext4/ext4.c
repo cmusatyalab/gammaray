@@ -488,7 +488,6 @@ int ext4_read_block(FILE* disk, int64_t partition_offset,
     }
 
     return 0;
-
 }
 
 uint32_t ext4_bgd_free_blocks_count(struct ext4_block_group_descriptor bgd)
@@ -718,6 +717,71 @@ int ext4_print_extent_index(struct ext4_extent_idx idx)
     return EXIT_SUCCESS;
 }
 
+uint64_t ext4_sector_extent_block(FILE* disk, int64_t partition_offset,
+                           struct ext4_superblock superblock, uint32_t block_num,
+                           struct ext4_inode inode)
+{
+    int i;
+    struct ext4_extent_header hdr; 
+    struct ext4_extent_idx idx;
+    struct ext4_extent_idx idx2; /* lookahead when searching for block_num */
+    struct ext4_extent extent;
+    uint8_t buf[ext4_block_size(superblock)];
+
+    memcpy(buf, inode.i_block, (size_t) 60);
+    hdr = *((struct ext4_extent_header*) buf);
+    idx.ei_block = (uint32_t) 2 << 31;
+
+    for (i = 0; i < hdr.eh_entries; i++)
+    {
+        if (hdr.eh_depth)
+        {
+            /* TODO */
+            idx2 =  * ((struct ext4_extent_idx*)
+                            &(buf[sizeof(struct ext4_extent_header) +
+                                  sizeof(struct ext4_extent_idx)*i])); 
+            if (hdr.eh_entries == 1)
+            {
+                ext4_read_block(disk, partition_offset, superblock,
+                                ext4_extent_index_leaf(idx2), buf);
+                i = -1; /* allow loop-expr to run (++) */
+                hdr = *((struct ext4_extent_header*) buf);
+                idx.ei_block = (uint32_t) 2 << 31;
+                continue;
+            }
+
+            if ((block_num < idx2.ei_block &&
+                block_num >= idx.ei_block))
+            {
+                ext4_read_block(disk, partition_offset, superblock,
+                                ext4_extent_index_leaf(idx), buf);
+                i = -1; /* allow loop-expr to run (++) */
+                hdr = *((struct ext4_extent_header*) buf);
+                idx.ei_block = (uint32_t) 2 << 31;
+                continue;
+            }
+            idx = idx2;
+        }
+        else
+        {
+            extent = * ((struct ext4_extent*)
+                            &(buf[sizeof(struct ext4_extent_header) +
+                                  sizeof(struct ext4_extent)*i])); 
+            if (extent.ee_block <= block_num &&
+                block_num < extent.ee_block + extent.ee_len)
+            {
+                block_num -= extent.ee_block; /* rebase */
+                return ext4_sector_from_block(ext4_extent_start(extent)
+                                              + block_num,
+                                              superblock,
+                                              partition_offset);
+            }
+        }
+    }
+
+    return 0; 
+}
+
 int ext4_read_extent_block(FILE* disk, int64_t partition_offset,
                            struct ext4_superblock superblock, uint32_t block_num,
                            struct ext4_inode inode, uint8_t* buf)
@@ -781,6 +845,127 @@ int ext4_read_extent_block(FILE* disk, int64_t partition_offset,
 
     memset(buf, 0, (size_t) ext4_block_size(superblock)); /* assuming hole */
     return 0; 
+}
+
+uint64_t ext4_sector_file_block(FILE* disk, int64_t partition_offset,
+                         struct ext4_superblock superblock, uint64_t block_num,
+                         struct ext4_inode inode)
+{
+    fprintf_light_blue(stderr, "in ext4_read_file_block, block_num = %"PRIu64"\n", block_num);
+    uint64_t block_size = ext4_block_size(superblock);
+    uint64_t addresses_in_block = block_size / 4;
+    
+    /* ranges for lookup */
+    uint64_t direct_low = 0;
+    uint64_t direct_high = 11;
+    uint64_t indirect_low = direct_high + 1;
+    uint64_t indirect_high = direct_high + (addresses_in_block);
+    uint64_t double_low = indirect_high + 1;
+    uint64_t double_high = indirect_high + (addresses_in_block)*
+                                           (addresses_in_block);
+    uint64_t triple_low = double_high + 1;
+    uint64_t triple_high = double_high + (addresses_in_block)*
+                                         (addresses_in_block)*
+                                         (addresses_in_block);
+    uint8_t buf[block_size];
+
+    if (block_num < direct_low || block_num > triple_high)
+    {
+        fprintf_light_red(stderr, "File block outside of range of inode.\n");
+        return 0;
+    }
+
+    /* figure out type of block lookup (direct, indirect, double, treble) */
+    /* DIRECT */
+    if (block_num <= direct_high)
+    {
+        if (inode.i_block[block_num] == 0)
+            return 0; /* finished */
+        return ext4_sector_from_block(inode.i_block[block_num],
+                                      superblock,
+                                      partition_offset);
+    }
+
+    /* INDIRECT */
+    if (block_num <= indirect_high)
+    {
+        block_num -= indirect_low; /* rebase, 0 is beginning indirect block range */
+        
+        if (inode.i_block[12] == 0)
+            return 0; /* finished */
+
+        ext4_read_block(disk, partition_offset, superblock, inode.i_block[12],
+                        (uint8_t*) buf);
+
+        if (buf[block_num] == 0)
+            return 0;
+
+        return ext4_sector_from_block(buf[block_num],
+                                      superblock,
+                                      partition_offset);
+    }
+
+    /* DOUBLE */
+    if (block_num <= double_high)
+    {
+        block_num -= double_low;
+
+        if (inode.i_block[13] == 0)
+            return 0;
+
+        ext4_read_block(disk, partition_offset, /* double */
+                        superblock, inode.i_block[13], (uint8_t*) buf);
+
+        if (buf[block_num / addresses_in_block] == 0)
+            return 0;
+
+        ext4_read_block(disk, partition_offset, /* indirect */
+                        superblock, buf[block_num / addresses_in_block],
+                        (uint8_t*) buf);
+
+        if (buf[block_num % addresses_in_block] == 0)
+            return 0;
+
+        return ext4_sector_from_block(buf[block_num % addresses_in_block],
+                                      superblock,
+                                      partition_offset);
+    }
+
+    /* TRIPLE */
+    if (block_num <= triple_high)
+    {
+        block_num -= triple_low;
+
+        if (inode.i_block[14] == 0)
+            return 0;
+
+        ext4_read_block(disk, partition_offset, /* triple */
+                        superblock, inode.i_block[14], (uint8_t*) buf);
+
+        if (buf[block_num / (addresses_in_block*addresses_in_block)] == 0)
+            return 0;
+        
+        ext4_read_block(disk, partition_offset, /* double */
+                        superblock,
+                        buf[block_num / (addresses_in_block*addresses_in_block)],
+                        (uint8_t*) buf);
+
+        if (buf[block_num / addresses_in_block] == 0)
+            return 0;
+
+        ext4_read_block(disk, partition_offset, /* indirect */
+                        superblock, buf[block_num / addresses_in_block],
+                        (uint8_t*) buf);
+
+        if (buf[block_num % addresses_in_block] == 0)
+            return 0;
+
+        return ext4_sector_from_block(buf[block_num % addresses_in_block],
+                                      superblock,
+                                      partition_offset);
+    }
+
+    return 0;
 }
 
 int ext4_read_file_block(FILE* disk, int64_t partition_offset,
@@ -2719,7 +2904,8 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
     uint64_t block_size = ext4_block_size(superblock), position = 0;
     uint8_t buf[block_size];
     uint64_t num_blocks, fsize = ext4_file_size(root_inode);
-    uint64_t i, mode, link_count, uid, gid, atime, mtime, ctime, inode_num, counter;
+    uint64_t i, mode, link_count, uid, gid, atime, mtime, ctime, inode_num,
+             sector;
     int ret_check;
     char path[8192];
     char count[32];
@@ -2979,7 +3165,8 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
 
         /* true, serialize data with sectors */
         ext4_serialize_file_sectors(disk, partition_offset,
-                                    superblock, bits, root_inode, bson, false, true);
+                                    superblock, bits, root_inode, bson, false,
+                                    true);
 
     }
 
@@ -3003,7 +3190,7 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
 
     dentries = bson_init();
 
-    counter = 0;
+    sector = 0;
 
     /* go through each valid block of the inode */
     for (i = 0; i < num_blocks; i++)
@@ -3012,6 +3199,13 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
             ret_check = ext4_read_extent_block(disk, partition_offset, superblock, i, root_inode, buf);
         else
             ret_check = ext4_read_file_block(disk, partition_offset, superblock, i, root_inode, (uint32_t*) buf);
+
+        if (root_inode.i_flags & 0x80000)
+            sector = ext4_sector_extent_block(disk, partition_offset,
+                                              superblock, i, root_inode);
+        else
+            sector = ext4_sector_file_block(disk, partition_offset, superblock,
+                                            i, root_inode);
 
         if (ret_check < 0) /* error reading */
         {
@@ -3048,8 +3242,9 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
             dentry_value.size = sizeof(uint64_t) + dir.name_len;
             inode_num = dir.inode;
             memcpy(xray_dentry_buf, &inode_num, sizeof(uint64_t));
-            memcpy(&(xray_dentry_buf[sizeof(uint64_t)]), dir.name, dir.name_len);
-            snprintf(count, 32, "%"PRIu64, counter++);
+            memcpy(&(xray_dentry_buf[sizeof(uint64_t)]), dir.name,
+                   dir.name_len);
+            snprintf(count, 32, "%"PRIu64, sector);
             bson_serialize(dentries, &dentry_value);
 
             bson2 = bson_init();
