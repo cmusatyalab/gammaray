@@ -2727,7 +2727,7 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
     uint64_t block_size = ext4_block_size(superblock), position = 0;
     uint8_t buf[block_size];
     uint64_t num_blocks, fsize = ext4_file_size(root_inode);
-    uint64_t i;
+    uint64_t i, mode, link_count, uid, gid, atime, mtime, ctime;
     int ret_check;
     char path[8192];
 
@@ -2755,11 +2755,70 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
 
         bson_serialize(bson, &value);
 
-        value.type = BSON_BINARY;
-        value.subtype = BSON_BINARY_GENERIC;
-        value.size = sizeof(struct ext4_inode);
-        value.key = "inode";
-        value.data = &root_inode;
+        value.type = BSON_INT64;
+        value.key = "mode";
+        mode = root_inode.i_mode;
+        value.data = &mode;
+
+        bson_serialize(bson, &value);
+
+        value.type = BSON_INT64;
+        value.key = "link_count";
+        link_count = root_inode.i_links_count;
+        value.data = &link_count;
+
+        bson_serialize(bson, &value);
+
+        value.type = BSON_INT64;
+        value.key = "uid";
+        uid = root_inode.i_uid;
+        value.data = &uid;
+
+        bson_serialize(bson, &value);
+
+        value.type = BSON_INT64;
+        value.key = "gid";
+        gid = root_inode.i_gid;
+        value.data = &gid;
+
+        bson_serialize(bson, &value);
+
+        value.type = BSON_INT64;
+        value.key = "atime";
+        atime = root_inode.i_atime;
+        value.data = &atime;
+
+        bson_serialize(bson, &value);
+
+        value.type = BSON_INT64;
+        value.key = "mtime";
+        mtime = root_inode.i_mtime;
+        value.data = &mtime;
+
+        bson_serialize(bson, &value);
+
+        value.type = BSON_INT64;
+        value.key = "ctime";
+        ctime = root_inode.i_ctime;
+        value.data = &ctime;
+
+        bson_serialize(bson, &value);
+
+        value.type = BSON_STRING;
+        value.size = fsize;
+        value.key = "link_name";
+
+        if (fsize < 60)
+        {
+            value.data = root_inode.i_block;
+
+        }
+        else
+        {
+            ext4_read_extent_block(disk, partition_offset, superblock, 0,
+                                   root_inode, buf);
+            value.data = buf;
+        }
 
         bson_serialize(bson, &value);
 
@@ -2792,11 +2851,52 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
 
         bson_serialize(bson, &value);
 
-        value.type = BSON_BINARY;
-        value.subtype = BSON_BINARY_GENERIC;
-        value.size = sizeof(struct ext4_inode);
-        value.key = "inode";
-        value.data = &root_inode;
+        value.type = BSON_INT64;
+        value.key = "mode";
+        mode = root_inode.i_mode;
+        value.data = &mode;
+
+        bson_serialize(bson, &value);
+
+        value.type = BSON_INT64;
+        value.key = "link_count";
+        link_count = root_inode.i_links_count;
+        value.data = &link_count;
+
+        bson_serialize(bson, &value);
+
+        value.type = BSON_INT64;
+        value.key = "uid";
+        uid = root_inode.i_uid;
+        value.data = &uid;
+
+        bson_serialize(bson, &value);
+
+        value.type = BSON_INT64;
+        value.key = "gid";
+        gid = root_inode.i_gid;
+        value.data = &gid;
+
+        bson_serialize(bson, &value);
+
+        value.type = BSON_INT64;
+        value.key = "atime";
+        atime = root_inode.i_atime;
+        value.data = &atime;
+
+        bson_serialize(bson, &value);
+
+        value.type = BSON_INT64;
+        value.key = "mtime";
+        mtime = root_inode.i_mtime;
+        value.data = &mtime;
+
+        bson_serialize(bson, &value);
+
+        value.type = BSON_INT64;
+        value.key = "ctime";
+        ctime = root_inode.i_ctime;
+        value.data = &ctime;
 
         bson_serialize(bson, &value);
 
@@ -2829,11 +2929,52 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
 
         bson_serialize(bson, &value);
 
-        value.type = BSON_BINARY;
-        value.subtype = BSON_BINARY_GENERIC;
-        value.size = sizeof(struct ext4_inode);
-        value.key = "inode";
-        value.data = &root_inode;
+        value.type = BSON_INT64;
+        value.key = "mode";
+        mode = root_inode.i_mode;
+        value.data = &mode;
+
+        bson_serialize(bson, &value);
+
+        value.type = BSON_INT64;
+        value.key = "link_count";
+        link_count = root_inode.i_links_count;
+        value.data = &link_count;
+
+        bson_serialize(bson, &value);
+
+        value.type = BSON_INT64;
+        value.key = "uid";
+        uid = root_inode.i_uid;
+        value.data = &uid;
+
+        bson_serialize(bson, &value);
+
+        value.type = BSON_INT64;
+        value.key = "gid";
+        gid = root_inode.i_gid;
+        value.data = &gid;
+
+        bson_serialize(bson, &value);
+
+        value.type = BSON_INT64;
+        value.key = "atime";
+        atime = root_inode.i_atime;
+        value.data = &atime;
+
+        bson_serialize(bson, &value);
+
+        value.type = BSON_INT64;
+        value.key = "mtime";
+        mtime = root_inode.i_mtime;
+        value.data = &mtime;
+
+        bson_serialize(bson, &value);
+
+        value.type = BSON_INT64;
+        value.key = "ctime";
+        ctime = root_inode.i_ctime;
+        value.data = &ctime;
 
         bson_serialize(bson, &value);
 
