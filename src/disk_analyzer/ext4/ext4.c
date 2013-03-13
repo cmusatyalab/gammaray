@@ -2412,9 +2412,8 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
     if (save_extents)
     {
         extent_value.key = count;
-        extent_value.type = BSON_BINARY;
-        extent_value.data = buf;
-        extent_value.size = block_size;
+        extent_value.type = BSON_INT64;
+        extent_value.data = &sector;
     }
 
     memcpy(buf, inode.i_block, (size_t) 60);
