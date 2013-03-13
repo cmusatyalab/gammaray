@@ -98,6 +98,8 @@ int redis_reverse_file_data_pointer_set(struct kv_store* handle,
                                         uint64_t end, uint64_t dst);
 int redis_sector_lookup(struct kv_store* store, uint64_t sector, uint8_t* data,
                         size_t* len);
+int redis_binary_insert(struct kv_store* handle, const char* fmt,
+                        uint64_t src, const uint8_t* data, size_t len);
 int redis_list_get(struct kv_store* handle, char* fmt, uint64_t src,
                    uint8_t** result[], size_t* len);
 int redis_list_get_var(struct kv_store* handle, char* fmt, uint64_t src,

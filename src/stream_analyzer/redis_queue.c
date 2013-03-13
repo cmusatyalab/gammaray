@@ -379,6 +379,25 @@ int redis_sector_lookup(struct kv_store* handle, uint64_t src,
     return check_redis_return(handle, reply);
 }
 
+int redis_binary_insert(struct kv_store* handle, const char* fmt,
+                        uint64_t src, const uint8_t* data, size_t len)
+{
+    redisAppendCommand(handle->connection, fmt,
+                                           src,
+                                           data,
+                                           len);
+    handle->outstanding_pipelined_cmds++;
+
+    if (handle->outstanding_pipelined_cmds >= REDIS_DEFAULT_PIPELINED)
+    {
+        if (redis_flush_pipeline(handle))
+        {
+            assert(true);
+        }
+    }
+    return EXIT_SUCCESS;
+}
+
 int redis_reverse_file_data_pointer_set(struct kv_store* handle,
                                         int64_t src, uint64_t start,
                                         uint64_t end, uint64_t dst)
