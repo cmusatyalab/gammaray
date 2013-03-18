@@ -1560,10 +1560,20 @@ int __diff_inodes(uint8_t* write, struct kv_store* store,
                   char* vmname, uint64_t write_counter, char* pointer,
                   size_t write_len, struct super_info* superblock, uint64_t partition_offset)
 {
+    uint64_t file = 0, lfiles = 0, i, offset, last_sector;
     uint8_t** list;
     size_t len = 0, len2 = 4096;
-    struct ext4_inode oldd, *old = &oldd, *new;
+    struct ext4_inode* new;
     char* channel = NULL, path[len2];
+    bool is_dir, new_is_dir;
+    uint64_t size, new_size;
+    uint64_t mode, new_mode;
+    uint64_t link_count, new_link_count;
+    uint64_t uid, new_uid;
+    uint64_t gid, new_gid;
+    uint64_t atime, new_atime;
+    uint64_t ctime, new_ctime;
+    uint64_t mtime, new_mtime;
     
     fprintf_light_white(stdout, "__diff_inodes()\n");
     fprintf_light_white(stdout, "pointer: %s\n", pointer);
@@ -1602,91 +1612,53 @@ int __diff_inodes(uint8_t* write, struct kv_store* store,
             return EXIT_FAILURE;
         }
 
-        len2 = sizeof(struct ext4_inode);
-        if (redis_hash_field_get(store, REDIS_FILE_SECTOR_GET, file, "inode",
-                                 (uint8_t*) old, &len2))
-        {
-            fprintf_light_red(stdout, "Error getting offset for file %"PRIu64
-                                      "from Redis.\n", file);
-            return EXIT_FAILURE;
-        }
-
-        if (len2 == 0)
-        {
-            memset(&oldd, 0, sizeof(oldd));
-        }
+        GET_FIELD(REDIS_FILE_SECTOR_GET, file, is_dir, len2);
+        GET_FIELD(REDIS_FILE_SECTOR_GET, file, size, len2);
+        GET_FIELD(REDIS_FILE_SECTOR_GET, file, mode, len2);
+        GET_FIELD(REDIS_FILE_SECTOR_GET, file, link_count, len2);
+        GET_FIELD(REDIS_FILE_SECTOR_GET, file, uid, len2);
+        GET_FIELD(REDIS_FILE_SECTOR_GET, file, gid, len2);
+        GET_FIELD(REDIS_FILE_SECTOR_GET, file, atime, len2);
+        GET_FIELD(REDIS_FILE_SECTOR_GET, file, mtime, len2);
+        GET_FIELD(REDIS_FILE_SECTOR_GET, file, ctime, len2);
 
         new = (struct ext4_inode*) &(write[offset]);
-        old_size = ext4_file_size(*old);
+
+        new_is_dir = (new->i_mode & 0x4000) == 0x4000;
+        new_size = ext4_file_size(*new);
+        new_mode = new->i_mode;
+        new_link_count = new->i_links_count;
+        new_uid = new->i_uid;
+        new_gid = new->i_gid;
+        new_atime = new->i_atime;
+        new_mtime = new->i_mtime;
+        new_ctime = new->i_ctime;
+
+        DIRECT_FIELD_COMPARE(is_dir, "file.is_dir", "metadata", BSON_BOOLEAN);
+        DIRECT_FIELD_COMPARE(size, "file.size", "metadata", BSON_INT64);
+        DIRECT_FIELD_COMPARE(mode, "file.mode", "metadata", BSON_INT64);
+        DIRECT_FIELD_COMPARE(link_count, "file.link_count", "metadata", BSON_INT64);
+        DIRECT_FIELD_COMPARE(uid, "file.uid", "metadata", BSON_INT64);
+        DIRECT_FIELD_COMPARE(gid, "file.gid", "metadata", BSON_INT64);
+        DIRECT_FIELD_COMPARE(atime, "file.atime", "metadata", BSON_INT64);
+        DIRECT_FIELD_COMPARE(mtime, "file.mtime", "metadata", BSON_INT64);
+        DIRECT_FIELD_COMPARE(ctime, "file.ctime", "metadata", BSON_INT64);
 
         fprintf_light_white(stdout, "Checking inode for file '%s', offset %"
                                     PRIu64"\n", path, offset);
         channel = construct_channel_name(vmname, path);
         fprintf_light_cyan(stdout, "channel: %s\n", channel);
 
-        FIELD_COMPARE(i_mode, "i_mode", "metadata", BSON_BINARY)
-        FIELD_COMPARE(i_uid, "i_uid", "metadata", BSON_BINARY)
-        FIELD_COMPARE(i_size_lo, "i_size_lo", "metadata", BSON_INT32)
-        FIELD_COMPARE(i_atime, "i_atime", "metadata", BSON_INT32)
-        FIELD_COMPARE(i_ctime, "i_ctime", "metadata", BSON_INT32)
-        FIELD_COMPARE(i_mtime, "i_mtime", "metadata", BSON_INT32)
-        FIELD_COMPARE(i_dtime, "i_dtime", "metadata", BSON_INT32)
-        FIELD_COMPARE(i_gid, "i_gid", "metadata", BSON_BINARY)
-        FIELD_COMPARE(i_links_count, "i_links_count", "metadata", BSON_BINARY)
-        FIELD_COMPARE(i_blocks_lo, "i_blocks_lo", "metadata", BSON_INT32)
-        FIELD_COMPARE(i_flags, "i_flags", "metadata", BSON_INT32)
-        FIELD_COMPARE(i_osd1[0], "i_osd1[0]", "metadata", BSON_BINARY)
-        FIELD_COMPARE(i_osd1[1], "i_osd1[1]", "metadata", BSON_BINARY)
-        FIELD_COMPARE(i_osd1[2], "i_osd1[2]", "metadata", BSON_BINARY)
-        FIELD_COMPARE(i_osd1[3], "i_osd1[3]", "metadata", BSON_BINARY)
-        FIELD_COMPARE(i_block[0], "i_block[0]", "metadata", BSON_INT32)
-        FIELD_COMPARE(i_block[1], "i_block[1]", "metadata", BSON_INT32)
-        FIELD_COMPARE(i_block[2], "i_block[2]", "metadata", BSON_INT32)
-        FIELD_COMPARE(i_block[3], "i_block[3]", "metadata", BSON_INT32)
-        FIELD_COMPARE(i_block[4], "i_block[4]", "metadata", BSON_INT32)
-        FIELD_COMPARE(i_block[5], "i_block[5]", "metadata", BSON_INT32)
-        FIELD_COMPARE(i_block[6], "i_block[6]", "metadata", BSON_INT32)
-        FIELD_COMPARE(i_block[7], "i_block[7]", "metadata", BSON_INT32)
-        FIELD_COMPARE(i_block[8], "i_block[8]", "metadata", BSON_INT32)
-        FIELD_COMPARE(i_block[9], "i_block[9]", "metadata", BSON_INT32)
-        FIELD_COMPARE(i_block[10], "i_block[10]", "metadata", BSON_INT32)
-        FIELD_COMPARE(i_block[11], "i_block[11]", "metadata", BSON_INT32)
-        FIELD_COMPARE(i_block[12], "i_block[12]", "metadata", BSON_INT32)
-        FIELD_COMPARE(i_block[13], "i_block[13]", "metadata", BSON_INT32)
-        FIELD_COMPARE(i_block[14], "i_block[14]", "metadata", BSON_INT32)
-        FIELD_COMPARE(i_generation, "i_generation", "metadata", BSON_INT32)
-        FIELD_COMPARE(i_file_acl_lo, "i_file_acl_lo", "metadata", BSON_INT32)
-        FIELD_COMPARE(i_size_high, "i_size_high", "metadata", BSON_INT32)
-        FIELD_COMPARE(i_obso_faddr, "i_obso_faddr", "metadata", BSON_INT32)
-        FIELD_COMPARE(i_osd2[0], "i_osd2[0]", "metadata", BSON_BINARY)
-        FIELD_COMPARE(i_osd2[1], "i_osd2[1]", "metadata", BSON_BINARY)
-        FIELD_COMPARE(i_osd2[2], "i_osd2[2]", "metadata", BSON_BINARY)
-        FIELD_COMPARE(i_osd2[3], "i_osd2[3]", "metadata", BSON_BINARY)
-        FIELD_COMPARE(i_osd2[4], "i_osd2[4]", "metadata", BSON_BINARY)
-        FIELD_COMPARE(i_osd2[5], "i_osd2[5]", "metadata", BSON_BINARY)
-        FIELD_COMPARE(i_osd2[6], "i_osd2[6]", "metadata", BSON_BINARY)
-        FIELD_COMPARE(i_osd2[7], "i_osd2[7]", "metadata", BSON_BINARY)
-        FIELD_COMPARE(i_osd2[8], "i_osd2[8]", "metadata", BSON_BINARY)
-        FIELD_COMPARE(i_osd2[9], "i_osd2[9]", "metadata", BSON_BINARY)
-        FIELD_COMPARE(i_osd2[10], "i_osd2[10]", "metadata", BSON_BINARY)
-        FIELD_COMPARE(i_extra_isize, "i_extra_isize", "metadata", BSON_BINARY)
-        FIELD_COMPARE(i_checksum_hi, "i_checksum_hi", "metadata", BSON_BINARY)
-        FIELD_COMPARE(i_ctime_extra, "i_ctime_extra", "metadata", BSON_INT32)
-        FIELD_COMPARE(i_mtime_extra, "i_mtime_extra", "metadata", BSON_INT32)
-        FIELD_COMPARE(i_atime_extra, "i_atime_extra", "metadata", BSON_INT32)
-        FIELD_COMPARE(i_crtime, "i_crtime", "metadata", BSON_INT32)
-        FIELD_COMPARE(i_crtime_extra, "i_crtime_extra", "metadata", BSON_INT32)
-        FIELD_COMPARE(i_version_hi, "i_version_hi", "metadata", BSON_INT32)
+        SET_FIELD(REDIS_FILE_SECTOR_INSERT, file, is_dir, len2);
+        SET_FIELD(REDIS_FILE_SECTOR_INSERT, file, size, len2);
+        SET_FIELD(REDIS_FILE_SECTOR_INSERT, file, mode, len2);
+        SET_FIELD(REDIS_FILE_SECTOR_INSERT, file, link_count, len2);
+        SET_FIELD(REDIS_FILE_SECTOR_INSERT, file, uid, len2);
+        SET_FIELD(REDIS_FILE_SECTOR_INSERT, file, gid, len2);
+        SET_FIELD(REDIS_FILE_SECTOR_INSERT, file, atime, len2);
+        SET_FIELD(REDIS_FILE_SECTOR_INSERT, file, mtime, len2);
+        SET_FIELD(REDIS_FILE_SECTOR_INSERT, file, ctime, len2);
 
-        /* diff ext4_extent_header() */
-        /* if eh_entries diff */
-        /*      if depth same, just update any extra intermediates */
-        /*      depth == 0 --> sector mappings */
-        /*      depth > 0 --> intermediate mappings */
-        /* if eh_max diff */
-        /* if depth diff --> add intermediate extent (check keyspace schema) */
-        /*      number added/diffed depends on eh_entries */
-        /* generation don't care */
         if (((new->i_mode & 0x8000) == 0x8000 ||
              (new->i_mode & 0x4000) == 0x4000) &&
             !((new->i_mode & 0x6000) == 0x6000 ||
@@ -1697,19 +1669,7 @@ int __diff_inodes(uint8_t* write, struct kv_store* store,
              //                   (uint8_t *) &(old->i_block[0]), partition_offset, super);
         }
 
-        len2 = sizeof(struct ext4_inode);
-        if (redis_hash_field_set(store, REDIS_FILE_SECTOR_INSERT, file, "inode",
-                                 (uint8_t*) new, len2))
-        {
-            fprintf_light_red(stdout, "Error getting offset for file %"PRIu64
-                                      "from Redis.\n", file);
-            return EXIT_FAILURE;
-        }
-
-        new_size = ext4_file_size(*new);
-        len2 = sizeof(new_size);
-
-        if (old_size < new_size)
+        if (size < new_size)
         {
             if (redis_last_file_sector(store, file, &last_sector))
             {
@@ -1718,18 +1678,13 @@ int __diff_inodes(uint8_t* write, struct kv_store* store,
                 return EXIT_FAILURE;
             }
             fprintf_light_white(stdout, "Size mismatch. Checking for last "
-                                        "block\n %"PRIu64" %"PRIu64, old_size, new_size);
+                                        "block\n %"PRIu64" %"PRIu64" %"PRIu64,
+                                        size, new_size, last_sector);
 
             __reinspect_write(superblock, store, partition_offset, last_sector,
                               write_counter, vmname);
         }
 
-        if (redis_hash_field_set(store, REDIS_FILE_SECTOR_INSERT, file, "size",
-                                 (uint8_t*) &new_size, len2))
-        {
-            fprintf_light_red(stdout, "Error inserting new size.\n", file);
-            return EXIT_FAILURE;
-        }
         free(channel);
     }
 
