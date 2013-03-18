@@ -1106,9 +1106,14 @@ int __diff_bgds(uint8_t* write, struct kv_store* store,
 {
     uint64_t bgd = 0, lbgds = 0, i;
     uint8_t** list;
-    size_t len = 0, bgdlen = sizeof(struct ext4_block_group_descriptor);
-    struct ext4_block_group_descriptor oldd, *old = &oldd, *new;
+    size_t len;
+    struct ext4_block_group_descriptor* new;
     char* channel, *path = "";
+    uint64_t block_bitmap_sector_start, new_block_bitmap_sector_start;
+    uint64_t inode_bitmap_sector_start, new_inode_bitmap_sector_start;
+    uint64_t block_bitmap_sector_end, new_block_bitmap_sector_end;
+    uint64_t inode_bitmap_sector_end, new_inode_bitmap_sector_end;
+
     fprintf_light_white(stdout, "__diff_bgds()\n");
     fprintf_light_white(stdout, "pointer: %s\n", pointer);
 
@@ -1131,35 +1136,23 @@ int __diff_bgds(uint8_t* write, struct kv_store* store,
         strtok((char*) (list)[i], ":");
         sscanf(strtok(NULL, ":"), "%"SCNu64, &bgd);
 
-        if (redis_hash_field_get(store, REDIS_BGD_SECTOR_GET, bgd,
-                                 "bgd", (uint8_t*) old, &bgdlen))
-        {
-            fprintf_light_red(stderr, "Could not load BGD %"PRIu64"\n", bgd);
-            return EXIT_FAILURE;
-        }
+        GET_FIELD(REDIS_BGD_SECTOR_GET, bgd, block_bitmap_sector_start, len);
+        GET_FIELD(REDIS_BGD_SECTOR_GET, bgd, block_bitmap_sector_end, len);
+        GET_FIELD(REDIS_BGD_SECTOR_GET, bgd, inode_bitmap_sector_start, len);
+        GET_FIELD(REDIS_BGD_SECTOR_GET, bgd, inode_bitmap_sector_end, len);
 
         new = (struct ext4_block_group_descriptor *)
             &(write[i*sizeof(struct ext4_block_group_descriptor)]);
 
-        FIELD_COMPARE(bg_block_bitmap_lo, "bgd.bg_block_bitmap_lo", "metadata", BSON_INT32);
-        FIELD_COMPARE(bg_inode_bitmap_lo, "bgd.bg_inode_bitmap_lo", "metadata", BSON_INT32);
-        FIELD_COMPARE(bg_inode_table_lo, "bgd.bg_inode_table_lo,", "metadata", BSON_INT32);
-        FIELD_COMPARE(bg_free_blocks_count_lo, "bgd.bg_free_blocks_count_lo", "metadata", BSON_BINARY);
-        FIELD_COMPARE(bg_free_inodes_count_lo, "bgd.bg_free_inodes_count_lo", "metadata", BSON_BINARY);
-        FIELD_COMPARE(bg_used_dirs_count_lo, "bgd.bg_used_dirs_count_lo", "metadata", BSON_BINARY);
-        FIELD_COMPARE(bg_flags, "bgd.bg_flags", "metadata", BSON_BINARY);
-        FIELD_COMPARE(bg_exclude_bitmap_lo, "bgd.bg_exclude_bitmap_lo", "metadata", BSON_INT32);
-        FIELD_COMPARE(bg_block_bitmap_csum_lo, "bgd.bg_block_bitmap_csum_lo", "metadata", BSON_BINARY);
-        FIELD_COMPARE(bg_inode_bitmap_csum_lo, "bgd.bg_inode_bitmap_csum_lo", "metadata", BSON_BINARY);
-        FIELD_COMPARE(bg_itable_unused_lo, "bgd.bg_itable_unused_lo", "metadata", BSON_BINARY);
-        FIELD_COMPARE(bg_checksum, "bgd.bg_checksum", "metadata", BSON_BINARY);
+        DIRECT_FIELD_COMPARE(block_bitmap_sector_start, "bgd.block_bitmap_sector_start", "metadata", BSON_INT64);
+        DIRECT_FIELD_COMPARE(block_bitmap_sector_end, "bgd.block_bitmap_sector_end", "metadata", BSON_INT64);
+        DIRECT_FIELD_COMPARE(inode_bitmap_sector_start, "bgd.inode_bitmap_sector_start", "metadata", BSON_INT64);
+        DIRECT_FIELD_COMPARE(inode_bitmap_sector_end, "bgd.inode_bitmap_sector_end", "metadata", BSON_INT64);
 
-        if (redis_hash_field_set(store, REDIS_BGD_SECTOR_INSERT, bgd, "bgd",
-                                 (uint8_t*) new, sizeof(*new)))
-        {
-            fprintf_light_red(stderr, "Error setting bgd %"PRIu64"\n", bgd);
-            return EXIT_FAILURE;
-        }
+        SET_FIELD(REDIS_BGD_SECTOR_INSERT, bgd, block_bitmap_sector_start, len);
+        SET_FIELD(REDIS_BGD_SECTOR_INSERT, bgd, block_bitmap_sector_end, len);
+        SET_FIELD(REDIS_BGD_SECTOR_INSERT, bgd, inode_bitmap_sector_start, len);
+        SET_FIELD(REDIS_BGD_SECTOR_INSERT, bgd, inode_bitmap_sector_end, len);
     } 
 
     redis_free_list(list, len);
