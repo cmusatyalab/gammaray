@@ -2246,6 +2246,9 @@ int ext4_serialize_fs(struct ext4_superblock* superblock,
                         superblock->s_free_inodes_count -
                         superblock->s_first_ino + 2;
     uint64_t block_size = ext4_block_size(*superblock);
+    uint64_t blocks_per_group = superblock->s_blocks_per_group;
+    uint64_t inodes_per_group = superblock->s_inodes_per_group;
+    uint64_t inode_size = superblock->s_inode_size;
     struct bson_info* serialized;
     struct bson_info* sectors;
     struct bson_kv value;
@@ -2311,6 +2314,24 @@ int ext4_serialize_fs(struct ext4_superblock* superblock,
     value.key = "block_size";
     value.type = BSON_INT64;
     value.data = &(block_size);
+
+    bson_serialize(serialized, &value);
+
+    value.key = "blocks_per_group";
+    value.type = BSON_INT64;
+    value.data = &(blocks_per_group);
+
+    bson_serialize(serialized, &value);
+
+    value.key = "inodes_per_group";
+    value.type = BSON_INT64;
+    value.data = &(inodes_per_group);
+
+    bson_serialize(serialized, &value);
+
+    value.key = "inode_size";
+    value.type = BSON_INT64;
+    value.data = &(inode_size);
 
     bson_serialize(serialized, &value);
 
