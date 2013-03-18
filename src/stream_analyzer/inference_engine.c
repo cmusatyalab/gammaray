@@ -26,7 +26,6 @@
 int read_loop(struct kv_store* store, char* vmname)
 {
     struct timeval start, end;
-    int sector_type = SECTOR_UNKNOWN;
     uint64_t write_counter = 0, partition_offset, time = 0;
     struct qemu_bdrv_write write;
     struct ext4_superblock superblock;
@@ -58,8 +57,6 @@ int read_loop(struct kv_store* store, char* vmname)
         }
 
         qemu_print_write(&write);
-        sector_type = qemu_infer_sector_type(&superblock, &write, store);
-        qemu_print_sector_type(sector_type);
         gettimeofday(&start, NULL);
         qemu_deep_inspect(&superblock, &write, store, write_counter++, vmname,
                           partition_offset);
