@@ -83,6 +83,16 @@ struct ext4_bgd
     uint64_t inode_table_sector_end;
 } __attribute__((packed));
 
+struct super_info
+{
+    uint64_t superblock_sector;
+    uint64_t superblock_offset;
+    uint64_t block_size;
+    uint64_t blocks_per_group;
+    uint64_t inodes_per_group;
+    uint64_t inode_size;
+} __attribute__((packed));
+
 /* functions */
 int qemu_load_index(FILE* index, struct kv_store* store);
 int qemu_load_md_filter(FILE* index, struct bitarray** bits);
@@ -97,9 +107,9 @@ int qemu_deep_inspect_ntfs(struct ntfs_boot_file* bootf,
                            struct qemu_bdrv_write* write, struct kv_store* store,
                            uint64_t write_counter, char* vmname,
                            uint64_t partition_offset);
-int qemu_get_superblock(struct kv_store* store,
-                        struct ext4_superblock* superblock,
-                        uint64_t fs_id);
+int qemu_get_superinfo(struct kv_store* store,
+                       struct super_info* superblock,
+                       uint64_t fs_id);
 int qemu_get_bootf(struct kv_store* store,
                    struct ntfs_boot_file* bootf,
                    uint64_t fs_id);
@@ -107,7 +117,7 @@ int qemu_get_pt_offset(struct kv_store* store,
                        uint64_t* partition_offset,
                        uint64_t pt_id);
 int qemu_print_sector_type(enum SECTOR_TYPE type);
-int qemu_deep_inspect(struct ext4_superblock* superblock,
+int qemu_deep_inspect(struct super_info* superblock,
                       struct qemu_bdrv_write* write, struct kv_store* store,
                       uint64_t write_counter, char* vmname,
                       uint64_t partition_offset);

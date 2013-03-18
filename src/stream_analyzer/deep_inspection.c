@@ -391,12 +391,12 @@ int __emit_field_update(struct kv_store* store, char* field, char* type,
     return EXIT_SUCCESS;
 }
 
-int __reinspect_write(struct ext4_superblock* super, struct kv_store* store,
+int __reinspect_write(struct super_info* superblock, struct kv_store* store,
                       int64_t partition_offset, uint64_t sector,
                       uint64_t write_counter, char* vmname)
 {
-    uint8_t buf[ext4_block_size(*super)];
-    size_t len = ext4_block_size(*super);
+    uint8_t buf[superblock->block_size];
+    size_t len = superblock->block_size;
     struct qemu_bdrv_write write;
 
     write.header.nb_sectors = len / SECTOR_SIZE;
@@ -420,19 +420,19 @@ int __reinspect_write(struct ext4_superblock* super, struct kv_store* store,
     fprintf_light_blue(stdout, "DEQUEUED!\n");
     hexdump(buf, len);
 
-    return qemu_deep_inspect(super, &write, store, write_counter, vmname,
+    return qemu_deep_inspect(superblock, &write, store, write_counter, vmname,
                              partition_offset);
 }
 
-uint64_t __inode_sector(struct kv_store* store, struct ext4_superblock* super,
+uint64_t __inode_sector(struct kv_store* store, struct super_info* super,
                         uint64_t inode)
 {
-    uint64_t block_group = (inode - 1) / super->s_inodes_per_group;
+    uint64_t block_group = (inode - 1) / super->inodes_per_group;
     uint64_t inode_table_sector;
     uint64_t inode_sector;
-    uint64_t inode_offset = (inode - 1) % super->s_inodes_per_group;
+    uint64_t inode_offset = (inode - 1) % super->inodes_per_group;
     D_PRINT64(inode_offset);
-    inode_offset *= super->s_inode_size;
+    inode_offset *= super->inode_size;
     D_PRINT64(inode_offset);
     size_t len = sizeof(inode_table_sector);
     fprintf_light_red(stdout, "__inode_sector\n");
@@ -447,7 +447,7 @@ uint64_t __inode_sector(struct kv_store* store, struct ext4_superblock* super,
         return EXIT_FAILURE;
     }
 
-    D_PRINT64(super->s_inodes_per_group);
+    D_PRINT64(super->inodes_per_group);
     D_PRINT64(inode);
     D_PRINT64(block_group);
     D_PRINT64(inode_offset);
@@ -461,14 +461,14 @@ uint64_t __inode_sector(struct kv_store* store, struct ext4_superblock* super,
     return inode_sector;
 }
 
-uint64_t __inode_offset(struct kv_store* store, struct ext4_superblock* super,
+uint64_t __inode_offset(struct kv_store* store, struct super_info* super,
                         uint64_t inode)
 {
-    uint64_t block_group = (inode - 1) / super->s_inodes_per_group;
+    uint64_t block_group = (inode - 1) / super->inodes_per_group;
     uint64_t inode_table_sector;
-    uint64_t inode_offset = (inode - 1) % super->s_inodes_per_group;
+    uint64_t inode_offset = (inode - 1) % super->inodes_per_group;
     D_PRINT64(inode_offset);
-    inode_offset *= super->s_inode_size;
+    inode_offset *= super->inode_size;
     D_PRINT64(inode_offset);
     size_t len = sizeof(inode_table_sector);
     fprintf_light_red(stdout, "__inode_offset\n");
@@ -486,7 +486,7 @@ uint64_t __inode_offset(struct kv_store* store, struct ext4_superblock* super,
     inode_offset += inode_table_sector * SECTOR_SIZE;
     inode_offset %= SECTOR_SIZE;
 
-    D_PRINT64(super->s_inodes_per_group);
+    D_PRINT64(super->inodes_per_group);
     D_PRINT64(inode);
     D_PRINT64(block_group);
     D_PRINT64(inode_offset);
@@ -644,7 +644,7 @@ int __diff_dir(uint8_t* write, struct kv_store* store,
 
 int __diff_dir2(uint8_t* write, struct kv_store* store, 
                char* vmname, uint64_t write_counter,
-               char* pointer, size_t write_len, struct ext4_superblock* super,
+               char* pointer, size_t write_len, struct super_info* superblock,
                uint64_t partition_offset)
 {
     /* TODO:
@@ -652,7 +652,7 @@ int __diff_dir2(uint8_t* write, struct kv_store* store,
      *       (2) add file:new if gained
      *       (2.5) remove from deletequeue if in it
      *       (3) update file:old sectors to point to any remaining path refs */
-    uint64_t dir = 0, old_pos = 0, new_pos = 0, file = 0, inode_sector, inode_offset;
+    uint64_t dir = 0, old_pos = 0, new_pos = 0, file = 0, inode_sector = 0, inode_offset = 0;
     struct ext4_dir_entry* old, *new;
     struct ext4_dir_entry cleared = {   .inode = 0,
                                         .rec_len = 0,
@@ -758,13 +758,13 @@ int __diff_dir2(uint8_t* write, struct kv_store* store,
                                          (uint8_t*) &(new->inode), sizeof(new->inode));
                     fprintf(stdout, "set inode_num\n");
 
-                    inode_offset = __inode_offset(store, super, new->inode);
+                    inode_offset = __inode_offset(store, superblock, new->inode);
                     redis_hash_field_set(store, REDIS_FILE_SECTOR_INSERT,
                                          file, "inode_offset",
                                          (uint8_t*) &(inode_offset), sizeof(inode_offset));
                     fprintf(stdout, "set inode_offset\n");
 
-                    inode_sector = __inode_sector(store, super, new->inode);
+                    inode_sector = __inode_sector(store, superblock, new->inode);
                     redis_reverse_pointer_set(store, REDIS_FILES_INSERT,
                                   inode_sector,
                                   file);
@@ -1072,7 +1072,8 @@ int __diff_mbr(uint8_t* write, struct kv_store* store,
 
 int __diff_bgds(uint8_t* write, struct kv_store* store,
                 char* vmname, uint64_t write_counter, char* pointer,
-                size_t write_len)
+                size_t write_len, struct super_info* superblock,
+                uint64_t offset)
 {
     uint64_t bgd = 0, lbgds = 0, i;
     uint8_t** list;
@@ -1131,11 +1132,11 @@ int __diff_bgds(uint8_t* write, struct kv_store* store,
 }
 
 int __ext4_new_extent_leaf_block(struct kv_store* store, uint64_t file,
-                                 uint64_t block, struct ext4_superblock* super,
+                                 uint64_t block, struct super_info* superblock,
                                  uint64_t partition_offset, uint64_t write_counter,
                                  char* vmname) 
 {
-    uint64_t sector = block * ext4_block_size(*super);
+    uint64_t sector = block * superblock->block_size;
     sector += partition_offset;
     sector /= SECTOR_SIZE;
     
@@ -1156,23 +1157,22 @@ int __ext4_new_extent_leaf_block(struct kv_store* store, uint64_t file,
         return EXIT_FAILURE;
     }
 
-    __reinspect_write(super, store, partition_offset, sector, write_counter,
+    __reinspect_write(superblock, store, partition_offset, sector, write_counter,
                       vmname);
 
     return EXIT_SUCCESS;
 }
 
 int __ext4_new_extent(struct kv_store* store, uint64_t file,
-                      struct ext4_superblock* super,
+                      struct super_info* superblock, 
                       uint64_t partition_offset, struct ext4_extent* extent_new,
                       char* vmname, uint64_t write_counter)
 {
-    uint64_t block_size = ext4_block_size(*super);
-    uint64_t sector = ext4_extent_start(*extent_new) * block_size;
+    uint64_t sector = ext4_extent_start(*extent_new) * superblock->block_size;
     sector += partition_offset;
     sector /= SECTOR_SIZE;
-    uint64_t sectors_per_block = block_size / SECTOR_SIZE;
-    uint64_t i, counter = extent_new->ee_block * block_size;
+    uint64_t sectors_per_block = superblock->block_size / SECTOR_SIZE;
+    uint64_t i, counter = extent_new->ee_block * superblock->block_size;
 
 
     for (i = 0; i < extent_new->ee_len; i++)
@@ -1182,17 +1182,17 @@ int __ext4_new_extent(struct kv_store* store, uint64_t file,
                                   sector);
         redis_reverse_file_data_pointer_set(store, 
                                             sector,
-                                            counter, counter + block_size,
+                                            counter, counter + superblock->block_size,
                                             file);
         D_PRINT64(counter);
         D_PRINT64(extent_new->ee_block);
         D_PRINT64(file);
 
-        __reinspect_write(super, store, partition_offset,
+        __reinspect_write(superblock, store, partition_offset,
                           sector, write_counter,
                           vmname);
 
-        counter += block_size;        
+        counter += superblock->block_size;        
         sector += sectors_per_block;
         
     }
@@ -1203,7 +1203,7 @@ int __ext4_new_extent(struct kv_store* store, uint64_t file,
 int __diff_ext4_extents(struct kv_store* store, char* vmname, uint64_t file,
                         uint64_t write_counter, uint8_t* newb, uint8_t* oldb,
                         uint64_t partition_offset,
-                        struct ext4_superblock* super)
+                        struct super_info* superblock)
 {
     struct ext4_extent_header* hdr_new, *hdr_old;
     struct ext4_extent_idx* idx_new, *idx_old;
@@ -1281,7 +1281,7 @@ int __diff_ext4_extents(struct kv_store* store, char* vmname, uint64_t file,
 
                     __ext4_new_extent_leaf_block(store, file,
                                               ext4_extent_index_leaf(*idx_new),
-                                              super, partition_offset,
+                                              superblock, partition_offset,
                                               write_counter, vmname);
                 }
                     D_PRINT64(ext4_extent_index_leaf(*idx_new));
@@ -1291,7 +1291,7 @@ int __diff_ext4_extents(struct kv_store* store, char* vmname, uint64_t file,
             {
                 __ext4_new_extent_leaf_block(store, file,
                                           ext4_extent_index_leaf(*idx_new),
-                                          super, partition_offset,
+                                          superblock, partition_offset,
                                           write_counter, vmname);
             }
         }
@@ -1323,7 +1323,7 @@ int __diff_ext4_extents(struct kv_store* store, char* vmname, uint64_t file,
                 {
                     fprintf_light_white(stdout, "adding new extents as start "
                                                 "shifted.\n");
-                    __ext4_new_extent(store, file, super, partition_offset,
+                    __ext4_new_extent(store, file, superblock, partition_offset,
                                       extent_new, vmname, write_counter);
                 }
                 else
@@ -1333,7 +1333,7 @@ int __diff_ext4_extents(struct kv_store* store, char* vmname, uint64_t file,
             }
             else
             {
-                __ext4_new_extent(store, file, super, partition_offset,
+                __ext4_new_extent(store, file, superblock, partition_offset,
                                   extent_new, vmname, write_counter);
                 /* deleted index */
             }
@@ -1549,10 +1549,8 @@ int __diff_inodes_ntfs(uint8_t* write, struct kv_store* store,
 
 int __diff_inodes(uint8_t* write, struct kv_store* store,
                   char* vmname, uint64_t write_counter, char* pointer,
-                  size_t write_len, struct ext4_superblock* super,
-                  uint64_t partition_offset)
+                  size_t write_len, struct super_info* superblock, uint64_t partition_offset)
 {
-    uint64_t file = 0, lfiles = 0, i, offset, new_size, old_size, last_sector;
     uint8_t** list;
     size_t len = 0, len2 = 4096;
     struct ext4_inode oldd, *old = &oldd, *new;
@@ -1685,9 +1683,9 @@ int __diff_inodes(uint8_t* write, struct kv_store* store,
             !((new->i_mode & 0x6000) == 0x6000 ||
               (new->i_mode & 0xa000) == 0xa000))
         {
-            __diff_ext4_extents(store, vmname, file, write_counter, 
-                                (uint8_t *) &(new->i_block[0]),
-                                (uint8_t *) &(old->i_block[0]), partition_offset, super);
+            //__diff_ext4_extents(store, vmname, file, write_counter, 
+             //                   (uint8_t *) &(new->i_block[0]),
+             //                   (uint8_t *) &(old->i_block[0]), partition_offset, super);
         }
 
         len2 = sizeof(struct ext4_inode);
@@ -1713,7 +1711,7 @@ int __diff_inodes(uint8_t* write, struct kv_store* store,
             fprintf_light_white(stdout, "Size mismatch. Checking for last "
                                         "block\n %"PRIu64" %"PRIu64, old_size, new_size);
 
-            __reinspect_write(super, store, partition_offset, last_sector,
+            __reinspect_write(superblock, store, partition_offset, last_sector,
                               write_counter, vmname);
         }
 
@@ -1740,10 +1738,10 @@ int __diff_bitmap(uint8_t* write, struct kv_store* store,
 int __diff_extent_tree(uint8_t* write, struct kv_store* store,
                        char* vmname, char* pointer,
                        uint64_t write_counter, size_t write_len,
-                       struct ext4_superblock* super,
+                       struct super_info* superblock,
                        uint64_t partition_offset)
 {
-    size_t len = ext4_block_size(*super), len2 = sizeof(uint64_t);
+    size_t len = superblock->block_size, len2 = sizeof(uint64_t);
     uint8_t buf[len];
     uint64_t id, file;
     struct ext4_extent_header def = { .eh_magic = 0,
@@ -1776,7 +1774,7 @@ int __diff_extent_tree(uint8_t* write, struct kv_store* store,
     }
 
     __diff_ext4_extents(store, vmname, file, write_counter, write, buf,
-                        partition_offset, super);
+                        partition_offset, superblock);
 
     /* set new extent block */
     if (redis_hash_field_set(store, REDIS_EXTENT_SECTOR_INSERT, id, "data", write,
@@ -1831,7 +1829,7 @@ int __qemu_dispatch_write(uint8_t* data,
                           struct kv_store* store, char* vmname,
                           uint64_t write_counter,
                           char* pointer, size_t len,
-                          struct ext4_superblock* super,
+                          struct super_info* superblock,
                           uint64_t partition_offset,
                           uint64_t sector)
 {
@@ -1845,18 +1843,19 @@ int __qemu_dispatch_write(uint8_t* data,
     else if(strncmp(pointer, "mbr", strlen("mbr")) == 0)
         __diff_mbr(data, store, vmname, pointer);
     else if(strncmp(pointer, "lbgds", strlen("lbgds")) == 0)
-        __diff_bgds(data, store, vmname, write_counter, pointer, len);
+        __diff_bgds(data, store, vmname, write_counter, pointer, len,
+                    superblock, partition_offset);
     else if(strncmp(pointer, "lfiles", strlen("lfiles")) == 0)
-        __diff_inodes(data, store, vmname, write_counter, pointer, len, super,
-                      partition_offset);
+        __diff_inodes(data, store, vmname, write_counter, pointer, len,
+                      superblock, partition_offset);
     else if(strncmp(pointer, "bgd", strlen("bgd")) == 0)
         __diff_bitmap(data, store, vmname, pointer);
     else if(strncmp(pointer, "extent", strlen("extent")) == 0)
         __diff_extent_tree(data, store, vmname, pointer, write_counter, len, 
-                           super, partition_offset);
+                           superblock, partition_offset);
     else if(strncmp(pointer, "dirdata", strlen("dirdata")) == 0)
         __diff_dir2(data, store, vmname, write_counter, pointer, len,
-                    super, partition_offset);
+                    superblock, partition_offset);
     else
     {
         fprintf_light_red(stderr, "Redis returned unknown sector type [%s]\n",
@@ -1940,7 +1939,7 @@ int qemu_deep_inspect_ntfs(struct ntfs_boot_file* bootf,
     return EXIT_SUCCESS;
 }
 
-int qemu_deep_inspect(struct ext4_superblock* superblock,
+int qemu_deep_inspect(struct super_info* superblock,
                       struct qemu_bdrv_write* write,
                       struct kv_store* store, uint64_t write_counter,
                       char* vmname, uint64_t partition_offset)
@@ -1948,24 +1947,23 @@ int qemu_deep_inspect(struct ext4_superblock* superblock,
     uint64_t i;
     uint8_t result[1024];
     size_t len = 1024;
-    uint64_t block_size = ext4_block_size(*superblock);
     uint64_t size = 0;
     uint8_t* data;
 
-    for (i = 0; i < write->header.nb_sectors; i += block_size / SECTOR_SIZE)
+    for (i = 0; i < write->header.nb_sectors; i += superblock->block_size / SECTOR_SIZE)
     {
         len = 1024;
         if (redis_sector_lookup(store, write->header.sector_num + i,
             result, &len))
         {
             fprintf_light_red(stderr, "Error doing sector lookup.\n");
-            if ((write->header.nb_sectors - i) * SECTOR_SIZE < block_size)
+            if ((write->header.nb_sectors - i) * SECTOR_SIZE < superblock->block_size)
             {
                 size = (write->header.nb_sectors - i) * SECTOR_SIZE;
             }
             else
             {
-                size = block_size;
+                size = superblock->block_size;
             }
 
             redis_enqueue_pipelined(store, write->header.sector_num + i,
@@ -1979,13 +1977,13 @@ int qemu_deep_inspect(struct ext4_superblock* superblock,
             result[len] = 0;
             data = &(write->data[i*SECTOR_SIZE]);
 
-            if ((write->header.nb_sectors - i) * SECTOR_SIZE < block_size)
+            if ((write->header.nb_sectors - i) * SECTOR_SIZE < superblock->block_size)
             {
                 size = (write->header.nb_sectors - i)* SECTOR_SIZE;
             }
             else
             {
-                size = block_size;
+                size = superblock->block_size;
             }
 
             D_PRINT64(partition_offset);
@@ -1996,13 +1994,13 @@ int qemu_deep_inspect(struct ext4_superblock* superblock,
         else
         {
             fprintf_light_red(stderr, "Returned sector lookup empty.\n");
-            if ((write->header.nb_sectors - i) * SECTOR_SIZE < block_size)
+            if ((write->header.nb_sectors - i) * SECTOR_SIZE < superblock->block_size)
             {
                 size = (write->header.nb_sectors - i) * SECTOR_SIZE;
             }
             else
             {
-                size = block_size;
+                size = superblock->block_size;
             }
 
             redis_enqueue_pipelined(store, write->header.sector_num + i,
@@ -2015,19 +2013,27 @@ int qemu_deep_inspect(struct ext4_superblock* superblock,
     return EXIT_SUCCESS;
 }
 
-int qemu_get_superblock(struct kv_store* store,
-                        struct ext4_superblock* superblock,
+int qemu_get_superinfo(struct kv_store* store,
+                        struct super_info* super_info,
                         uint64_t fs_id)
 {
-    size_t len = sizeof(struct ext4_superblock);
+    size_t len;
+    uint64_t superblock_sector, superblock_offset, block_size,
+             blocks_per_group, inodes_per_group, inode_size;
 
-    if (redis_hash_field_get(store, REDIS_SUPERBLOCK_SECTOR_GET,
-                             fs_id, "superblock", (uint8_t*) superblock,
-                             &len))
-    {
-        fprintf_light_red(stderr, "Error retrieving superblock\n");
-        return EXIT_FAILURE;
-    }
+    GET_FIELD(REDIS_SUPERBLOCK_SECTOR_GET, fs_id, superblock_sector, len);
+    GET_FIELD(REDIS_SUPERBLOCK_SECTOR_GET, fs_id, superblock_offset, len);
+    GET_FIELD(REDIS_SUPERBLOCK_SECTOR_GET, fs_id, block_size, len);
+    GET_FIELD(REDIS_SUPERBLOCK_SECTOR_GET, fs_id, blocks_per_group, len);
+    GET_FIELD(REDIS_SUPERBLOCK_SECTOR_GET, fs_id, inodes_per_group, len);
+    GET_FIELD(REDIS_SUPERBLOCK_SECTOR_GET, fs_id, inode_size, len);
+
+    super_info->superblock_sector    =     superblock_sector;
+    super_info->superblock_offset    =     superblock_offset;
+    super_info->block_size           =     block_size;
+    super_info->blocks_per_group     =     blocks_per_group;
+    super_info->inodes_per_group     =     inodes_per_group;
+    super_info->inode_size           =     inode_size;
 
     return EXIT_SUCCESS;
 }

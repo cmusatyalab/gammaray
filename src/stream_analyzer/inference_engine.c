@@ -28,10 +28,10 @@ int read_loop(struct kv_store* store, char* vmname)
     struct timeval start, end;
     uint64_t write_counter = 0, partition_offset, time = 0;
     struct qemu_bdrv_write write;
-    struct ext4_superblock superblock;
+    struct super_info super_info;
     char pretty_time[32];
     
-    if (qemu_get_superblock(store, &superblock, (uint64_t) 0))
+    if (qemu_get_superinfo(store, &super_info, (uint64_t) 0))
     {
         fprintf_light_red(stderr, "Failed getting superblock.\n");
         return EXIT_FAILURE;
@@ -58,7 +58,7 @@ int read_loop(struct kv_store* store, char* vmname)
 
         qemu_print_write(&write);
         gettimeofday(&start, NULL);
-        qemu_deep_inspect(&superblock, &write, store, write_counter++, vmname,
+        qemu_deep_inspect(&super_info, &write, store, write_counter++, vmname,
                           partition_offset);
         gettimeofday(&end, NULL);
         time = diff_time(start, end);
