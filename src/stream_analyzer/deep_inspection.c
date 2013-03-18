@@ -32,23 +32,23 @@
                             sizeof(new->field), write_counter, true, false); }
 
 #define DIRECT_FIELD_COMPARE(field, fname, type, btype) {\
-    if (old_##field != new_##field) \
+    if (field != new_##field) \
         __emit_field_update(store, fname, type, channel, btype, \
-                            &(old_##field), &(new_##field), sizeof(old_##field), \
+                            &(field), &(new_##field), sizeof(field), \
                             sizeof(new_##field), write_counter, true, false); }
 
-#define GET_FIELD(name, cmd, id, field, len) {\
+#define GET_FIELD(cmd, id, field, len) {\
    len = sizeof(field); \
    if (redis_hash_field_get(store, cmd, id, \
-                        name, (uint8_t*) &field, &len)) \
-    fprintf_light_red(stderr, "Error getting field: %s\n", name); }
+                            #field, (uint8_t*) &field, &len)) \
+    fprintf_light_red(stderr, "Error getting field: %s\n", #field); }
 
-#define SET_FIELD(name, cmd, id, field, len) {\
+#define SET_FIELD(cmd, id, field, len) {\
    len = sizeof(new_##field); \
-   if ((new_##field != old_##field) && \
+   if ((new_##field != field) && \
        redis_hash_field_set(store, cmd, id, \
-                        name, (uint8_t*) &new_##field, len)) \
-    fprintf_light_red(stderr, "Error setting field: %s\n", name); }
+                            #field, (uint8_t*) &new_##field, len)) \
+    fprintf_light_red(stderr, "Error setting field: %s\n", #field); }
 
 #define STRINGIFY2(x) #x
 #define STRINGIFY(x) STRINGIFY2(x)
@@ -1041,18 +1041,16 @@ int __diff_superblock_ntfs(uint8_t* write, struct kv_store* store,
     return EXIT_SUCCESS;
 }
 
-
-
 int __diff_superblock(uint8_t* write, struct kv_store* store, 
                       char* vmname, uint64_t write_counter, 
                       char* pointer, size_t write_len)
 {
     uint64_t fs = 0, superblock_offset = 0;
     struct ext4_superblock* new;
-    uint64_t new_block_size, old_block_size;
+    uint64_t new_block_size, block_size;
     size_t len;
-    int32_t new_num_files, old_num_files;
-    int32_t new_num_block_groups, old_num_block_groups;
+    int32_t new_num_files, num_files;
+    int32_t new_num_block_groups, num_block_groups;
     char* channel = NULL;
 
     fprintf_light_white(stdout, "__diff_superblock()\n");
@@ -1063,10 +1061,10 @@ int __diff_superblock(uint8_t* write, struct kv_store* store,
 
     fprintf_light_white(stdout, "pulling block_size: %"PRIu64"\n", fs);
 
-    GET_FIELD("block_size", REDIS_SUPERBLOCK_SECTOR_GET, fs, old_block_size, len);
-    GET_FIELD("num_files", REDIS_SUPERBLOCK_SECTOR_GET, fs, old_num_files, len);
-    GET_FIELD("num_block_groups", REDIS_SUPERBLOCK_SECTOR_GET, fs, old_num_block_groups, len);
-    GET_FIELD("superblock_offset", REDIS_SUPERBLOCK_SECTOR_GET, fs, superblock_offset, len);
+    GET_FIELD(REDIS_SUPERBLOCK_SECTOR_GET, fs, block_size, len);
+    GET_FIELD(REDIS_SUPERBLOCK_SECTOR_GET, fs, num_files, len);
+    GET_FIELD(REDIS_SUPERBLOCK_SECTOR_GET, fs, num_block_groups, len);
+    GET_FIELD(REDIS_SUPERBLOCK_SECTOR_GET, fs, superblock_offset, len);
 
     fprintf_light_white(stdout, "superblock_offset: %"PRIu64"\n",
                                 superblock_offset);
@@ -1082,15 +1080,15 @@ int __diff_superblock(uint8_t* write, struct kv_store* store,
                     new->s_free_inodes_count -
                     new->s_first_ino + 2;
 
-    DIRECT_FIELD_COMPARE(block_size, "", "metadata", BSON_INT64);
-    DIRECT_FIELD_COMPARE(num_block_groups, "", "metadata", BSON_INT32);
-    DIRECT_FIELD_COMPARE(num_files, "", "metadata", BSON_INT32);
+    DIRECT_FIELD_COMPARE(block_size, "superblock.block_size", "metadata", BSON_INT64);
+    DIRECT_FIELD_COMPARE(num_block_groups, "superblock.num_block_groups", "metadata", BSON_INT32);
+    DIRECT_FIELD_COMPARE(num_files, "superblock.num_files", "metadata", BSON_INT32);
 
     free(channel);
 
-    SET_FIELD("block_size", REDIS_SUPERBLOCK_SECTOR_INSERT, fs, block_size, len);
-    SET_FIELD("num_block_groups", REDIS_SUPERBLOCK_SECTOR_INSERT, fs, num_block_groups, len);
-    SET_FIELD("num_files", REDIS_SUPERBLOCK_SECTOR_INSERT, fs, num_files, len);
+    SET_FIELD(REDIS_SUPERBLOCK_SECTOR_INSERT, fs, block_size, len);
+    SET_FIELD(REDIS_SUPERBLOCK_SECTOR_INSERT, fs, num_block_groups, len);
+    SET_FIELD(REDIS_SUPERBLOCK_SECTOR_INSERT, fs, num_files, len);
 
     return EXIT_SUCCESS;
 }
