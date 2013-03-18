@@ -228,6 +228,9 @@ int64_t ext4_sector_from_block(uint64_t block, struct ext4_superblock super,
                                int64_t partition_offset);
 char* ext4_last_mount_point(struct ext4_superblock* superblock);
 uint64_t ext4_s_blocks_count(struct ext4_superblock superblock);
+uint64_t ext4_bgd_block_bitmap(struct ext4_block_group_descriptor bgd);
+uint64_t ext4_bgd_inode_bitmap(struct ext4_block_group_descriptor bgd);
+uint64_t ext4_bgd_inode_table(struct ext4_block_group_descriptor bgd);
 int ext4_serialize_fs(struct ext4_superblock* superblock, int64_t offset,
                       int32_t pte_num, struct bitarray* bits,
                       char* mount_point, FILE* serializef);
