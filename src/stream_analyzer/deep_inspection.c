@@ -25,31 +25,6 @@
 #define VM_NAME_MAX 512
 #define PATH_MAX 4096
 
-#define FIELD_COMPARE(field, fname, type, btype) {\
-    if (old->field != new->field) \
-        __emit_field_update(store, fname, type, channel, btype, \
-                            &(old->field), &(new->field), sizeof(old->field), \
-                            sizeof(new->field), write_counter, true, false); }
-
-#define DIRECT_FIELD_COMPARE(field, fname, type, btype) {\
-    if (field != new_##field) \
-        __emit_field_update(store, fname, type, channel, btype, \
-                            &(field), &(new_##field), sizeof(field), \
-                            sizeof(new_##field), write_counter, true, false); }
-
-#define GET_FIELD(cmd, id, field, len) {\
-   len = sizeof(field); \
-   if (redis_hash_field_get(store, cmd, id, \
-                            #field, (uint8_t*) &field, &len)) \
-    fprintf_light_red(stderr, "Error getting field: %s\n", #field); }
-
-#define SET_FIELD(cmd, id, field, len) {\
-   len = sizeof(new_##field); \
-   if ((new_##field != field) && \
-       redis_hash_field_set(store, cmd, id, \
-                            #field, (uint8_t*) &new_##field, len)) \
-    fprintf_light_red(stderr, "Error setting field: %s\n", #field); }
-
 #define STRINGIFY2(x) #x
 #define STRINGIFY(x) STRINGIFY2(x)
 
@@ -1490,7 +1465,6 @@ int __diff_data_ntfs(struct kv_store* store, struct ntfs_boot_file* bootf,
         redis_reverse_pointer_set(store, REDIS_FILE_SECTORS_INSERT,
                                   file, (int64_t) -1);
     }
-
 
     return EXIT_SUCCESS;
 }
