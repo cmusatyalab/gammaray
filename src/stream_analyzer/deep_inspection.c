@@ -1082,8 +1082,7 @@ int __diff_bgds(uint8_t* write, struct kv_store* store,
     char* channel, *path = "";
     uint64_t block_bitmap_sector_start, new_block_bitmap_sector_start;
     uint64_t inode_bitmap_sector_start, new_inode_bitmap_sector_start;
-    uint64_t block_bitmap_sector_end, new_block_bitmap_sector_end;
-    uint64_t inode_bitmap_sector_end, new_inode_bitmap_sector_end;
+    uint64_t inode_table_sector_start, new_inode_table_sector_start;
 
     fprintf_light_white(stdout, "__diff_bgds()\n");
     fprintf_light_white(stdout, "pointer: %s\n", pointer);
@@ -1108,22 +1107,32 @@ int __diff_bgds(uint8_t* write, struct kv_store* store,
         sscanf(strtok(NULL, ":"), "%"SCNu64, &bgd);
 
         GET_FIELD(REDIS_BGD_SECTOR_GET, bgd, block_bitmap_sector_start, len);
-        GET_FIELD(REDIS_BGD_SECTOR_GET, bgd, block_bitmap_sector_end, len);
         GET_FIELD(REDIS_BGD_SECTOR_GET, bgd, inode_bitmap_sector_start, len);
-        GET_FIELD(REDIS_BGD_SECTOR_GET, bgd, inode_bitmap_sector_end, len);
+        GET_FIELD(REDIS_BGD_SECTOR_GET, bgd, inode_table_sector_start, len);
 
         new = (struct ext4_block_group_descriptor *)
             &(write[i*sizeof(struct ext4_block_group_descriptor)]);
 
+        new_block_bitmap_sector_start = (ext4_bgd_block_bitmap(*new) *
+                                        superblock->block_size +
+                                        offset) /
+                                        SECTOR_SIZE;
+        new_inode_bitmap_sector_start = (ext4_bgd_inode_bitmap(*new) *
+                                        superblock->block_size +
+                                        offset) /
+                                        SECTOR_SIZE;
+        new_inode_table_sector_start = (ext4_bgd_inode_table(*new) *
+                                        superblock->block_size +
+                                        offset) /
+                                        SECTOR_SIZE;
+
         DIRECT_FIELD_COMPARE(block_bitmap_sector_start, "bgd.block_bitmap_sector_start", "metadata", BSON_INT64);
-        DIRECT_FIELD_COMPARE(block_bitmap_sector_end, "bgd.block_bitmap_sector_end", "metadata", BSON_INT64);
         DIRECT_FIELD_COMPARE(inode_bitmap_sector_start, "bgd.inode_bitmap_sector_start", "metadata", BSON_INT64);
-        DIRECT_FIELD_COMPARE(inode_bitmap_sector_end, "bgd.inode_bitmap_sector_end", "metadata", BSON_INT64);
+        DIRECT_FIELD_COMPARE(inode_table_sector_start, "bgd.inode_table_sector_start", "metadata", BSON_INT64);
 
         SET_FIELD(REDIS_BGD_SECTOR_INSERT, bgd, block_bitmap_sector_start, len);
-        SET_FIELD(REDIS_BGD_SECTOR_INSERT, bgd, block_bitmap_sector_end, len);
         SET_FIELD(REDIS_BGD_SECTOR_INSERT, bgd, inode_bitmap_sector_start, len);
-        SET_FIELD(REDIS_BGD_SECTOR_INSERT, bgd, inode_bitmap_sector_end, len);
+        SET_FIELD(REDIS_BGD_SECTOR_INSERT, bgd, inode_table_sector_start, len);
     } 
 
     redis_free_list(list, len);
