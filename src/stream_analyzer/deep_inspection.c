@@ -34,11 +34,6 @@
                          STRINGIFY(val)" : %"PRIu32"\n", (uint32_t) val); }
 
 /*** Pre-Definitions ***/
-int qemu_deep_inspect(struct ext4_superblock* superblock,
-                      struct qemu_bdrv_write* write,
-                      struct kv_store* store, uint64_t write_counter,
-                      char* vmname, uint64_t partition_offset);
-
 char* construct_channel_name(char* vmname, char* path)
 {
     char* buf = malloc(HOST_NAME_MAX + VM_NAME_MAX + PATH_MAX + 3);
