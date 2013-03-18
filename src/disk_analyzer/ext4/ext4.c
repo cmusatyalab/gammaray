@@ -2211,16 +2211,12 @@ int ext4_serialize_bgd_sectors(struct bson_info* serialized,
     sector = (ext4_bgd_inode_table(bgd) * block_size + offset + 
               superblock->s_inodes_per_group * 
               sizeof(struct ext4_inode)) / SECTOR_SIZE - 1;
-    value.key = "inode_table_sector_end";
-    value.data = &sector; 
 
     for (i = 0; i < sector; i += block_size /  SECTOR_SIZE)
     {
         bitarray_set_bit(bits, (inode_table_start + i) / block_size);
     }
 
-    bson_serialize(serialized, &value);
-    
     return EXIT_SUCCESS;
 }
 
