@@ -344,6 +344,7 @@ int main(int argc, char* args[])
 
                 ntfs_serialize_fs_tree(disk, &ntfs_bootf, bits,
                                        partition_offset, "/", serializef);
+                disk_analyzer_serialize_bitarray(bits, serializef);
             }
         }
     }
