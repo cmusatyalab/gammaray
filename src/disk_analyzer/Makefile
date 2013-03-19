@@ -89,9 +89,12 @@ default:
 test_ntfs: default
 	@rm -rf /tmp/win7
 	@mkdir /tmp/win7
-	@./disk_analyzer \
+	@time -- ./disk_analyzer \
 		/home/wolf/VM/vm_ntfs_test/win7enterprise.raw.pristine \
-		/tmp/win7enterprise.bson #| grep found > fnames
+		/tmp/win7enterprise.bson > /dev/null
+	@ls -lah /tmp/win7enterprise.bson 
+	@gzip --best -c /tmp/win7enterprise.bson > /tmp/win7enterprise.bson.gz
+	@ls -lah /tmp/win7enterprise.bson.gz
 
 test: default
 	@time ./disk_analyzer \
