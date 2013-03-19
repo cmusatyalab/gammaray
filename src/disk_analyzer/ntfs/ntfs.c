@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <wchar.h>
+#include <sys/stat.h>
 
 #define NRH_DIFF(element) \
     if (nrha->element != nrhb->element) \
@@ -30,6 +31,7 @@
     else \
         fprintf_yellow(stdout, "%s match.\n", #element);
 
+#define NTFS_FILETIME_TO_UNIX  ((uint64_t)(369 * 365 + 89) * 24 * 3600 * 10000000)
 
 
 char* namespaces[] = { "POSIX",
@@ -2199,6 +2201,13 @@ int ntfs_serialize_file_record(FILE* disk, struct ntfs_boot_file* bootf,
     struct ntfs_file_name fdata;
     struct ntfs_update_sequence seq;
     struct ntfs_standard_attribute_header sah;
+    uint64_t mode = 0;
+    uint64_t link_count;
+    uint64_t uid;
+    uint64_t gid;
+    uint64_t atime;
+    uint64_t mtime;
+    uint64_t ctime;
 
     ntfs_read_file_record_header(data, &data_offset, &rec);
     ntfs_read_update_sequence(data, &data_offset, rec.size_usn,
@@ -2224,6 +2233,23 @@ int ntfs_serialize_file_record(FILE* disk, struct ntfs_boot_file* bootf,
 
     ntfs_get_size(data, &sah, &data_offset, &fsize);
 
+    if ((rec.flags & 0x02) == 0x02)
+        mode |= S_IFDIR | S_IXUSR | S_IXGRP | S_IXOTH;
+    else
+        mode |= S_IFREG;
+
+    if (fdata.flags & 0x0001)
+        mode |= S_IRUSR | S_IRGRP | S_IROTH;
+    else
+        mode |= S_IRWXU | S_IRWXG | S_IRWXO;
+
+    link_count = rec.hard_link_count;
+    uid = 0;
+    gid = 0;
+    atime = (fdata.a_time - NTFS_FILETIME_TO_UNIX) / 10000000;
+    mtime = (fdata.a_time - NTFS_FILETIME_TO_UNIX) / 10000000;
+    ctime = (fdata.a_time - NTFS_FILETIME_TO_UNIX) / 10000000;
+
     value.type = BSON_STRING;
     if (strlen(prefix) > 1 && is_dir)
         value.size = strlen(prefix) - 1;
@@ -2246,11 +2272,45 @@ int ntfs_serialize_file_record(FILE* disk, struct ntfs_boot_file* bootf,
 
     bson_serialize(bson, &value);
 
-    value.type = BSON_BINARY;
-    value.subtype = BSON_BINARY_GENERIC;
-    value.size = ntfs_file_record_size(bootf);
-    value.key = "inode";
-    value.data = data;
+    value.type = BSON_INT64;
+    value.key = "mode";
+    value.data = &(mode);
+
+    bson_serialize(bson, &value);
+
+    value.type = BSON_INT64;
+    value.key = "link_count";
+    value.data = &(link_count);
+
+    bson_serialize(bson, &value);
+
+    value.type = BSON_INT64;
+    value.key = "uid";
+    value.data = &(uid);
+
+    bson_serialize(bson, &value);
+
+    value.type = BSON_INT64;
+    value.key = "gid";
+    value.data = &(gid);
+
+    bson_serialize(bson, &value);
+
+    value.type = BSON_INT64;
+    value.key = "atime";
+    value.data = &(atime);
+
+    bson_serialize(bson, &value);
+
+    value.type = BSON_INT64;
+    value.key = "mtime";
+    value.data = &(mtime);
+
+    bson_serialize(bson, &value);
+
+    value.type = BSON_INT64;
+    value.key = "ctime";
+    value.data = &(ctime);
 
     bson_serialize(bson, &value);
 
