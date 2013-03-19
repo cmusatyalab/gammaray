@@ -1240,7 +1240,8 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
                                  struct bson_info* bson,
                                  FILE* serializedf)
 {
-    uint8_t* stream, *ostream, file_record[ntfs_file_record_size(bootf)];
+    uint8_t* stream, *ostream, file_record[ntfs_file_record_size(bootf)],
+             dentry_buf[4096];
     uint64_t stream_offset = 0;
     struct ntfs_index_record_header irh;
     struct ntfs_update_sequence seq;
@@ -1258,6 +1259,7 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
     char count[11];
     uint64_t stream_len = 0;
     uint64_t counter = 0;
+    uint64_t record_num = 0;
 
     sectors = bson_init();
     sector_array.type = BSON_ARRAY;
@@ -1265,11 +1267,12 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
 
     datas = bson_init();
     data_array.type = BSON_ARRAY;
-    data_array.key = "data";
+    data_array.key = "files";
 
     snprintf(count, 11, "%"PRIu32, sector);
     data_value.key = count;
     data_value.type = BSON_BINARY;
+    data_value.data = dentry_buf;
 
     sector_value.key = count;
     sector_value.type = BSON_INT32;
@@ -1288,7 +1291,6 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
         fprintf_light_blue(stdout, "INDX Parsing stream_offset == %"PRIu64" and stream_len == %"PRIu64"\n",
                 stream_offset, stream_len);
 
-        data_value.data = stream;
         ////hexdump(stream, 4096);
 
         irh = *((struct ntfs_index_record_header*) stream);
@@ -1310,10 +1312,7 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
         ire.flags = 0;
         stream_offset = irh.offset_to_index_entries + 0x18;
         
-        data_value.size = 0x18 + irh.allocated_size_of_index_entries;
-
         snprintf(count, 11, "%"PRIu32, sector);
-        bson_serialize(datas, &data_value);
         bson_serialize(sectors, &sector_value);
         sector++;
 
@@ -1342,6 +1341,12 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
             memset(name, 0, 32767);
             strncpy(name, prefix, strlen(prefix));
             strcat(name, current_fname);
+
+            record_num = ntfs_get_reference_int(&(ire.ref));
+            memcpy(dentry_buf, &record_num, 8);
+            memcpy(&(dentry_buf[8]), current_fname, strlen(current_fname));
+            data_value.size = 8 + strlen(current_fname);
+            bson_serialize(datas, &data_value);
 
             stream_offset += ire.size - sizeof(struct ntfs_index_record_entry);
 
