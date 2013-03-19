@@ -2093,6 +2093,10 @@ int ntfs_serialize_fs(struct ntfs_boot_file* bootf, struct bitarray* bits,
     struct bson_info* serialized;
     struct bson_info* sectors;
     struct bson_kv value;
+    uint64_t block_size = bootf->bytes_per_sector;
+    uint64_t blocks_per_group = bootf->sectors_per_cluster;
+    uint64_t inode_size = ntfs_file_record_size(bootf);
+    uint64_t inodes_per_group = (blocks_per_group * block_size) / inode_size; 
 
     serialized = bson_init();
     sectors = bson_init();
@@ -2150,11 +2154,27 @@ int ntfs_serialize_fs(struct ntfs_boot_file* bootf, struct bitarray* bits,
 
     bson_serialize(serialized, &value);
 
-    value.key = "superblock";
-    value.type = BSON_BINARY;
-    value.size = sizeof(struct ntfs_boot_file);
-    value.subtype = BSON_BINARY_GENERIC;
-    value.data = bootf;
+    value.type = BSON_INT64;
+    value.key = "block_size";
+    value.data = &(block_size);
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT64;
+    value.key = "blocks_per_group";
+    value.data = &(blocks_per_group);
+
+    bson_serialize(serialized, &value);
+    
+    value.type = BSON_INT64;
+    value.key = "inodes_per_group";
+    value.data = &(inodes_per_group);
+
+    bson_serialize(serialized, &value);
+    
+    value.type = BSON_INT64;
+    value.key = "inode_size";
+    value.data = &(inode_size);
 
     bson_serialize(serialized, &value);
 
