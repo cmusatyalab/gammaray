@@ -73,6 +73,7 @@ int main(int argc, char* args[])
     char buf[4096];
     struct bitarray* bits;
     struct stat fstats;
+    uint8_t* icache = NULL;
 
     fprintf_blue(stdout, "Raw Disk Analyzer -- By: Wolfgang Richter "
                          "<wolf@cs.cmu.edu>\n");
@@ -296,16 +297,25 @@ int main(int argc, char* args[])
                     return EXIT_FAILURE;
                 }
 
+                if (ext4_cache_inodes(disk, partition_offset, &ext4_superblock,
+                                      &icache))
+                {
+                    fprintf_light_red(stderr, "Error populating icache.\n");
+                    return EXIT_FAILURE;
+                }
+
                 ext4_serialize_fs_tree(disk, partition_offset, 
                                        &ext4_superblock,
                                        bits,
                                        ext4_last_mount_point(&ext4_superblock),
-                                       serializef);
+                                       serializef,
+                                       icache);
                 ext4_serialize_journal(disk, partition_offset, 
                                        &ext4_superblock,
                                        bits,
                                        "journal",
-                                       serializef);
+                                       serializef,
+                                       icache);
                 disk_analyzer_serialize_bitarray(bits, serializef);
             }
 
