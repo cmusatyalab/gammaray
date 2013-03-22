@@ -226,15 +226,21 @@ int ext4_serialize_fs(struct ext4_superblock* superblock, int64_t offset,
                       char* mount_point, FILE* serializef);
 int ext4_serialize_bgds(FILE* disk, int64_t partition_offset,
                         struct ext4_superblock* superblock,
-                        struct bitarray* bits, FILE* serializef);
+                        struct bitarray* bits, FILE* serializef,
+                        uint8_t* bcache);
 int ext4_serialize_fs_tree(FILE* disk, int64_t partition_offset,
                            struct ext4_superblock* superblock,
                            struct bitarray* bits, char* prefix,
-                           FILE* serializef, uint8_t* icache);
+                           FILE* serializef, uint8_t* icache,
+                           uint8_t* bcache);
 int ext4_serialize_journal(FILE* disk, int64_t partition_offset,
                             struct ext4_superblock* superblock,
                             struct bitarray* bits, char* mount,
-                            FILE* serializef, uint8_t* icache);
+                            FILE* serializef, uint8_t* icache,
+                            uint8_t* bcache);
+int ext4_cache_bgds(FILE* disk, int64_t partition_offset,
+                    struct ext4_superblock* superblock, uint8_t** cache);
 int ext4_cache_inodes(FILE* disk, int64_t partition_offset,
-                      struct ext4_superblock* superblock, uint8_t** cache);
+                      struct ext4_superblock* superblock, uint8_t** cache,
+                      uint8_t* bcache);
 #endif

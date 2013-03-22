@@ -281,7 +281,8 @@ uint32_t ext4_next_block_group_descriptor(FILE* disk,
                                      struct ext4_superblock superblock,
                                      struct ext4_block_group_descriptor* bgd,
                                      uint32_t* sector,
-                                     uint32_t* s_offset)
+                                     uint32_t* s_offset,
+                                     uint8_t* bcache)
 {
     static uint32_t i = 0;
     uint64_t offset = (superblock.s_first_data_block+1) *
@@ -290,23 +291,32 @@ uint32_t ext4_next_block_group_descriptor(FILE* disk,
 
     for (; i < num_block_groups;)
     {
-        if (fseeko(disk, partition_offset + offset +
-                         (i) *
-                         sizeof(struct ext4_block_group_descriptor), 0))
+        if (bcache)
         {
-            fprintf_light_red(stderr, "error seeking to position 0x%lx.\n",
-                              offset);
-            return 0;
+            *bgd = *((struct ext4_block_group_descriptor*)
+                    &(bcache[i * sizeof(struct ext4_block_group_descriptor)]));
+        }
+        else
+        {
+            if (fseeko(disk, partition_offset + offset +
+                             (i) *
+                             sizeof(struct ext4_block_group_descriptor), 0))
+            {
+                fprintf_light_red(stderr, "error seeking to position 0x%lx.\n",
+                                  offset);
+                return 0;
+            }
+
+            if (fread(bgd, 1, sizeof(struct ext4_block_group_descriptor), disk) !=
+                sizeof(struct ext4_block_group_descriptor))
+            {
+                fprintf_light_red(stderr, 
+                                  "error while trying to read ext4 block group "
+                                  "descriptor.\n");
+                return 0;
+            }
         }
 
-        if (fread(bgd, 1, sizeof(struct ext4_block_group_descriptor), disk) !=
-            sizeof(struct ext4_block_group_descriptor))
-        {
-            fprintf_light_red(stderr, 
-                              "error while trying to read ext4 block group "
-                              "descriptor.\n");
-            return 0;
-        }
         *sector = (partition_offset + offset +
                    i*sizeof(struct ext4_block_group_descriptor)) / SECTOR_SIZE;
         *sector /= (ext4_block_size(superblock) / SECTOR_SIZE);
@@ -500,11 +510,19 @@ uint64_t ext4_bgd_inode_table(struct ext4_block_group_descriptor bgd)
 int ext4_read_bgd(FILE* disk, int64_t partition_offset,
                  struct ext4_superblock superblock,
                  uint32_t block_group,
-                 struct ext4_block_group_descriptor* bgd)
+                 struct ext4_block_group_descriptor* bgd,
+                 uint8_t* bcache)
 {
     uint64_t offset = (superblock.s_first_data_block+1) *
                       ext4_block_size(superblock) +
                       block_group*sizeof(struct ext4_block_group_descriptor);
+
+    if (bcache)
+    {
+        *bgd = *((struct ext4_block_group_descriptor*)
+          &(bcache[block_group * sizeof(struct ext4_block_group_descriptor)]));
+        return 0;
+    }
 
     if (fseeko(disk, partition_offset + offset, 0))
     {
@@ -528,7 +546,8 @@ int ext4_read_bgd(FILE* disk, int64_t partition_offset,
 int ext4_read_inode_serialized(FILE* disk, int64_t partition_offset,
                                struct ext4_superblock superblock,
                                uint32_t inode_num, struct ext4_inode* inode,
-                               struct bson_info* bson, uint8_t* icache)
+                               struct bson_info* bson,
+                               uint8_t* icache, uint8_t* bcache)
 {
     uint64_t block_group = (inode_num - 1) / superblock.s_inodes_per_group;
     struct ext4_block_group_descriptor bgd;
@@ -539,13 +558,16 @@ int ext4_read_inode_serialized(FILE* disk, int64_t partition_offset,
     uint64_t sector, offset;
     uint64_t sectors_per_block = ext4_block_size(superblock) / SECTOR_SIZE;
 
-    if (ext4_read_bgd(disk, partition_offset, superblock, block_group, &bgd))
+    if (ext4_read_bgd(disk, partition_offset, superblock,
+                      block_group, &bgd, bcache))
     {
-        fprintf(stderr, "Error retrieving block group descriptor %"PRIu64".\n", block_group);
+        fprintf(stderr, "Error retrieving block group descriptor %"PRIu64".\n",
+                                                                  block_group);
         return -1;
     }
 
-    inode_table_offset = ext4_block_offset(ext4_bgd_inode_table(bgd), superblock);
+    inode_table_offset = ext4_block_offset(ext4_bgd_inode_table(bgd),
+                                           superblock);
 
     icache_offset = block_group * (superblock.s_inode_size *
                                    superblock.s_inodes_per_group);
@@ -1793,7 +1815,8 @@ int ext4_serialize_fs(struct ext4_superblock* superblock,
 
 int ext4_serialize_bgds(FILE* disk, int64_t partition_offset,
                         struct ext4_superblock* superblock,
-                        struct bitarray* bits, FILE* serializef)
+                        struct bitarray* bits, FILE* serializef,
+                        uint8_t* bcache)
 {
     struct ext4_block_group_descriptor bgd;
     struct bson_info* serialized;
@@ -1821,7 +1844,8 @@ int ext4_serialize_bgds(FILE* disk, int64_t partition_offset,
                                              *superblock,
                                              &bgd,
                                              &sector,
-                                             &offset)) > 0)
+                                             &offset,
+                                             bcache)) > 0)
     {
 
         bson_serialize(serialized, &v_type);
@@ -2366,7 +2390,8 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
                         char* prefix,
                         FILE* serializef,
                         struct bson_info* bson,
-                        uint8_t* icache)
+                        uint8_t* icache,
+                        uint8_t* bcache)
 {
     struct ext4_inode child_inode;
     struct ext4_dir_entry dir;
@@ -2719,7 +2744,7 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
             bson2 = bson_init();
 
             if (ext4_read_inode_serialized(disk, partition_offset, superblock,
-                                       dir.inode, &child_inode, bson2, icache))
+                                       dir.inode, &child_inode, bson2, icache, bcache))
             {
                fprintf_light_red(stderr, "Error reading child inode.\n");
                return -1;
@@ -2743,7 +2768,7 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
                 }
                 ext4_serialize_tree(disk, partition_offset, superblock, bits,
                                     child_inode, path, serializef,
-                                    bson2, icache); /* recursive call */
+                                    bson2, icache, bcache); /* recursive call */
             }
 
             position += dir.rec_len;
@@ -2765,7 +2790,7 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
 int ext4_serialize_fs_tree(FILE* disk, int64_t partition_offset,
                            struct ext4_superblock* superblock,
                            struct bitarray* bits, char* mount,
-                           FILE* serializef, uint8_t* icache)
+                           FILE* serializef, uint8_t* icache, uint8_t* bcache)
 {
     struct ext4_inode root;
     struct bson_info* bson;
@@ -2783,7 +2808,7 @@ int ext4_serialize_fs_tree(FILE* disk, int64_t partition_offset,
     bson = bson_init();
 
     if (ext4_read_inode_serialized(disk, partition_offset, *superblock, 2,\
-                                   &root, bson, icache))
+                                   &root, bson, icache, bcache))
     {
         free(buf);
         fprintf(stderr, "Failed getting root fs inode.\n");
@@ -2791,7 +2816,7 @@ int ext4_serialize_fs_tree(FILE* disk, int64_t partition_offset,
     }
 
     if (ext4_serialize_tree(disk, partition_offset, *superblock, bits, root,
-                            buf, serializef, bson, icache))
+                            buf, serializef, bson, icache, bcache))
     {
         free(buf);
         fprintf(stdout, "Error listing fs tree from root inode.\n");
@@ -2803,8 +2828,36 @@ int ext4_serialize_fs_tree(FILE* disk, int64_t partition_offset,
     return 0;
 }
 
-int ext4_cache_inodes(FILE* disk, int64_t partition_offset,
+int ext4_cache_bgds(FILE* disk, int64_t partition_offset,
                       struct ext4_superblock* superblock, uint8_t** cache)
+{
+    uint64_t num_block_groups = ext4_num_block_groups(*superblock);
+    uint32_t i = 0;
+    uint8_t* cachep;
+
+    *cache = malloc(sizeof(struct ext4_block_group_descriptor) * num_block_groups);
+    cachep = *cache;
+
+    if (cachep == NULL)
+    {
+        fprintf_light_red(stderr, "Failed allocating inode cache.\n");
+        return EXIT_FAILURE;
+    }
+
+    for (i = 0 ; i < num_block_groups; i++)
+    {
+        ext4_read_bgd(disk, partition_offset, *superblock, i,
+                      (struct ext4_block_group_descriptor*) cachep, NULL);
+
+        cachep += sizeof(struct ext4_block_group_descriptor);
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int ext4_cache_inodes(FILE* disk, int64_t partition_offset,
+                      struct ext4_superblock* superblock,
+                      uint8_t** cache, uint8_t* bcache)
 {
     struct ext4_block_group_descriptor bgd;
     uint8_t* cachep;
@@ -2826,7 +2879,7 @@ int ext4_cache_inodes(FILE* disk, int64_t partition_offset,
 
     for (i = 0 ; i < num_block_groups; i++)
     {
-        ext4_read_bgd(disk, partition_offset, *superblock, i, &bgd);
+        ext4_read_bgd(disk, partition_offset, *superblock, i, &bgd, bcache);
         inode_table_start = (ext4_bgd_inode_table(bgd) * block_size +
                              partition_offset);
 
@@ -2863,7 +2916,7 @@ int ext4_cache_inodes(FILE* disk, int64_t partition_offset,
 int ext4_serialize_journal(FILE* disk, int64_t partition_offset,
                            struct ext4_superblock* superblock,
                            struct bitarray* bits, char* mount,
-                           FILE* serializef, uint8_t* icache)
+                           FILE* serializef, uint8_t* icache, uint8_t* bcache)
 {
     struct ext4_inode root;
     struct bson_info* bson;
@@ -2881,7 +2934,7 @@ int ext4_serialize_journal(FILE* disk, int64_t partition_offset,
     bson = bson_init();
 
     if (ext4_read_inode_serialized(disk, partition_offset, *superblock, 8,\
-                                   &root, bson, icache))
+                                   &root, bson, icache, bcache))
     {
         free(buf);
         fprintf(stderr, "Failed getting journal inode.\n");
@@ -2889,7 +2942,7 @@ int ext4_serialize_journal(FILE* disk, int64_t partition_offset,
     }
 
     if (ext4_serialize_tree(disk, partition_offset, *superblock, bits, root,
-                            buf, serializef, bson, icache))
+                            buf, serializef, bson, icache, bcache))
     {
         free(buf);
         fprintf(stdout, "Error listing fs tree from journal inode.\n");

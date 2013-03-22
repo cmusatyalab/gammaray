@@ -73,7 +73,7 @@ int main(int argc, char* args[])
     char buf[4096];
     struct bitarray* bits;
     struct stat fstats;
-    uint8_t* icache = NULL;
+    uint8_t* icache = NULL, *bcache = NULL;
 
     fprintf_blue(stdout, "Raw Disk Analyzer -- By: Wolfgang Richter "
                          "<wolf@cs.cmu.edu>\n");
@@ -289,18 +289,25 @@ int main(int argc, char* args[])
                     return EXIT_FAILURE;
                 }
 
-                if (ext4_serialize_bgds(disk, partition_offset,
-                                        &ext4_superblock, bits, serializef))
+                if (ext4_cache_bgds(disk, partition_offset, &ext4_superblock,
+                                    &bcache))
                 {
-                    fprintf_light_red(stderr, "Error writing serialized "
-                                              "BGDs\n");
+                    fprintf_light_red(stderr, "Error populating bcache.\n");
                     return EXIT_FAILURE;
                 }
 
                 if (ext4_cache_inodes(disk, partition_offset, &ext4_superblock,
-                                      &icache))
+                                      &icache, bcache))
                 {
                     fprintf_light_red(stderr, "Error populating icache.\n");
+                    return EXIT_FAILURE;
+                }
+
+                if (ext4_serialize_bgds(disk, partition_offset,
+                                        &ext4_superblock, bits, serializef, bcache))
+                {
+                    fprintf_light_red(stderr, "Error writing serialized "
+                                              "BGDs\n");
                     return EXIT_FAILURE;
                 }
 
@@ -309,13 +316,15 @@ int main(int argc, char* args[])
                                        bits,
                                        ext4_last_mount_point(&ext4_superblock),
                                        serializef,
-                                       icache);
+                                       icache,
+                                       bcache);
                 ext4_serialize_journal(disk, partition_offset, 
                                        &ext4_superblock,
                                        bits,
                                        "journal",
                                        serializef,
-                                       icache);
+                                       icache,
+                                       bcache);
                 disk_analyzer_serialize_bitarray(bits, serializef);
             }
 
@@ -361,6 +370,11 @@ int main(int argc, char* args[])
 
     fclose(serializef);
     fclose(disk);
+
+    if (icache)
+        free(icache);
+    if (bcache)
+        free(bcache);
 
     return EXIT_SUCCESS;
 }
