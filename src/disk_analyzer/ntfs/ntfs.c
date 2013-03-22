@@ -370,7 +370,7 @@ uint64_t ntfs_file_record_size(struct ntfs_boot_file* bootf)
 
 
 int ntfs_read_file_data(FILE* disk, uint8_t* data, struct ntfs_boot_file* bootf,
-                        int64_t partition_offset, uint8_t** buf);
+                        int64_t partition_offset, uint8_t** buf, char* name);
 
 /* read FILE record */
 int ntfs_read_file_record(FILE* disk, uint64_t record_num,
@@ -437,7 +437,7 @@ int ntfs_read_file_record(FILE* disk, uint64_t record_num,
         if (record_num == 0 && mft)
         {
             fprintf_light_green(stdout, "Reading file data for file 0.\n");
-            if (ntfs_read_file_data(disk, buf, bootf, partition_offset, mft))
+            if (ntfs_read_file_data(disk, buf, bootf, partition_offset, mft, "$MFT"))
                 return 0;
         }
     }
@@ -1242,7 +1242,7 @@ int ntfs_dispatch_data_attribute(uint8_t* data, uint64_t* offset,
 }
 
 int ntfs_read_file_data(FILE* disk, uint8_t* data, struct ntfs_boot_file* bootf,
-                        int64_t partition_offset, uint8_t** buf)
+                        int64_t partition_offset, uint8_t** buf, char* name)
 {
     uint64_t fsize, data_offset = 0, stream_len;
     struct ntfs_file_record rec;
@@ -1256,7 +1256,7 @@ int ntfs_read_file_data(FILE* disk, uint8_t* data, struct ntfs_boot_file* bootf,
 
     data_offset = 0;
 
-    if (ntfs_get_attribute(data, &sah, &data_offset, NTFS_DATA))
+    if (ntfs_get_attribute(data, &sah, &data_offset, NTFS_DATA, name))
     {
         fprintf_light_red(stderr, "Failed getting NTFS_DATA attr.\n");
         return EXIT_FAILURE;
@@ -1273,7 +1273,7 @@ int ntfs_read_file_data(FILE* disk, uint8_t* data, struct ntfs_boot_file* bootf,
 
     data_offset = 0;
 
-    if (ntfs_get_attribute(data, &sah, &data_offset, NTFS_DATA))
+    if (ntfs_get_attribute(data, &sah, &data_offset, NTFS_DATA, name))
     {
         fprintf_light_red(stderr, "Failed getting NTFS_DATA attr.\n");
         return EXIT_FAILURE;
@@ -1573,7 +1573,7 @@ int ntfs_attribute_dispatcher(uint8_t* data, uint64_t* offset, char** fname,
 }
 
 int ntfs_get_attribute(uint8_t* data, void* attr, uint64_t* offset,
-                       enum NTFS_ATTRIBUTE_TYPE type)
+                       enum NTFS_ATTRIBUTE_TYPE type, char* name)
 {
     struct ntfs_file_record rec;
     struct ntfs_standard_attribute_header sah;
@@ -1618,7 +1618,7 @@ int ntfs_get_attribute(uint8_t* data, void* attr, uint64_t* offset,
         }
     }
 
-    fprintf_light_red(stdout, "Failed to find attribute.\n");
+    fprintf_light_red(stdout, "Failed to find attribute %d [%s].\n", type, name);
     return EXIT_FAILURE;
 }
 
@@ -2196,15 +2196,15 @@ int ntfs_serialize_file_record(FILE* disk, struct ntfs_boot_file* bootf,
     data_offset = 0;
     is_dir = (rec.flags & 0x02) == 0x02;
 
-    if (ntfs_get_attribute(data, &fdata, &data_offset, NTFS_FILE_NAME))
+    if (ntfs_get_attribute(data, &fdata, &data_offset, NTFS_FILE_NAME, prefix))
     {
-        fprintf_light_red(stderr, "Failed getting NTFS_FILE_NAME attr.\n");
-        return EXIT_FAILURE;
+        fprintf_light_red(stderr, "Failed getting NTFS_FILE_NAME attr [%s].\n", prefix);
+        //return EXIT_FAILURE;
     }
 
     data_offset = 0;
 
-    if (!is_dir && ntfs_get_attribute(data, &sah, &data_offset, NTFS_DATA))
+    if (!is_dir && ntfs_get_attribute(data, &sah, &data_offset, NTFS_DATA, prefix))
     {
         fprintf_light_red(stderr, "Failed getting NTFS_DATA attr.\n");
         return EXIT_FAILURE;
@@ -2295,7 +2295,7 @@ int ntfs_serialize_file_record(FILE* disk, struct ntfs_boot_file* bootf,
 
     data_offset = 0;
 
-    if (!is_dir && ntfs_get_attribute(data, &sah, &data_offset, NTFS_DATA))
+    if (!is_dir && ntfs_get_attribute(data, &sah, &data_offset, NTFS_DATA, prefix))
     {
         fprintf_light_red(stderr, "Failed getting NTFS_DATA attr.\n");
         return EXIT_FAILURE;
@@ -2318,7 +2318,7 @@ int ntfs_serialize_file_record(FILE* disk, struct ntfs_boot_file* bootf,
         data_offset = 0;
 
 
-        if (ntfs_get_attribute(data, &sah, &data_offset, NTFS_INDEX_ROOT))
+        if (ntfs_get_attribute(data, &sah, &data_offset, NTFS_INDEX_ROOT, prefix))
         {
             fprintf_light_red(stderr, "Failed getting NTFS_INDEX_ROOT attr.\n");
         }
@@ -2332,7 +2332,7 @@ int ntfs_serialize_file_record(FILE* disk, struct ntfs_boot_file* bootf,
 
         data_offset = 0;
 
-        if (ntfs_get_attribute(data, &sah, &data_offset, NTFS_INDEX_ALLOCATION))
+        if (ntfs_get_attribute(data, &sah, &data_offset, NTFS_INDEX_ALLOCATION, prefix))
         {
             fprintf_light_red(stderr, "Failed getting NTFS_INDEX_ALLOCATION attr.\n");
         }

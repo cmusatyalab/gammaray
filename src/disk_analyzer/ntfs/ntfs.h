@@ -262,7 +262,7 @@ int ntfs_diff_file_record_buffs(uint8_t* recorda, uint8_t* recordb,
                                 int64_t partition_offset,
                                 struct ntfs_boot_file* bootf);
 int ntfs_get_attribute(uint8_t* record, void* attr, uint64_t* offset,
-                       enum NTFS_ATTRIBUTE_TYPE type);
+                       enum NTFS_ATTRIBUTE_TYPE type, char* name);
 int ntfs_get_size(uint8_t* data, struct ntfs_standard_attribute_header* sah,
                   uint64_t* offset, uint64_t* fsize);
 int ntfs_serialize_fs(struct ntfs_boot_file* bootf, struct bitarray* bits,
