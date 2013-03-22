@@ -369,10 +369,14 @@ uint64_t ntfs_file_record_size(struct ntfs_boot_file* bootf)
 }
 
 
+int ntfs_read_file_data(FILE* disk, uint8_t* data, struct ntfs_boot_file* bootf,
+                        int64_t partition_offset, uint8_t** buf);
+
 /* read FILE record */
 int ntfs_read_file_record(FILE* disk, uint64_t record_num,
                           int64_t partition_offset, 
                           struct ntfs_boot_file* bootf,
+                          uint8_t** mft,
                           struct bitarray* bits,
                           uint8_t* buf, struct bson_info* bson)
 {
@@ -416,16 +420,30 @@ int ntfs_read_file_record(FILE* disk, uint64_t record_num,
         return 0;
     }
 
-    if (fseeko(disk, offset, SEEK_SET))
+    if (record_num < 16)
     {
-        fprintf_light_red(stderr, "Error seeking to FILE record.\n");
-        return 0;
-    }
+        if (fseeko(disk, offset, SEEK_SET))
+        {
+            fprintf_light_red(stderr, "Error seeking to FILE record.\n");
+            return 0;
+        }
 
-    if (fread(buf, 1, record_size, disk) != record_size)
+        if (fread(buf, 1, record_size, disk) != record_size)
+        {
+            fprintf_light_red(stderr, "Error reading FILE record data.\n");
+            return 0;
+        }
+
+        if (record_num == 0 && mft)
+        {
+            fprintf_light_green(stdout, "Reading file data for file 0.\n");
+            if (ntfs_read_file_data(disk, buf, bootf, partition_offset, mft))
+                return 0;
+        }
+    }
+    else
     {
-        fprintf_light_red(stderr, "Error reading FILE record data.\n");
-        return 0;
+        memcpy(buf, &((*mft)[record_num * record_size]), record_size);
     }
 
     if (strncmp((char*) buf, "FILE", 4) != 0)
@@ -497,6 +515,7 @@ int ntfs_fixup_data(uint8_t* data, uint64_t data_len,
 
     return EXIT_SUCCESS;
 }
+
 
 /* read attribute */
 int ntfs_read_attribute_header(uint8_t* data, uint64_t* offset,
@@ -586,7 +605,7 @@ int ntfs_handle_resident_data_attribute(uint8_t* data, uint64_t* offset,
 
     ntfs_read_attribute_data(data, offset, buf, buf_len, sah);
   
-    if (save_sectors)
+    if (bson && save_sectors)
     {
         value.type = BSON_ARRAY;
         value.key = "sectors";
@@ -689,7 +708,7 @@ int ntfs_handle_non_resident_data_attribute(uint8_t* data, uint64_t* offset,
 
     int counter = 0;
 
-    if (save_sectors)
+    if (bson && save_sectors)
     {
         value.type = BSON_ARRAY;
         value.key = "sectors";
@@ -735,7 +754,7 @@ int ntfs_handle_non_resident_data_attribute(uint8_t* data, uint64_t* offset,
         assert(prev_lcn + run_lcn >= 0);
         assert(prev_lcn + run_lcn < 26214400);
 
-        if (save_sectors)
+        if (bson && save_sectors)
         {
             for (i = 0; i < run_length_bytes / 512; i += 8)
             {
@@ -815,7 +834,7 @@ int ntfs_handle_non_resident_data_attribute(uint8_t* data, uint64_t* offset,
         run_lcn_bytes = 0;
     }
 
-    if (save_sectors)
+    if (bson && save_sectors)
     {
         bson_finalize(sectors);
         bson_serialize(bson, &value);
@@ -1214,6 +1233,55 @@ int ntfs_dispatch_data_attribute(uint8_t* data, uint64_t* offset,
     return EXIT_SUCCESS;
 }
 
+int ntfs_read_file_data(FILE* disk, uint8_t* data, struct ntfs_boot_file* bootf,
+                        int64_t partition_offset, uint8_t** buf)
+{
+    uint64_t fsize, data_offset = 0, stream_len;
+    struct ntfs_file_record rec;
+    struct ntfs_update_sequence seq;
+    struct ntfs_standard_attribute_header sah;
+
+    ntfs_read_file_record_header(data, &data_offset, &rec);
+    ntfs_read_update_sequence(data, &data_offset, rec.size_usn,
+                              rec.usn_num, &seq);
+    ntfs_fixup_data(data, ntfs_file_record_size(bootf), &seq);
+
+    data_offset = 0;
+
+    if (ntfs_get_attribute(data, &sah, &data_offset, NTFS_DATA))
+    {
+        fprintf_light_red(stderr, "Failed getting NTFS_DATA attr.\n");
+        return EXIT_FAILURE;
+    }
+
+    ntfs_get_size(data, &sah, &data_offset, &fsize);
+    *buf = malloc((size_t) fsize);
+
+    if (*buf == NULL)
+    {
+        fprintf_light_red(stderr, "Error allocating buffer for file data.\n");
+        return EXIT_FAILURE;
+    }
+
+    data_offset = 0;
+
+    if (ntfs_get_attribute(data, &sah, &data_offset, NTFS_DATA))
+    {
+        fprintf_light_red(stderr, "Failed getting NTFS_DATA attr.\n");
+        return EXIT_FAILURE;
+    }
+
+    if (ntfs_dispatch_data_attribute(data, &data_offset, NULL, &sah, bootf, NULL,
+                                 partition_offset, disk, false, buf, false,
+                                 NULL, false, &stream_len))
+    {
+        fprintf_light_red(stderr, "Failed on data dispatch.\n");
+        return EXIT_FAILURE;
+    }
+
+    return EXIT_SUCCESS;
+}
+
 int ntfs_read_index_record_entry(uint8_t* data, uint64_t* offset,
                                  struct ntfs_index_record_entry* ire)
 {
@@ -1236,6 +1304,7 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
                                  struct ntfs_boot_file* bootf,
                                  struct bitarray* bits,
                                  int64_t partition_offset,
+                                 uint8_t** mft,
                                  FILE* disk,
                                  struct bson_info* bson,
                                  FILE* serializedf)
@@ -1258,7 +1327,6 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
     static uint32_t sector = 0;
     char count[11];
     uint64_t stream_len = 0;
-    uint64_t counter = 0;
     uint64_t record_num = 0;
 
     sectors = bson_init();
@@ -1300,14 +1368,24 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
             (irh.magic[1] != 'N') ||
             (irh.magic[2] != 'D') ||
             (irh.magic[3] != 'X'))
-            break; /* TODO: why do these appear? */
+        {
+            stream += 4096;
+            stream_len -= 4096;
+            stream_offset = 0;
+            continue; /* TODO: why do these appear? */
+        }
 
         ntfs_print_index_record_header(&irh);
         ntfs_read_update_sequence(stream, &stream_offset,
                                   irh.size_usn, irh.usn_num,
                                   &seq);
         if (ntfs_fixup_data(stream, irh.allocated_size_of_index_entries + 0x18, &seq))
-            break; /* TODO: why does this ever fail? */
+        {
+            stream += 4096;
+            stream_len -= 4096;
+            stream_offset = 0;
+            continue; /* TODO: why do these appear? */
+        }
 
         ire.flags = 0;
         stream_offset = irh.offset_to_index_entries + 0x18;
@@ -1319,7 +1397,7 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
         /* walk all entries */
         while (!(ire.flags & 0x02))
         {
-            assert(counter++ < 30000);
+            //assert(counter++ < 30000);
             /* read index entries */
             ntfs_read_index_record_entry(stream, &stream_offset, &ire);
             ntfs_print_index_record_entry(&ire);
@@ -1351,7 +1429,10 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
             stream_offset += ire.size - sizeof(struct ntfs_index_record_entry);
 
             if (ire.flags & 0x01)
-                fprintf_light_yellow(stdout, "Has sub-node!\n");
+            {
+                fprintf_light_yellow(stdout, "Has[%s] sub-node at VCN %"
+                                             PRIu64"\n", name, (uint64_t*) &(stream[stream_offset-8]));
+            }
 
             if (ire.flags & 0x02)
                 fprintf_light_yellow(stdout, "Is last entry; without file!\n");
@@ -1373,23 +1454,25 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
                 bson2 = bson_init();
                 if (ntfs_read_file_record(disk,
                                           ntfs_get_reference_int(&(ire.ref)),
-                                          partition_offset, bootf, bits,
+                                          partition_offset, bootf, mft, bits,
                                           file_record, bson2) == 0)
                 {
-                    fprintf_light_red(stderr, "Failed reading file record %"
+                    fprintf_light_red(stdout, "Failed reading file record[%s] %"
                                            PRIu64"\n",
+                                           name,
                                            ntfs_get_reference_int(&(ire.ref)));
                     return EXIT_FAILURE;
                 }           
 
                 ntfs_serialize_file_record(disk, bootf, bits, partition_offset,
-                                           name, serializedf, file_record,
+                                           name, mft, serializedf, file_record,
                                            bson2);
             }
 
         }
-        stream_offset += 4096 - stream_offset;
-        stream += stream_offset;
+        stream += 4096;
+        stream_len -= 4096;
+        stream_offset = 0;
     }
 
     bson_finalize(sectors);
@@ -2081,6 +2164,7 @@ int ntfs_serialize_fs(struct ntfs_boot_file* bootf, struct bitarray* bits,
 int ntfs_serialize_file_record(FILE* disk, struct ntfs_boot_file* bootf,
                                struct bitarray* bits,
                                int64_t partition_offset, char* prefix,
+                               uint8_t** mft,
                                FILE* serializedf, uint8_t* data,
                                struct bson_info* bson)
 {
@@ -2251,7 +2335,7 @@ int ntfs_serialize_file_record(FILE* disk, struct ntfs_boot_file* bootf,
         {
             ntfs_dispatch_index_allocation_attribute(data, (uint64_t*) &data_offset,
                                                      prefix, &sah, bootf, bits,
-                                                     partition_offset, disk,
+                                                     partition_offset, mft, disk,
                                                      bson, serializedf);
         }
 
@@ -2266,8 +2350,16 @@ int ntfs_serialize_fs_tree(FILE* disk, struct ntfs_boot_file* bootf, struct bita
 {
     uint8_t data[ntfs_file_record_size(bootf)];
     struct bson_info* bson = bson_init();
+    uint8_t* mft = NULL;
 
-    if (ntfs_read_file_record(disk, 5, partition_offset, bootf, bits,
+    if (ntfs_read_file_record(disk, 0, partition_offset, bootf, &mft, bits,
+                              data, bson) == 0)
+    {
+        fprintf_light_red(stderr, "Failed reading file record 0\n");
+        return EXIT_FAILURE;
+    }
+
+    if (ntfs_read_file_record(disk, 5, partition_offset, bootf, &mft, bits,
                               data, bson) == 0)
     {
         fprintf_light_red(stderr, "Failed reading file record 5\n");
@@ -2275,7 +2367,10 @@ int ntfs_serialize_fs_tree(FILE* disk, struct ntfs_boot_file* bootf, struct bita
     }
 
     ntfs_serialize_file_record(disk, bootf, bits, partition_offset, 
-                               mount_point, serializedf, data, bson);
+                               mount_point, &mft, serializedf, data, bson);
+
+    if (mft)
+        free(mft);
 
     return EXIT_SUCCESS;
 }

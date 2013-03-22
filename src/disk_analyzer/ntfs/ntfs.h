@@ -255,7 +255,8 @@ int ntfs_diff_file_records(FILE* disk, uint64_t recorda, uint64_t recordb,
                            struct bitarray* bits);
 int ntfs_read_file_record(FILE* disk, uint64_t record_num,
                           int64_t partition_offset, 
-                          struct ntfs_boot_file* bootf, struct bitarray* bits,
+                          struct ntfs_boot_file* bootf, uint8_t** mft,
+                          struct bitarray* bits,
                           uint8_t* buf, struct bson_info* bson);
 int ntfs_diff_file_record_buffs(uint8_t* recorda, uint8_t* recordb,
                                 int64_t partition_offset,
@@ -272,7 +273,7 @@ int ntfs_serialize_fs_tree(FILE* disk, struct ntfs_boot_file* bootf,
                            char* mount_point, FILE* serializedf);
 int ntfs_serialize_file_record(FILE* disk, struct ntfs_boot_file* bootf,
                                struct bitarray* bits,
-                               int64_t partition_offset, char* prefix,
+                               int64_t partition_offset, char* prefix, uint8_t** mft, 
                                FILE* serializedf, uint8_t* data,
                                struct bson_info* bson);
 int ntfs_read_index_record_entry(uint8_t* data, uint64_t* offset,
