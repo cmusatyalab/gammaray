@@ -206,16 +206,6 @@ int simple_find(uint32_t inode_table_location,
                 FILE* disk, uint32_t inode, char* path_prefix);
 int ext4_probe(FILE* disk, int64_t partition_offset,
                struct ext4_superblock* superblock);
-int ext4_read_inode(FILE* disk, int64_t partition_offset,
-                    struct ext4_superblock superblock, uint32_t inode_num,
-                    struct ext4_inode* inode);
-int ext4_list_block_groups(FILE* disk, int64_t partition_offset,
-                           struct ext4_superblock superblock);
-int ext4_list_root_fs(FILE* disk, int64_t partition_offset,
-                      struct ext4_superblock superblock, char* prefix);
-int ext4_reconstruct_root_fs(FILE* disk, int64_t partition_offset, 
-                             struct ext4_superblock superblock, char* prefix,
-                             char* copy_prefix);
 int ext4_read_block(FILE* disk, int64_t partition_offset, 
                     struct ext4_superblock superblock, uint64_t block_num, 
                     uint8_t* buf);

@@ -43,20 +43,6 @@ default:
 		   -I./ext2/ \
 		   -I./mbr \
 		   -lm
-	@clang ext4/tools/inode_explorer.c ext4/ext4.c \
-		   ../util/color.c mbr/mbr.c \
-		   ../bson/bson-encoder.c \
-		   ../util/util.c \
-		   ../datastructures/bitarray.c \
-		   -o ext4_inode_explorer \
-		   -Wall \
-		   -Werror \
-		   -I../util \
-		   -I../bson \
-		   -I../datastructures \
-		   -I./ext4/ \
-		   -I./mbr/ \
-		   -lm
 	@clang ext4/tools/data_block_explorer.c ext4/ext4.c \
 		   ../util/color.c mbr/mbr.c \
 		   ../bson/bson-encoder.c \
@@ -105,7 +91,6 @@ clean:
 		ntfs_file_record_differ \
 	    ext2_inode_explorer \
 	    ext4_data_block_explorer \
-	    ext4_inode_explorer	
 
 inode_explorer: default
 	./inode_explorer /home/wolf/Dropbox/Projects/xray/sample/tinycore.raw 
