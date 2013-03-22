@@ -449,6 +449,14 @@ int ntfs_read_file_record(FILE* disk, uint64_t record_num,
     if (strncmp((char*) buf, "FILE", 4) != 0)
     {
         fprintf_light_cyan(stderr, "FILE magic bytes mismatch.\n");
+        fprintf_light_cyan(stderr, "offset was: %"PRId64"\n", offset);
+        fprintf_light_cyan(stderr, "partition_offset was: %"PRId64"\n",
+                                    partition_offset);
+        fprintf_light_cyan(stderr, "lcn_mft was: %"PRIu64"\n", bootf->lcn_mft);
+        fprintf_light_cyan(stderr, "record_number was: %"PRIu64"\n",
+                                   record_num);
+        fprintf_light_cyan(stderr, "record_size was: %"PRIu64"\n",
+                                   record_size);
         return 0;
     }
 
@@ -1358,9 +1366,6 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
     {
         fprintf_light_blue(stdout, "INDX Parsing stream_offset == %"PRIu64" and stream_len == %"PRIu64"\n",
                 stream_offset, stream_len);
-
-        ////hexdump(stream, 4096);
-
         irh = *((struct ntfs_index_record_header*) stream);
         stream_offset += sizeof(irh);
 
