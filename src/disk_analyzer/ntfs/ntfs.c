@@ -1535,89 +1535,6 @@ int ntfs_get_attribute(uint8_t* data, void* attr, uint64_t* offset,
 }
 
 
-/* meta-walk MFT */
-int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf, struct bitarray* bits,
-                  int64_t partition_offset)
-{
-    struct ntfs_file_record rec;
-    struct ntfs_update_sequence seq;
-    struct ntfs_standard_attribute_header sah;
-    uint8_t* data = malloc(ntfs_file_record_size(bootf));
-    int64_t file_record_offset;
-    uint64_t data_offset = 0;
-    char* fname = NULL;
-    int counter = 0;
-    uint64_t file_record_counter = 0;
-    bool extension = false;
-
-    file_record_offset =
-        ntfs_lcn_to_offset(bootf, partition_offset, bootf->lcn_mft); 
-
-    fprintf_light_red(stdout, "Current %"PRIu64" file_record_offset: %"
-                              PRId64"\n",
-                              file_record_counter,
-                              file_record_offset);
-    while (ntfs_read_file_record(disk, file_record_counter, partition_offset, bootf, bits, data, NULL) &&
-           file_record_counter <= 5)
-    {
-        extension = false;
-        data_offset = 0;
-        fprintf_light_red(stdout, "Current %"PRIu64" file_record_offset: %"
-                                  PRId64"\n",
-                                  file_record_counter++,
-                                  file_record_offset);
-        file_record_offset += ntfs_file_record_size(bootf);
-        ntfs_read_file_record_header(data, &data_offset, &rec);
-        ntfs_print_file_record(&rec);
-        ntfs_read_update_sequence(data, &data_offset, rec.size_usn,
-                                  rec.usn_num, &seq);
-        ntfs_fixup_data(data, 1024, &seq);
-
-        /* check if valid record we want to check */
-        if (!(rec.flags & 0x01)) /* in use */
-           continue;
-        if (rec.flags & 0x02) /* not a dir */
-        {
-            fprintf_light_red(stdout, "DIRECTORY ENCOUNTERED.\n");
-        }
-        if (rec.file_ref_base) /* BASE FILE Record */
-        {
-            fprintf_light_red(stderr, "Uh oh: Extension FILE Record "
-                                      "encountered.\n");
-            extension = true;
-        }
-        
-        data_offset = rec.offset_first_attribute;
-        counter = 0;
-        while (ntfs_read_attribute_header(data, &data_offset, &sah) == 0 &&
-               counter < 1024)
-        {
-            ntfs_print_standard_attribute_header(&sah);
-
-            if (ntfs_attribute_dispatcher(data, &data_offset, &fname, &sah,
-                                          bootf, partition_offset, disk,
-                                          extension) == 0)
-                break;
-            counter++;
-        }
-
-        if (seq.data)
-        {
-            free(seq.data);
-            seq.data = NULL;
-        }
-        
-        if (fname)
-        {
-            free(fname);
-            fname = NULL;
-        }
-    }
-    
-    return EXIT_SUCCESS;
-}
-
-
 int __diff_file_records(struct ntfs_file_record* reca,
                         struct ntfs_file_record* recb)
 {
@@ -2057,38 +1974,6 @@ int ntfs_diff_file_record_buffs(uint8_t* bufa, uint8_t* bufb,
                                 struct ntfs_boot_file* bootf)
 {
     return ntfs_diff_raw_file_records(bufa, bufb,partition_offset, bootf);
-}
-
-int ntfs_diff_file_records(FILE* disk, uint64_t recorda, uint64_t recordb,
-                           int64_t partition_offset,
-                           struct ntfs_boot_file* bootf,
-                           struct bitarray* bits)
-{
-    uint64_t file_record_size = ntfs_file_record_size(bootf);
-    uint8_t* data_a = malloc(file_record_size);
-    uint8_t* data_b = malloc(file_record_size);
-
-    if (data_a == NULL)
-    {
-        fprintf_light_red(stderr, "Error malloc()ing data_a.\n");
-        return EXIT_FAILURE;
-    }
-
-    if (data_b == NULL)
-    {
-        fprintf_light_red(stderr, "Error malloc()ing data_b.\n");
-        return EXIT_FAILURE;
-    }
-
-    ntfs_read_file_record(disk, recorda, partition_offset, bootf, bits, data_a, NULL);
-    ntfs_read_file_record(disk, recordb, partition_offset, bootf, bits, data_b, NULL);
-
-    ntfs_diff_raw_file_records(data_a, data_b, partition_offset, bootf);
-
-    free(data_a);    
-    free(data_b);
-
-    return EXIT_SUCCESS;
 }
 
 int ntfs_serialize_fs(struct ntfs_boot_file* bootf, struct bitarray* bits,

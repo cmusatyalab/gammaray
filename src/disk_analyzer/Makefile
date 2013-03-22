@@ -71,20 +71,6 @@ default:
 		   -I./ext4/ \
 		   -I./mbr/ \
 		   -lm
-	@clang ntfs/tools/file_record_differ.c ntfs/ntfs.c \
-		   ../util/color.c mbr/mbr.c \
-		   ../bson/bson-encoder.c \
-		   ../util/util.c \
-		   ../datastructures/bitarray.c \
-		   -o ntfs_file_record_differ \
-		   -Wall \
-		   -Werror \
-		   -I../util \
-		   -I../bson \
-		   -I../datastructures \
-		   -I./ntfs/ \
-		   -I./mbr/ \
-		   -lm
 
 test_ntfs: default
 	@rm -rf /tmp/win7
