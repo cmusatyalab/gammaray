@@ -1380,7 +1380,7 @@ int __diff_data_ntfs(struct kv_store* store, struct ntfs_boot_file* bootf,
     struct ntfs_standard_attribute_header sah;
     struct ntfs_non_resident_header nrh;
 
-    if (ntfs_get_attribute(data, &sah, &data_offset, NTFS_DATA))
+    if (ntfs_get_attribute(data, &sah, &data_offset, NTFS_DATA, ""))
     {
         fprintf_light_red(stderr, "Failed getting NTFS_DATA attr.\n");
         return EXIT_FAILURE;
@@ -2327,7 +2327,6 @@ int __deserialize_file(struct ext4_superblock* superblock,
                     bson_cleanup(bson2);
                     return EXIT_FAILURE;
                 }
-
 
                 if (redis_reverse_pointer_set(store, REDIS_DIR_INSERT,
                                       sector,
