@@ -534,7 +534,7 @@ int redis_list_get(struct kv_store* handle, char* fmt, uint64_t src,
                 return EXIT_FAILURE;
             }
 
-            (*result)[i] = (uint8_t*) malloc(reply->len + 1);
+            (*result)[i] = (uint8_t*) malloc(reply->element[i]->len + 1);
 
             memcpy((*result)[i], reply->element[i]->str,
                    (size_t) reply->element[i]->len);
