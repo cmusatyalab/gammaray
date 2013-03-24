@@ -52,6 +52,7 @@
 #define REDIS_DIR_SECTOR_INSERT "HSET dirdata:%"PRIu64" %s %b"
 #define REDIS_DIR_SECTOR_GET "HGET dirdata:%"PRIu64" %s"
 #define REDIS_DIR_FILES_INSERT "RPUSH dirlist:%"PRIu64" %b"
+#define REDIS_DIR_FILES_LGET "LRANGE dirlist:%"PRIu64" 0 -1"
 #define REDIS_DIR_INSERT "SET sector:%"PRIu64" dirdata:%"PRIu64
 
 #define REDIS_ASYNC_QUEUE_PUSH "LPUSH writequeue %b"
