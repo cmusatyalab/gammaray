@@ -171,9 +171,9 @@ static int xrayfs_read(const char* path, char* buf, size_t size, off_t offset,
     uint8_t** list;
     size_t len = 0;
     ssize_t readb = 0, toread = 0, ret = 0;
-    uint64_t position = 0, sector = 0, i = 0;
+    uint64_t position = 0, i = 0;
     struct stat st;
-    int64_t start = offset / 4096, end;
+    int64_t start = offset / 4096, end, sector = 0;
 
     if (xrayfs_getattr(path, &st))
         return -ENOENT;
@@ -196,9 +196,6 @@ static int xrayfs_read(const char* path, char* buf, size_t size, off_t offset,
         strtok((char*) (list)[i], ":");
         sscanf(strtok(NULL, ":"), "%"SCNu64, &sector);
 
-        lseek(fd_disk, sector * 512 + offset % block_size, SEEK_SET);
-        readb = 0;
-
         if (position + block_size - offset % block_size < size)
             toread = block_size - offset % block_size;
         else
@@ -206,6 +203,16 @@ static int xrayfs_read(const char* path, char* buf, size_t size, off_t offset,
 
         if (toread <= 0)
             break;
+
+        if (sector < 0)
+        {
+            memset(&(buf[position]), 0, toread);
+            readb += toread;
+            goto readloop;
+        }
+
+        lseek(fd_disk, sector * 512 + offset % block_size, SEEK_SET);
+        readb = 0;
 
         while (readb < toread)
         {
@@ -215,6 +222,7 @@ static int xrayfs_read(const char* path, char* buf, size_t size, off_t offset,
             readb += ret;
         }
 
+readloop:
         offset += readb;
         position += readb;
     }
