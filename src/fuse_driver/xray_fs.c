@@ -30,29 +30,64 @@ static int64_t xrayfs_pathlookup(const char* path)
 static int xrayfs_getattr(const char* path, struct stat* stbuf)
 {
     int64_t inode_num = xrayfs_pathlookup(path);
-    struct ext4_inode inode;
-    size_t len2 = sizeof(struct ext4_inode);
-
+    uint64_t field;
+    size_t len2 = sizeof(field);
+    
     if (inode_num < 0)
         return -ENOENT;
 
-    if (redis_hash_field_get(handle, REDIS_FILE_SECTOR_GET, inode_num, "inode",
-                             (uint8_t*) &inode, &len2))
+    if (redis_hash_field_get(handle, REDIS_FILE_SECTOR_GET, inode_num, "size",
+                             (uint8_t*) &field, &len2))
         return -ENOENT;
 
     memset(stbuf, 0, sizeof(struct stat));
+    stbuf->st_size = field;
 
-    stbuf->st_mode = inode.i_mode;
-    stbuf->st_nlink = inode.i_links_count;
-    stbuf->st_uid = inode.i_uid;
-    stbuf->st_gid = inode.i_gid;
+    if (redis_hash_field_get(handle, REDIS_FILE_SECTOR_GET, inode_num, "mode",
+                             (uint8_t*) &field, &len2))
+        return -ENOENT;
+    
+    stbuf->st_mode = field;
+
+    if (redis_hash_field_get(handle, REDIS_FILE_SECTOR_GET, inode_num, "link_count",
+                             (uint8_t*) &field, &len2))
+        return -ENOENT;
+
+    stbuf->st_nlink = field;
+
+    if (redis_hash_field_get(handle, REDIS_FILE_SECTOR_GET, inode_num, "uid",
+                             (uint8_t*) &field, &len2))
+        return -ENOENT;
+
+    stbuf->st_uid = field;
+
+    if (redis_hash_field_get(handle, REDIS_FILE_SECTOR_GET, inode_num, "gid",
+                             (uint8_t*) &field, &len2))
+        return -ENOENT;
+
+    stbuf->st_gid = field;
+
     stbuf->st_blksize = block_size;
-    stbuf->st_size = ext4_file_size(inode);
     stbuf->st_blocks = (stbuf->st_size % 512) ? stbuf->st_size / 512 + 1 : 
                                                 stbuf->st_size / 512;
-    stbuf->st_atime = inode.i_atime;
-    stbuf->st_mtime = inode.i_mtime;
-    stbuf->st_ctime = inode.i_ctime;
+
+    if (redis_hash_field_get(handle, REDIS_FILE_SECTOR_GET, inode_num, "atime",
+                             (uint8_t*) &field, &len2))
+        return -ENOENT;
+
+    stbuf->st_atime = field;
+
+    if (redis_hash_field_get(handle, REDIS_FILE_SECTOR_GET, inode_num, "mtime",
+                             (uint8_t*) &field, &len2))
+        return -ENOENT;
+
+    stbuf->st_mtime = field;
+
+    if (redis_hash_field_get(handle, REDIS_FILE_SECTOR_GET, inode_num, "ctime",
+                             (uint8_t*) &field, &len2))
+        return -ENOENT;
+
+    stbuf->st_ctime = field;
 
     return 0;
 }
@@ -60,113 +95,58 @@ static int xrayfs_getattr(const char* path, struct stat* stbuf)
 static int xrayfs_readlink(const char* path, char* buf, size_t bufsize)
 {
     int64_t inode_num = xrayfs_pathlookup(path);
-    ssize_t ret = 0;
-    uint64_t position = 0, sector = 0;
-    struct ext4_inode inode;
-    size_t len2 = sizeof(struct ext4_inode);
-    uint8_t** list = NULL;
+    size_t len = bufsize;
 
     memset(buf, 0, bufsize);
 
     if (inode_num < 0)
         return -ENOENT;
 
-    if (redis_hash_field_get(handle, REDIS_FILE_SECTOR_GET, inode_num, "inode",
-                             (uint8_t*) &inode, &len2))
+    if (redis_hash_field_get(handle, REDIS_FILE_SECTOR_GET, inode_num, "link_name",
+                             (uint8_t*) buf, &len))
         return -ENOENT;
-
-    if (bufsize == ext4_file_size(inode))
-        bufsize -= 1;
-
-    if (ext4_file_size(inode) < bufsize)
-        bufsize = ext4_file_size(inode);
-
-    if (bufsize >= 4096)
-        return -EINVAL;
-
-    if (bufsize < 60)
-    {
-        memcpy(buf, (uint8_t*) inode.i_block, bufsize);
-    }
-    else
-    {
-        if (redis_list_get_var(handle, REDIS_FILE_SECTORS_LGET_VAR,
-                               inode_num, &list, &len2, 0, 0))
-            return -ENOENT;
-
-        if (len2 <= 0)
-            return -ENOENT;
-
-        strtok((char*) (list)[0], ":");
-        sscanf(strtok(NULL, ":"), "%"SCNu64, &sector);
-        lseek(fd_disk, sector * 512, SEEK_SET);
-
-        while (bufsize - position > 0)
-        {
-            ret = read(fd_disk, &(buf[position]), bufsize - position);
-            if (ret < 0)
-                return -ENOENT;
-            position += ret;
-        }
-    }
-
-    buf[bufsize] = 0;
-
-    redis_free_list(list, len2);
 
     return 0;
 
 }
 
 static int xrayfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler,
-                          off_t offset, struct fuse_file_info* fi)
+                                  off_t offset, struct fuse_file_info* fi)
 {
     int64_t inode_num = xrayfs_pathlookup(path);
-    uint8_t data_buf[block_size], **list;
-    size_t len = 0, len2 = 0;
-    uint64_t position = 0, sector = 0, i = 0;
-    struct ext4_dir_entry dir;
+    uint8_t **slist = NULL, **dlist = NULL;
+    size_t slen = 0, dlen = 0;
+    uint64_t sector = 0, i = 0, j = 0;
 
     if (inode_num < 0)
         return -ENOENT;
 
     if (redis_list_get(handle, REDIS_FILE_SECTORS_LGET,
-                       inode_num, &list, &len))
+                       inode_num, &slist, &slen))
         return -ENOENT;
 
-    for (i = 0; i < len; i++)
+    /* for all folder sectors (length of folder on disk/positions) */
+    for (i = 0; i < slen; i++)
     {
-        strtok((char*) (list)[i], ":");
+        fprintf_light_yellow(stderr, "strtok()ing.\n");
+        strtok((char*) (slist)[i], ":");
         sscanf(strtok(NULL, ":"), "%"SCNu64, &sector);
-        len2 = block_size;
 
-        if (redis_hash_field_get(handle, REDIS_DIR_SECTOR_GET, sector, "data",
-                                 data_buf, &len2))
+        if (redis_list_get(handle, REDIS_DIR_FILES_LGET, sector,
+                           &dlist, &dlen))
             return -ENOENT;
 
-        position = 0;
-        /* loop through all dentry in block while (position < block_size) */
-        while (position < block_size)
+        /* for every dentry in that sector */
+        for (j = 0; j < dlen; j++)
         {
-            if (ext4_read_dir_entry(&data_buf[position], &dir))
-                return -ENOENT;
-            
-            if (dir.inode == 0)
-            {
-                if (dir.rec_len)
-                {
-                    position += dir.rec_len;
-                    continue;
-                }
-            }
-
-            dir.name[dir.name_len] = 0;
-            filler(buf, (const char*) dir.name, NULL, 0);
-            position += dir.rec_len;
+            filler(buf, (const char*) &(dlist[j][8]), NULL, 0);
         }
+
+        redis_free_list(dlist, dlen);
+
     }
 
-    redis_free_list(list, len);
+    redis_free_list(slist, slen);
 
     return 0;
 }
@@ -185,7 +165,7 @@ static int xrayfs_open(const char* path, struct fuse_file_info* fi)
 }
 
 static int xrayfs_read(const char* path, char* buf, size_t size, off_t offset,
-                       struct fuse_file_info* fi)
+                               struct fuse_file_info* fi)
 {
     uint64_t inode_num = xrayfs_pathlookup(path);
     uint8_t** list;
@@ -251,18 +231,20 @@ static int xrayfs_read(const char* path, char* buf, size_t size, off_t offset,
  */
 int main(int argc, char* argv[])
 {
-    struct ext4_superblock superblock;
     const char* path = argv[argc - 1];
+    size_t len = sizeof(uint64_t);
     handle = redis_init("4", false);
     on_exit((void (*) (int, void *)) redis_shutdown, handle);
 
     fd_disk = open(path, O_RDONLY);
     argc -= 1;
 
-    if (qemu_get_superblock(handle, &superblock, (uint64_t) 0))
-        return EXIT_FAILURE;
+    if (redis_hash_field_get(handle, REDIS_SUPERBLOCK_SECTOR_GET, 0, "block_size",
+                             (uint8_t*) &block_size, &len))
+        return -ENOENT;
 
-    block_size = ext4_block_size(superblock);
+    if (len != 8)
+        return EXIT_FAILURE;
 
     if (qemu_get_pt_offset(handle, &partition_offset, (uint64_t) 0))
         return EXIT_FAILURE;
