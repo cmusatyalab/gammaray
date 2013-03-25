@@ -93,6 +93,17 @@ default:
 		 -lm \
 		 #-DNOCOLOR
 
+test: clean default
+	@redis-cli flushall
+	./inference_engine \
+		/home/wolf/Dropbox/Projects/xray/sample/ext4_index.bson \
+	    4 \
+		ext4_test_vm &
+	sleep 20
+	./async_queuer \
+		/home/wolf/Dropbox/Projects/xray/sample/ext4_index.bson \
+		/tmp/1GB_capture.bin \
+	    4 &
 
 test_ntfs: clean default
 	@redis-cli flushall
