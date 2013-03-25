@@ -258,6 +258,8 @@ int redis_dequeue(struct kv_store* handle, uint64_t sector_num, uint8_t* data,
         *len = 0;
     }
 
+    check_redis_return(handle, reply);
+
     reply = redisCommand(handle->connection, REDIS_DEL_WRITE, sector_num);
 
     return check_redis_return(handle, reply);
@@ -377,6 +379,43 @@ int redis_sector_lookup(struct kv_store* handle, uint64_t src,
     }
 
     return check_redis_return(handle, reply);
+}
+
+int redis_list_len(struct kv_store* handle, char* fmt, uint64_t src,
+                   uint64_t* len)
+{
+    redisReply* reply;
+    redis_flush_pipeline(handle);
+    reply = redisCommand(handle->connection, fmt, src);
+    if (reply->type == REDIS_REPLY_INTEGER)
+    {
+        *len = reply->integer;
+    }
+    else
+    {
+        *len = 0;
+    }
+
+    return check_redis_return(handle, reply);
+}
+
+int redis_list_set(struct kv_store* handle, char* fmt, uint64_t src,
+                   uint64_t index, int64_t value)
+{
+    redisAppendCommand(handle->connection, fmt,
+                                           src,
+                                           index,
+                                           value);
+    handle->outstanding_pipelined_cmds++;
+
+    if (handle->outstanding_pipelined_cmds >= REDIS_DEFAULT_PIPELINED)
+    {
+        if (redis_flush_pipeline(handle))
+        {
+            assert(true);
+        }
+    }
+    return EXIT_SUCCESS;
 }
 
 int redis_binary_insert(struct kv_store* handle, const char* fmt,

@@ -34,6 +34,8 @@
 #define REDIS_FILE_SECTORS_LGET "LRANGE filesectors:%"PRIu64" 0 -1"
 #define REDIS_FILE_SECTORS_LGET_VAR "LRANGE filesectors:%"PRIu64" %"PRIu64" %"PRIu64
 #define REDIS_FILE_SECTORS_LAST_SECTOR "LINDEX filesectors:%"PRIu64" -1"
+#define REDIS_FILE_SECTORS_LLEN "LLEN filesectors:%"PRIu64
+#define REDIS_FILE_SECTORS_LSET "LSET filesectors:%"PRIu64" %"PRIu64" sector:%"PRId64
 #define REDIS_FILE_SECTORS_DELETE "DEL filesectors:%"PRIu64
 #define REDIS_FILES_INSERT "RPUSH files:%"PRIu64" file:%"PRIu64
 #define REDIS_FILES_LGET "LRANGE files:%"PRIu64" 0 -1"
@@ -47,6 +49,8 @@
 #define REDIS_EXTENT_SECTOR_GET "HGET extent:%"PRIu64" %s"
 #define REDIS_EXTENTS_INSERT "RPUSH extents:%"PRIu64" extent:%"PRIu64
 #define REDIS_EXTENTS_LGET "LRANGE extents:%"PRIu64" 0 -1"
+#define REDIS_EXTENTS_LINSERT "LINSERT extents:%"PRIu64" BEFORE %"PRIu64" extent:%"PRIu64
+#define REDIS_EXTENTS_LLEN "LLEN extents:%"PRIu64
 #define REDIS_EXTENTS_SECTOR_INSERT "SET sector:%"PRIu64" extent:%"PRIu64
 
 #define REDIS_DIR_SECTOR_INSERT "HSET dirdata:%"PRIu64" %s %b"
@@ -107,6 +111,10 @@ int redis_list_get(struct kv_store* handle, char* fmt, uint64_t src,
 int redis_list_get_var(struct kv_store* handle, char* fmt, uint64_t src,
                        uint8_t** result[], size_t* len, 
                        int64_t start, int64_t end);
+int redis_list_len(struct kv_store* handle, char* fmt, uint64_t src,
+                   uint64_t* len);
+int redis_list_set(struct kv_store* handle, char* fmt, uint64_t src,
+                   uint64_t index, int64_t value);
 void redis_free_list(uint8_t* list[], size_t len);
 
 int redis_last_file_sector(struct kv_store* handle, uint64_t id, 

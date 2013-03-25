@@ -405,14 +405,14 @@ int __reinspect_write(struct super_info* superblock, struct kv_store* store,
 
     if (redis_dequeue(store, sector, buf, &len))
     {
-        fprintf_light_red(stderr, "Failed retrieving queued write [%"
+        fprintf_light_red(stdout, "Failed retrieving queued write [%"
                                   PRIu64"]\n", sector);
         return EXIT_FAILURE;
     }
 
     if (len == 0)
     {
-        fprintf_light_red(stderr, "Empty write returned for [%"PRIu64"]\n",
+        fprintf_light_red(stdout, "Empty write returned for [%"PRIu64"]\n",
                                   sector);
         return EXIT_FAILURE;
     }
@@ -917,13 +917,16 @@ int __ext4_new_extent(struct kv_store* store, uint64_t file,
 }
 
 int __diff_ext4_extents(struct kv_store* store, char* vmname, uint64_t file,
-                        uint64_t write_counter, uint8_t* newb, uint8_t* oldb,
+                        uint64_t write_counter, uint8_t* newb,
                         uint64_t partition_offset,
                         struct super_info* superblock)
 {
-    struct ext4_extent_header* hdr_new, *hdr_old;
-    struct ext4_extent_idx* idx_new, *idx_old;
-    struct ext4_extent* extent_new, *extent_old;
+    struct ext4_extent_header* hdr_new;
+    struct ext4_extent_idx* idx_new;
+    struct ext4_extent* extent_new;
+    uint64_t new_entries = 0, new_counter = 0, extent_sector = 0;
+    uint64_t old_file_len = 0, old_extent_len = 0, i;
+    uint8_t** extent_list;
 
     struct ext4_extent_header hdr_def = { .eh_magic = 0,
                                           .eh_entries = 0,
@@ -932,83 +935,79 @@ int __diff_ext4_extents(struct kv_store* store, char* vmname, uint64_t file,
                                           .eh_generation = 0
                                         };
     
-    struct ext4_extent_idx idx_def = { .ei_block = 0,
-                                       .ei_leaf_lo = 0,
-                                       .ei_leaf_hi = 0,
-                                       .ei_unused = 0
-                                     };
-
-    struct ext4_extent extent_def = { .ee_block = 0,
-                                      .ee_len = 0,
-                                      .ee_start_hi = 0,
-                                      .ee_start_lo = 0
-                                    };
-
-    uint64_t new_entries = 0, old_entries = 0, old_counter = 0, new_counter = 0;
-    
     hdr_new = (struct ext4_extent_header*) newb;
-    hdr_old = (struct ext4_extent_header*) oldb;
 
     if (hdr_new->eh_magic != 0xF30A)
         hdr_new = &hdr_def;
-    if (hdr_old->eh_magic != 0xF30A)
-        hdr_old = &hdr_def;
 
     new_entries = hdr_new->eh_entries;
-    old_entries  = hdr_old->eh_entries;
 
     fprintf_light_cyan(stdout, "__ext4_diff_extents()\n");
     D_PRINT16(hdr_new->eh_magic);
-    D_PRINT16(hdr_old->eh_magic);
+
+    if (redis_list_len(store, REDIS_FILE_SECTORS_LLEN, file, &old_file_len))
+    {
+        return EXIT_FAILURE;
+    }
+
+    if (redis_list_get(store, REDIS_EXTENTS_LGET, file, &extent_list,
+                       &old_extent_len))
+    {
+        return EXIT_FAILURE;
+    }
+
+    uint64_t extents[old_extent_len];
+
+    for (i = 0; i < old_extent_len; i++)
+    {
+        strtok((char *) extent_list[i], ":");
+        sscanf(strtok(NULL, ":"), "%"SCNu64, &(extents[i]));
+    }
+
+    fprintf_white(stdout, "got old_len == %"PRIu64"\n", old_file_len);
 
     while (new_entries)
     {
-        D_PRINT16(new_entries);
-        D_PRINT16(old_entries);
-
-        D_PRINT16(hdr_new->eh_depth);
-        D_PRINT16(hdr_old->eh_depth);
-
-        if (old_entries == 0)
-        {
-            idx_old = &idx_def;
-            hdr_old = &hdr_def;
-            extent_old = &extent_def;
-        }
-
         if (hdr_new->eh_depth)
         {
             idx_new = (struct ext4_extent_idx *)
                       &(newb[sizeof(struct ext4_extent_header) +
                              sizeof(struct ext4_extent_idx) * new_counter]);
 
-            if (hdr_old->eh_depth)
+            if ((extent_sector = ext4_extent_index_leaf(*idx_new)))
             {
-                idx_old = (struct ext4_extent_idx *)
-                          &(oldb[sizeof(struct ext4_extent_header) +
-                                 sizeof(struct ext4_extent_idx)*old_counter]);
+                fprintf_light_white(stdout, "found new extent position fs block = %"PRIu64".\n", extent_sector);
 
-                if (ext4_extent_index_leaf(*idx_new) !=
-                    ext4_extent_index_leaf(*idx_old))
+                extent_sector *= superblock->block_size;
+                extent_sector += partition_offset;
+                extent_sector /= SECTOR_SIZE;
+
+                if (old_extent_len == 0)
                 {
-                    D_PRINT64(ext4_extent_index_leaf(*idx_new));
-                    D_PRINT64(ext4_extent_index_leaf(*idx_old));
-                    fprintf_light_white(stdout, "found new extent position.\n");
-
-                    __ext4_new_extent_leaf_block(store, file,
-                                              ext4_extent_index_leaf(*idx_new),
-                                              superblock, partition_offset,
-                                              write_counter, vmname);
+                    redis_hash_field_set(store, REDIS_EXTENT_SECTOR_INSERT,
+                                             extent_sector, "file", (uint8_t*) &file, sizeof(file));
+                    redis_reverse_pointer_set(store, REDIS_EXTENTS_INSERT,
+                                          file,
+                                          extent_sector);
+                    redis_reverse_pointer_set(store, REDIS_EXTENTS_SECTOR_INSERT,
+                                          extent_sector,
+                                          extent_sector);
+                    __reinspect_write(superblock, store, partition_offset, extent_sector,
+                                      write_counter, vmname);
                 }
-                    D_PRINT64(ext4_extent_index_leaf(*idx_new));
-                    D_PRINT64(ext4_extent_index_leaf(*idx_old));
-            }
-            else
-            {
-                __ext4_new_extent_leaf_block(store, file,
-                                          ext4_extent_index_leaf(*idx_new),
-                                          superblock, partition_offset,
-                                          write_counter, vmname);
+
+                /* check if new leaf block */
+                for (i = 0; i < old_extent_len; i++)
+                {
+                    if (extent_sector == extents[i])
+                        break;
+
+                    if (extent_sector < extents[i])
+                    {
+                        redis_list_set(store, REDIS_EXTENTS_LINSERT, file,
+                                       i, extent_sector);
+                    }
+                }
             }
         }
         else
@@ -1016,65 +1015,66 @@ int __diff_ext4_extents(struct kv_store* store, char* vmname, uint64_t file,
             extent_new = (struct ext4_extent *)
                       &(newb[sizeof(struct ext4_extent_header) +
                              sizeof(struct ext4_extent) * new_counter]);
-            fprintf_light_white(stdout, "no depth new\n");
-            if (hdr_old->eh_depth == 0)
+            fprintf_light_white(stdout, "no depth potentially new\n");
+            /* check if new data block */
+            if (extent_new->ee_block < old_file_len)
             {
-                fprintf_light_white(stdout, "no depth old\n");
-                if (old_entries)
-                {
-                    extent_old = (struct ext4_extent *)
-                          &(oldb[sizeof(struct ext4_extent_header) +
-                                 sizeof(struct ext4_extent) * old_counter]);
-                }
+                fprintf_light_white(stdout, "old start block: %"PRIu32"\n",
+                                            extent_new->ee_block);
+                fprintf_light_white(stdout, "number of blocks: %"PRIu16"\n",
+                                           extent_new->ee_len);
 
-                D_PRINT64(ext4_extent_start(*extent_new));
-                D_PRINT64(ext4_extent_start(*extent_old));
-
-                D_PRINT16(extent_new->ee_len);
-                D_PRINT16(extent_old->ee_len);
-
-                if ((ext4_extent_start(*extent_new) !=
-                     ext4_extent_start(*extent_old)) ||
-                    (extent_new->ee_len != extent_old->ee_len))
+                for (i = 0; i < extent_new->ee_len; i++)
                 {
-                    fprintf_light_white(stdout, "adding new extents as start "
-                                                "shifted.\n");
-                    __ext4_new_extent(store, file, superblock, partition_offset,
-                                      extent_new, vmname, write_counter);
-                }
-                else
-                {
-                    fprintf_light_cyan(stdout, "Extents exactly match.\n");
+                    extent_sector = ext4_extent_start(*extent_new) + i;
+                    extent_sector *= superblock->block_size;
+                    extent_sector += partition_offset;
+                    extent_sector /= SECTOR_SIZE;
+
+                    if (i + extent_new->ee_block < old_file_len)
+                        redis_list_set(store, REDIS_FILE_SECTORS_LSET, file,
+                                       i + extent_new->ee_block,
+                                       extent_sector);
+                    else
+                        redis_reverse_pointer_set(store,
+                                                  REDIS_FILE_SECTORS_INSERT,
+                                                  file,
+                                                  extent_sector);
                 }
             }
             else
             {
-                __ext4_new_extent(store, file, superblock, partition_offset,
-                                  extent_new, vmname, write_counter);
-                /* deleted index */
+                /* create file hole */
+                for (i = 0; i < extent_new->ee_block - old_file_len; i++)
+                {
+                    redis_reverse_pointer_set(store,
+                                              REDIS_FILE_SECTORS_INSERT,
+                                              file, -1);
+                }
+
+                /* fill with real extents now */
+                for (i = 0; i < extent_new->ee_len; i++)
+                {
+                    extent_sector = ext4_extent_start(*extent_new) + i;
+                    extent_sector *= superblock->block_size;
+                    extent_sector += partition_offset;
+                    extent_sector /= SECTOR_SIZE;
+
+                    redis_reverse_pointer_set(store,
+                                              REDIS_FILE_SECTORS_INSERT,
+                                              file,
+                                              extent_sector);
+                }
             }
         }
 
-        if (old_entries)
-        {
-            old_entries--;
-            old_counter++;
-        }
-
-        if (new_entries)
-        {
-            new_entries--;
-            new_counter++;
-        }
+        new_entries--;
+        new_counter++;
     }
 
-    while (old_entries--)
-    {
-        fprintf_light_red(stderr, "LARGE deletion quickly of extent tree "
-                                  "associated with a file.");
-        /* ALL deletions */
-    }
-    
+    redis_free_list(extent_list, old_extent_len);
+    redis_flush_pipeline(store);
+
     return EXIT_SUCCESS; 
 }
 
@@ -1319,6 +1319,8 @@ int __diff_inodes(uint8_t* write, struct kv_store* store,
             return EXIT_FAILURE;
         }
 
+        channel = construct_channel_name(vmname, path);
+
         GET_FIELD(REDIS_FILE_SECTOR_GET, file, is_dir, len2);
         GET_FIELD(REDIS_FILE_SECTOR_GET, file, size, len2);
         GET_FIELD(REDIS_FILE_SECTOR_GET, file, mode, len2);
@@ -1371,9 +1373,9 @@ int __diff_inodes(uint8_t* write, struct kv_store* store,
             !((new->i_mode & 0x6000) == 0x6000 ||
               (new->i_mode & 0xa000) == 0xa000))
         {
-            //__diff_ext4_extents(store, vmname, file, write_counter, 
-             //                   (uint8_t *) &(new->i_block[0]),
-             //                   (uint8_t *) &(old->i_block[0]), partition_offset, super);
+            __diff_ext4_extents(store, vmname, file, write_counter, 
+                                (uint8_t *) &(new->i_block[0]),
+                                partition_offset, superblock);
         }
 
         if (size < new_size)
@@ -1412,8 +1414,7 @@ int __diff_extent_tree(uint8_t* write, struct kv_store* store,
                        struct super_info* superblock,
                        uint64_t partition_offset)
 {
-    size_t len = superblock->block_size, len2 = sizeof(uint64_t);
-    uint8_t buf[len];
+    size_t len2 = sizeof(uint64_t);
     uint64_t id, file;
     struct ext4_extent_header def = { .eh_magic = 0,
                                       .eh_entries = 0,
@@ -1435,24 +1436,8 @@ int __diff_extent_tree(uint8_t* write, struct kv_store* store,
         fprintf_light_red(stderr, "No old index?\n");
     }
 
-    /* load old extent block */
-    if (redis_hash_field_get(store, REDIS_EXTENT_SECTOR_GET, id, "data", buf,
-                             &len))
-    {
-        fprintf_light_red(stderr, "No old index?\n");
-        len = sizeof(def);
-        memcpy(buf, &def, sizeof(def));
-    }
-
-    __diff_ext4_extents(store, vmname, file, write_counter, write, buf,
+    __diff_ext4_extents(store, vmname, file, write_counter, write,
                         partition_offset, superblock);
-
-    /* set new extent block */
-    if (redis_hash_field_set(store, REDIS_EXTENT_SECTOR_INSERT, id, "data", write,
-                             write_len))
-    {
-        return EXIT_FAILURE;
-    }
 
     return EXIT_SUCCESS;
 }
@@ -1627,7 +1612,7 @@ int qemu_deep_inspect(struct super_info* superblock,
         if (redis_sector_lookup(store, write->header.sector_num + i,
             result, &len))
         {
-            fprintf_light_red(stderr, "Error doing sector lookup.\n");
+            fprintf_light_red(stdout, "Error doing sector lookup.\n");
             if ((write->header.nb_sectors - i) * SECTOR_SIZE < superblock->block_size)
             {
                 size = (write->header.nb_sectors - i) * SECTOR_SIZE;
@@ -1645,6 +1630,7 @@ int qemu_deep_inspect(struct super_info* superblock,
 
         if (len)
         {
+            fprintf_light_red(stdout, "Returned sector lookup, now dispatching.\n");
             result[len] = 0;
             data = &(write->data[i*SECTOR_SIZE]);
 
@@ -1664,7 +1650,7 @@ int qemu_deep_inspect(struct super_info* superblock,
         }
         else
         {
-            fprintf_light_red(stderr, "Returned sector lookup empty.\n");
+            fprintf_light_red(stdout, "Returned sector lookup empty.\n");
             if ((write->header.nb_sectors - i) * SECTOR_SIZE < superblock->block_size)
             {
                 size = (write->header.nb_sectors - i) * SECTOR_SIZE;
@@ -1673,13 +1659,15 @@ int qemu_deep_inspect(struct super_info* superblock,
             {
                 size = superblock->block_size;
             }
+            fprintf_light_red(stdout, "enqueueing() %"PRIu64"\n", write->header.sector_num + i);
 
             redis_enqueue_pipelined(store, write->header.sector_num + i,
                                     &(write->data[i*SECTOR_SIZE]),
                                     size);
-            return EXIT_FAILURE;
         }
     }
+
+    redis_flush_pipeline(store);
 
     return EXIT_SUCCESS;
 }
