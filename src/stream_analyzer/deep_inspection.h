@@ -120,5 +120,6 @@ int qemu_print_sector_type(enum SECTOR_TYPE type);
 int qemu_deep_inspect(struct super_info* superblock,
                       struct qemu_bdrv_write* write, struct kv_store* store,
                       uint64_t write_counter, char* vmname,
-                      uint64_t partition_offset);
+                      uint64_t partition_offset,
+                      FILE* index);
 #endif

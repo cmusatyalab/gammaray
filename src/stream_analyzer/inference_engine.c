@@ -23,7 +23,7 @@
 
 #define SECTOR_SIZE 512 
 
-int read_loop(struct kv_store* store, char* vmname)
+int read_loop(struct kv_store* store, char* vmname, FILE* index)
 {
     struct timeval start, end;
     uint64_t write_counter = 0, partition_offset, time = 0;
@@ -59,7 +59,7 @@ int read_loop(struct kv_store* store, char* vmname)
         qemu_print_write(&write);
         gettimeofday(&start, NULL);
         qemu_deep_inspect(&super_info, &write, store, write_counter++, vmname,
-                          partition_offset);
+                          partition_offset, index);
         gettimeofday(&end, NULL);
         time = diff_time(start, end);
         pretty_print_microseconds(time, pretty_time, 32);
@@ -130,13 +130,13 @@ int main(int argc, char* args[])
     gettimeofday(&end, NULL);
     time = diff_time(start, end);
 
-    fclose(indexf);
     redis_flush_pipeline(handle);
 
     gettimeofday(&start, NULL);
-    ret = read_loop(handle, vmname);
+    ret = read_loop(handle, vmname, indexf);
     gettimeofday(&end, NULL);
 
+    fclose(indexf);
     pretty_print_microseconds(time, pretty_micros, 32);
     fprintf_light_red(stderr, "load_index time: %s.\n", pretty_micros);
 
