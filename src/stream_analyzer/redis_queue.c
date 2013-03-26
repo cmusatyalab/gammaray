@@ -124,7 +124,7 @@ void* redis_flush_thread_pipeline(void* data)
         if(check_redis_return(job->handle, reply))
         {
             fprintf(stderr, "ERROR FLUSHING\n");
-            pthread_mutex_unlock(&(job->handle->flush_lock));
+            //pthread_mutex_unlock(&(job->handle->flush_lock));
             assert(true);
         }
         pthread_mutex_unlock(&(job->handle->conn_lock));
