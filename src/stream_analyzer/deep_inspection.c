@@ -2046,20 +2046,20 @@ int __deserialize_file_lazy(struct ext4_superblock* superblock,
     struct bson_info* bson2;
     struct bson_kv value1, value2;
 
-    uint64_t sector = 0;
+    uint64_t sector = 0, inode_sector = 0;
 
     while (bson_deserialize(bson, &value1, &value2))
     {
         if (strcmp(value1.key, "inode_sector") == 0)
         {
+            inode_sector = (uint64_t) *((uint32_t *) value1.data);
             if (redis_reverse_pointer_set(store, REDIS_LOAD_LRECORDS_INSERT,
-                                      (uint64_t) *((uint32_t *) value1.data),
+                                      inode_sector,
                                       (uint64_t) bson->f_offset))
                 return EXIT_FAILURE;
 
             if (redis_reverse_pointer_set(store, REDIS_LOAD_LRECORDS,
-                                      (uint64_t) *((uint32_t *) value1.data),
-                                      (uint64_t) *((uint32_t *) value1.data)))
+                                          inode_sector, inode_sector))
                 return EXIT_FAILURE;
         }
         else if (strcmp(value1.key, "files") == 0)
@@ -2078,9 +2078,9 @@ int __deserialize_file_lazy(struct ext4_superblock* superblock,
             {
                 sscanf((const char*) value1.key, "%"SCNu64, &sector);
 
-                if (redis_reverse_pointer_set(store, REDIS_LOAD_RECORD,
+                if (redis_reverse_pointer_set(store, REDIS_LOAD_LRECORDS,
                                       sector,
-                                      (uint64_t) bson->f_offset))
+                                      inode_sector))
                 {
                     bson_cleanup(bson2);
                     return EXIT_FAILURE;
@@ -2106,9 +2106,9 @@ int __deserialize_file_lazy(struct ext4_superblock* superblock,
 
             while (bson_deserialize(bson2, &value1, &value2) == 1)
             {
-                redis_reverse_pointer_set(store, REDIS_LOAD_RECORD,
+                redis_reverse_pointer_set(store, REDIS_LOAD_LRECORDS,
                                        (int64_t) *((int32_t *) value1.data),
-                                       (uint64_t) bson->f_offset);
+                                       inode_sector);
             }
 
             bson_cleanup(bson2);
@@ -2129,9 +2129,9 @@ int __deserialize_file_lazy(struct ext4_superblock* superblock,
             {
                 sscanf((const char*) value1.key, "%"SCNu64, &sector);
 
-                if (redis_reverse_pointer_set(store, REDIS_LOAD_RECORD,
+                if (redis_reverse_pointer_set(store, REDIS_LOAD_LRECORDS,
                                       sector,
-                                      (uint64_t) bson->f_offset))
+                                      inode_sector))
                 {
                     bson_cleanup(bson2);
                     return EXIT_FAILURE;

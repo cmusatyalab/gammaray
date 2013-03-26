@@ -71,7 +71,6 @@
 #define REDIS_LIST_DELETED "SDIFF deleteset createset"
 #define REDIS_LIST_CREATED "SDIFF createset deleteset"
 
-#define REDIS_LOAD_RECORD "SET sector:%"PRIu64" load:%"PRIu64
 #define REDIS_LOAD_LRECORDS "SET sector:%"PRIu64" loadlist:%"PRIu64
 #define REDIS_LOAD_LRECORDS_INSERT "RPUSH loadlist:%"PRIu64" load:%"PRIu64
 #define REDIS_GET_LRECORDS "LRANGE loadlist:%"PRIu64" 0 -1"
