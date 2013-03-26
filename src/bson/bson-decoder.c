@@ -34,6 +34,8 @@ int bson_readf(struct bson_info* bson_info, FILE* file)
     if (file == NULL)
         return 0;
 
+    bson_info->f_offset = ftell(file);
+
     if (fread(&(size), 4, 1, file) != 1)
     {
         return 0;

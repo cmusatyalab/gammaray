@@ -6,6 +6,7 @@
 struct bson_info
 {
     uint64_t size;
+    uint64_t f_offset;
     uint64_t position;
     uint8_t* buffer;
 };
