@@ -657,7 +657,7 @@ int redis_async_write_enqueue(struct kv_store* handle, struct bitarray* bits,
     {
         if (!bitarray_get_bit(bits, sector / 4096))
         {
-            pthread_mutex_unlock(&(hadnle->conn_lock));
+            pthread_mutex_unlock(&(handle->conn_lock));
             return EXIT_FAILURE;
         }
         else
