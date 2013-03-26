@@ -12,8 +12,6 @@
 #include "redis_queue.h"
 #include "qemu_common.h"
 
-#include <event2/event.h>
-
 #include <inttypes.h>
 #include <sys/types.h>
 #include <sys/stat.h>
