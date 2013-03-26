@@ -653,6 +653,17 @@ int redis_async_write_enqueue(struct kv_store* handle, struct bitarray* bits,
             pthread_mutex_lock(&(handle->conn_lock));
     }
 
+    if (pthread_mutex_trylock(&(handle->cmd_lock)))
+    {
+        if (!bitarray_get_bit(bits, sector / 4096))
+        {
+            pthread_mutex_unlock(&(hadnle->conn_lock));
+            return EXIT_FAILURE;
+        }
+        else
+            pthread_mutex_lock(&(handle->cmd_lock));
+    }
+
     redisAppendCommand(handle->connection, REDIS_ASYNC_QUEUE_PUSH,
                                            &sector,
                                            sizeof(sector));
@@ -660,8 +671,6 @@ int redis_async_write_enqueue(struct kv_store* handle, struct bitarray* bits,
                                            data,
                                            len);
     pthread_mutex_unlock(&(handle->conn_lock));
-
-    pthread_mutex_lock(&(handle->cmd_lock));
 
     handle->outstanding_pipelined_cmds++;
     handle->outstanding_bytes += sizeof(sector);
