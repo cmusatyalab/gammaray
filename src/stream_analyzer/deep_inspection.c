@@ -926,6 +926,7 @@ int __diff_ext4_extents(struct kv_store* store, char* vmname, uint64_t file,
     struct ext4_extent* extent_new;
     uint64_t new_entries = 0, new_counter = 0, extent_sector = 0;
     uint64_t old_file_len = 0, old_extent_len = 0, i;
+    uint64_t start = 0, end = 0;
     uint8_t** extent_list;
 
     struct ext4_extent_header hdr_def = { .eh_magic = 0,
@@ -1040,6 +1041,15 @@ int __diff_ext4_extents(struct kv_store* store, char* vmname, uint64_t file,
                                                   REDIS_FILE_SECTORS_INSERT,
                                                   file,
                                                   extent_sector);
+
+                    start = (i + extent_new->ee_block) *
+                            superblock->block_size;
+                    end = start + superblock->block_size; 
+
+                    redis_reverse_file_data_pointer_set(store, extent_sector,
+                                                        start, end, file);
+                    __reinspect_write(superblock, store, partition_offset,
+                                      extent_sector, write_counter, vmname);
                 }
             }
             else
@@ -1064,6 +1074,15 @@ int __diff_ext4_extents(struct kv_store* store, char* vmname, uint64_t file,
                                               REDIS_FILE_SECTORS_INSERT,
                                               file,
                                               extent_sector);
+
+                    start = (i + extent_new->ee_block) *
+                            superblock->block_size;
+                    end = start + superblock->block_size; 
+
+                    redis_reverse_file_data_pointer_set(store, extent_sector,
+                                                        start, end, file);
+                    __reinspect_write(superblock, store, partition_offset,
+                                      extent_sector, write_counter, vmname);
                 }
             }
         }
