@@ -1,23 +1,57 @@
+/*****************************************************************************
+ * util.c                                                                    *
+ *                                                                           *
+ * This file contains implementations for miscellaneous widely-applicable    *
+ * utility functions.                                                        *
+ *                                                                           *
+ *                                                                           *
+ *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
+ *                                                                           *
+ *                                                                           *
+ *   Copyright 2013 Carnegie Mellon University                               *
+ *                                                                           *
+ *   Licensed under the Apache License, Version 2.0 (the "License");         *
+ *   you may not use this file except in compliance with the License.        *
+ *   You may obtain a copy of the License at                                 *
+ *                                                                           *
+ *       http://www.apache.org/licenses/LICENSE-2.0                          *
+ *                                                                           *
+ *   Unless required by applicable law or agreed to in writing, software     *
+ *   distributed under the License is distributed on an "AS IS" BASIS,       *
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.*
+ *   See the License for the specific language governing permissions and     *
+ *   limitations under the License.                                          *
+ *****************************************************************************/
 #include "util.h"
 #include "color.h"
 
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 
+#define KB 1024
+#define MB KB*1024
+#define GB MB*1024
+#define TB GB*1024
+
+#define MILLIS 1000
+#define SECONDS MILLIS*MILLIS
+#define MINUTES SECONDS*60
+#define HOURS MINUTES*60
+#define DAYS HOURS*24
+
 bool top_bit_set(uint8_t byte)
 {
-    return (0x80 & byte) == 0x80;
+    return 0x80 & byte;
 }
 
-/* http://stackoverflow.com/posts/4970859/revisions */
+/* http://graphics.stanford.edu/~seander/bithacks.html#IntegerLogObvious */
 uint64_t highest_set_bit64(uint64_t val)
 {
-    int counter = 0;
+    uint64_t counter = 0;
 
     while (val >>= 1)
-    {
         counter++;
-    }
 
     return counter;
 }
@@ -34,15 +68,13 @@ int64_t sign_extend64(uint64_t val, uint64_t bits)
     return r;
 }
 
-/* http://stackoverflow.com/posts/4970859/revisions */
+/* http://graphics.stanford.edu/~seander/bithacks.html#IntegerLogObvious */
 uint32_t highest_set_bit(uint32_t val)
 {
     int counter = 0;
 
     while (val >>= 1)
-    {
         counter++;
-    }
 
     return counter;
 }
@@ -131,31 +163,16 @@ int hexdump(uint8_t* buf, uint64_t len)
 /* buf should be at least 13 bytes long */
 int pretty_print_bytes(uint64_t bytes, char* buf, uint64_t bufsize)
 {
-    uint64_t kb = 1024;
-    uint64_t mb = kb*kb;
-    uint64_t gb = kb*mb;
-    uint64_t tb = kb*gb;
-
-    if (bytes > tb)
-    {
-        snprintf(buf, bufsize, "%0.3f TiB", ((double) bytes) / tb);
-    }
-    else if (bytes > gb)
-    {
-        snprintf(buf, bufsize, "%0.3f GiB", ((double) bytes) / gb);
-    }
-    else if (bytes > mb)
-    {
-        snprintf(buf, bufsize, "%0.3f MiB", ((double) bytes) / mb);
-    }
-    else if(bytes > kb)
-    {
-        snprintf(buf, bufsize, "%0.3f KiB", ((double) bytes) / kb);
-    }
+    if (bytes > TB)
+        snprintf(buf, bufsize, "%0.3f TiB", ((double) bytes) / TB);
+    else if (bytes > GB)
+        snprintf(buf, bufsize, "%0.3f GiB", ((double) bytes) / GB);
+    else if (bytes > MB)
+        snprintf(buf, bufsize, "%0.3f MiB", ((double) bytes) / MB);
+    else if(bytes > KB)
+        snprintf(buf, bufsize, "%0.3f KiB", ((double) bytes) / KB);
     else
-    {
         snprintf(buf, bufsize, "%"PRIu64" B", bytes);
-    }
 
     return EXIT_SUCCESS;
 }
@@ -163,38 +180,19 @@ int pretty_print_bytes(uint64_t bytes, char* buf, uint64_t bufsize)
 /* buf should be at least 13 bytes long */
 int pretty_print_microseconds(uint64_t micros, char* buf, uint64_t bufsize)
 {
-    uint64_t millis = 1000;
-    uint64_t seconds = millis*millis;
-    uint64_t minutes = 60*seconds;
-    uint64_t hours = 60*minutes;
-    uint64_t days = 24*hours;
-
-
-    if (micros > days)
-    {
-        snprintf(buf, bufsize, "%0.3f days", ((double) micros) / days);
-    }
-    else if (micros > hours)
-    {
-        snprintf(buf, bufsize, "%0.3f hours", ((double) micros) / hours);
-    }
-    else if (micros > minutes)
-    {
-        snprintf(buf, bufsize, "%0.3f minutes", ((double) micros ) / minutes);
-    }
-    else if (micros > seconds)
-    {
-        snprintf(buf, bufsize, "%0.3f seconds", ((double) micros) / seconds);
-    }
-    else if (micros > millis)
-    {
+    if (micros > DAYS)
+        snprintf(buf, bufsize, "%0.3f days", ((double) micros) / DAYS);
+    else if (micros > HOURS)
+        snprintf(buf, bufsize, "%0.3f hours", ((double) micros) / HOURS);
+    else if (micros > MINUTES)
+        snprintf(buf, bufsize, "%0.3f minutes", ((double) micros ) / MINUTES);
+    else if (micros > SECONDS)
+        snprintf(buf, bufsize, "%0.3f seconds", ((double) micros) / SECONDS);
+    else if (micros > MILLIS)
         snprintf(buf, bufsize, "%0.3f milliseconds",
-                                ((double) micros) / millis);
-    }
+                                                ((double) micros) / MILLIS);
     else
-    {
         snprintf(buf, bufsize, "%"PRIu64" microseconds", micros);
-    }
 
     return EXIT_SUCCESS;
 }

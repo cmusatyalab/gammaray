@@ -1,8 +1,7 @@
 /*****************************************************************************
- * color.h                                                                   *
+ * color_test.c                                                              *
  *                                                                           *
- * This file contains prototypes for colorized versions of fprintf, suitable *
- * for including in other C files within a project.                          *
+ * This file executes all of the colorized version of fprintf to test them.  *
  *                                                                           *
  *                                                                           *
  *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
@@ -15,33 +14,36 @@
  *   You may obtain a copy of the License at                                 *
  *                                                                           *
  *       http://www.apache.org/licenses/LICENSE-2.0                          *
- *                                                                           * 
+ *                                                                           *
  *   Unless required by applicable law or agreed to in writing, software     *
  *   distributed under the License is distributed on an "AS IS" BASIS,       *
  *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.*
  *   See the License for the specific language governing permissions and     *
  *   limitations under the License.                                          *
  *****************************************************************************/
-#ifndef __GAMMARAY_UTIL_COLOR_H
-#define __GAMMARAY_UTIL_COLOR_H
+#include "color.h"
 
-#include <stdio.h>
+#include <stdlib.h>
 
-int fprintf_black(FILE * stream, const char * format, ...);
-int fprintf_red(FILE * stream, const char * format, ...);
-int fprintf_blue(FILE * stream, const char * format, ...);
-int fprintf_green(FILE * stream, const char * format, ...);
-int fprintf_yellow(FILE * stream, const char * format, ...);
-int fprintf_magenta(FILE * stream, const char * format, ...);
-int fprintf_cyan(FILE * stream, const char * format, ...);
-int fprintf_white(FILE * stream, const char * format, ...);
-int fprintf_light_black(FILE * stream, const char * format, ...);
-int fprintf_light_red(FILE * stream, const char * format, ...);
-int fprintf_light_blue(FILE * stream, const char * format, ...);
-int fprintf_light_green(FILE * stream, const char * format, ...);
-int fprintf_light_yellow(FILE * stream, const char * format, ...);
-int fprintf_light_magenta(FILE * stream, const char * format, ...);
-int fprintf_light_cyan(FILE * stream, const char * format, ...);
-int fprintf_light_white(FILE * stream, const char * format, ...);
+int main(int argc, char* argv[])
+{
+    fprintf_black(stdout, "fprintf_black\n");
+    fprintf_red(stdout, "fprintf_red\n");
+    fprintf_blue(stdout, "fprintf_blue\n");
+    fprintf_green(stdout, "fprintf_green\n");
+    fprintf_yellow(stdout, "fprintf_yellow\n");
+    fprintf_magenta(stdout, "fprintf_magenta\n");
+    fprintf_cyan(stdout, "fprintf_cyan\n");
+    fprintf_white(stdout, "fprintf_white\n");
 
-#endif
+    fprintf_light_black(stdout, "fprintf_light_black\n");
+    fprintf_light_red(stdout, "fprintf_light_red\n");
+    fprintf_light_blue(stdout, "fprintf_light_blue\n");
+    fprintf_light_green(stdout, "fprintf_light_green\n");
+    fprintf_light_yellow(stdout, "fprintf_light_yellow\n");
+    fprintf_light_magenta(stdout, "fprintf_light_magenta\n");
+    fprintf_light_cyan(stdout, "fprintf_light_cyan\n");
+    fprintf_light_white(stdout, "fprintf_light_white\n");
+
+    return EXIT_SUCCESS;
+}

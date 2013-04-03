@@ -1,0 +1,23 @@
+   =========================================================================
+   ==  NOTICE file for the gammaray open source research project          ==
+   =========================================================================
+
+   gammaray 
+   Copyright 2013 Carnegie Mellon University
+
+   This product includes software developed at
+   Carnegie Mellon University (http://www.cmu.edu/).
+
+   Redis support is provided by the hiredis library package, which is open
+   source software, written by Salvatore Sanfilippo and Pieter Noordhuis,
+   and copyright is held by them.  hiredis is licensed under the BSD
+   3-Clause License.  hiredis is available from:
+      https://github.com/redis/hiredis
+
+   Sign extension code was included written by Sean Eron Anderson, released
+   into the public domain from:
+      http://graphics.stanford.edu/~seander/bithacks.html#VariableSignExtend 
+
+   Highest set bit code was included written by Sean Eron Anderson, released
+   into the public domain from:
+      http://graphics.stanford.edu/~seander/bithacks.html#IntegerLogObvious 
