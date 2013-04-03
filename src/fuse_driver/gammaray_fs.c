@@ -1,4 +1,33 @@
+/*****************************************************************************
+ * gammaray_fs.c                                                             *
+ *                                                                           *
+ * This file contains implementations of functions for a FUSE read-only      *
+ * file-system view of metadata maintained by gammaray in its in-memory Redis*
+ * store.                                                                    *
+ *                                                                           *
+ *                                                                           *
+ *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
+ *                                                                           *
+ *                                                                           *
+ *   Copyright 2013 Carnegie Mellon University                               *
+ *                                                                           *
+ *   Licensed under the Apache License, Version 2.0 (the "License");         *
+ *   you may not use this file except in compliance with the License.        *
+ *   You may obtain a copy of the License at                                 *
+ *                                                                           *
+ *       http://www.apache.org/licenses/LICENSE-2.0                          *
+ *                                                                           *
+ *   Unless required by applicable law or agreed to in writing, software     *
+ *   distributed under the License is distributed on an "AS IS" BASIS,       *
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.*
+ *   See the License for the specific language governing permissions and     *
+ *   limitations under the License.                                          *
+ *****************************************************************************/
 #define _FILE_OFFSET_BITS 64
+
+#include "deep_inspection.h"
+#include "redis_queue.h"
+#include "gammaray_fs.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -9,16 +38,13 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "deep_inspection.h"
-#include "redis_queue.h"
-#include "xray_fs.h"
-
+/* constants maintained globally */
 static uint64_t partition_offset;
 static uint64_t block_size;
 static struct kv_store* handle;
 static int fd_disk;
 
-static int64_t xrayfs_pathlookup(const char* path)
+static int64_t gammarayfs_pathlookup(const char* path)
 {
     int64_t inode = -ENOENT;
     if (redis_path_get(handle, (const uint8_t *) path,
@@ -27,9 +53,9 @@ static int64_t xrayfs_pathlookup(const char* path)
     return inode;
 }
 
-static int xrayfs_getattr(const char* path, struct stat* stbuf)
+static int gammarayfs_getattr(const char* path, struct stat* stbuf)
 {
-    int64_t inode_num = xrayfs_pathlookup(path);
+    int64_t inode_num = gammarayfs_pathlookup(path);
     uint64_t field;
     size_t len2 = sizeof(field);
     
@@ -49,8 +75,8 @@ static int xrayfs_getattr(const char* path, struct stat* stbuf)
     
     stbuf->st_mode = field;
 
-    if (redis_hash_field_get(handle, REDIS_FILE_SECTOR_GET, inode_num, "link_count",
-                             (uint8_t*) &field, &len2))
+    if (redis_hash_field_get(handle, REDIS_FILE_SECTOR_GET, inode_num,
+                             "link_count", (uint8_t*) &field, &len2))
         return -ENOENT;
 
     stbuf->st_nlink = field;
@@ -92,9 +118,9 @@ static int xrayfs_getattr(const char* path, struct stat* stbuf)
     return 0;
 }
 
-static int xrayfs_readlink(const char* path, char* buf, size_t bufsize)
+static int gammarayfs_readlink(const char* path, char* buf, size_t bufsize)
 {
-    int64_t inode_num = xrayfs_pathlookup(path);
+    int64_t inode_num = gammarayfs_pathlookup(path);
     size_t len = bufsize;
 
     memset(buf, 0, bufsize);
@@ -102,21 +128,21 @@ static int xrayfs_readlink(const char* path, char* buf, size_t bufsize)
     if (inode_num < 0)
         return -ENOENT;
 
-    if (redis_hash_field_get(handle, REDIS_FILE_SECTOR_GET, inode_num, "link_name",
-                             (uint8_t*) buf, &len))
+    if (redis_hash_field_get(handle, REDIS_FILE_SECTOR_GET, inode_num,
+                             "link_name", (uint8_t*) buf, &len))
         return -ENOENT;
 
     return 0;
-
 }
 
-static int xrayfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler,
-                                  off_t offset, struct fuse_file_info* fi)
+static int gammarayfs_readdir(const char* path, void* buf,
+                              fuse_fill_dir_t filler, off_t offset,
+                              struct fuse_file_info* fi)
 {
-    int64_t inode_num = xrayfs_pathlookup(path);
+    int64_t inode_num = gammarayfs_pathlookup(path);
+    uint64_t sector = 0, i = 0, j = 0;
     uint8_t **slist = NULL, **dlist = NULL;
     size_t slen = 0, dlen = 0;
-    uint64_t sector = 0, i = 0, j = 0;
 
     if (inode_num < 0)
         return -ENOENT;
@@ -128,7 +154,6 @@ static int xrayfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler,
     /* for all folder sectors (length of folder on disk/positions) */
     for (i = 0; i < slen; i++)
     {
-        fprintf_light_yellow(stderr, "strtok()ing.\n");
         strtok((char*) (slist)[i], ":");
         sscanf(strtok(NULL, ":"), "%"SCNu64, &sector);
 
@@ -143,7 +168,6 @@ static int xrayfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler,
         }
 
         redis_free_list(dlist, dlen);
-
     }
 
     redis_free_list(slist, slen);
@@ -151,9 +175,9 @@ static int xrayfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler,
     return 0;
 }
 
-static int xrayfs_open(const char* path, struct fuse_file_info* fi)
+static int gammarayfs_open(const char* path, struct fuse_file_info* fi)
 {
-    int64_t inode_num = xrayfs_pathlookup(path);
+    int64_t inode_num = gammarayfs_pathlookup(path);
 
     if (inode_num < 0)
         return -ENOENT;
@@ -164,18 +188,18 @@ static int xrayfs_open(const char* path, struct fuse_file_info* fi)
     return 0;
 }
 
-static int xrayfs_read(const char* path, char* buf, size_t size, off_t offset,
-                               struct fuse_file_info* fi)
+static int gammarayfs_read(const char* path, char* buf, size_t size,
+                           off_t offset, struct fuse_file_info* fi)
 {
-    uint64_t inode_num = xrayfs_pathlookup(path);
+    uint64_t inode_num = gammarayfs_pathlookup(path), position = 0,
+             i = 0, start = offset / 4096, end;
+    int64_t sector = 0;
     uint8_t** list;
     size_t len = 0;
     ssize_t readb = 0, toread = 0, ret = 0;
-    uint64_t position = 0, i = 0;
     struct stat st;
-    int64_t start = offset / 4096, end, sector = 0;
 
-    if (xrayfs_getattr(path, &st))
+    if (gammarayfs_getattr(path, &st))
         return -ENOENT;
 
     if (offset > st.st_size)
@@ -185,6 +209,7 @@ static int xrayfs_read(const char* path, char* buf, size_t size, off_t offset,
         size = st.st_size - offset;
 
     end = start + ((size + 4095) / 4096);
+    offset %= block_size;
 
     if (redis_list_get_var(handle, REDIS_FILE_SECTORS_LGET_VAR,
                            inode_num, &list, &len, start, end))
@@ -195,11 +220,15 @@ static int xrayfs_read(const char* path, char* buf, size_t size, off_t offset,
     {
         strtok((char*) (list)[i], ":");
         sscanf(strtok(NULL, ":"), "%"SCNu64, &sector);
+        readb = 0;
 
-        if (position + block_size - offset % block_size < size)
-            toread = block_size - offset % block_size;
+        if (offset > 0)
+            toread = block_size - offset;
         else
-            toread = size - position;
+            toread = block_size;
+
+        if (toread > size - position)
+            toread =  size - position;
 
         if (toread <= 0)
             break;
@@ -211,8 +240,7 @@ static int xrayfs_read(const char* path, char* buf, size_t size, off_t offset,
             goto readloop;
         }
 
-        lseek(fd_disk, sector * 512 + offset % block_size, SEEK_SET);
-        readb = 0;
+        lseek(fd_disk, sector * 512 + offset, SEEK_SET);
 
         while (readb < toread)
         {
@@ -223,7 +251,7 @@ static int xrayfs_read(const char* path, char* buf, size_t size, off_t offset,
         }
 
 readloop:
-        offset += readb;
+        offset = 0;
         position += readb;
     }
 
@@ -232,11 +260,6 @@ readloop:
     return position;
 }
 
-/**
- *  main runs FUSE program and mounts passed in commandline path
- *  Need to:
- *      (1) disable inode cache, data cache
- */
 int main(int argc, char* argv[])
 {
     const char* path = argv[argc - 1];
@@ -247,8 +270,8 @@ int main(int argc, char* argv[])
     fd_disk = open(path, O_RDONLY);
     argc -= 1;
 
-    if (redis_hash_field_get(handle, REDIS_SUPERBLOCK_SECTOR_GET, 0, "block_size",
-                             (uint8_t*) &block_size, &len))
+    if (redis_hash_field_get(handle, REDIS_SUPERBLOCK_SECTOR_GET, 0,
+                             "block_size", (uint8_t*) &block_size, &len))
         return -ENOENT;
 
     if (len != 8)
@@ -257,5 +280,5 @@ int main(int argc, char* argv[])
     if (qemu_get_pt_offset(handle, &partition_offset, (uint64_t) 0))
         return EXIT_FAILURE;
 
-    return fuse_main(argc, argv, &xrayfs_oper, NULL);
+    return fuse_main(argc, argv, &gammarayfs_oper, NULL);
 }
