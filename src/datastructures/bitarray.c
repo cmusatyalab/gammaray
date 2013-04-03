@@ -43,6 +43,17 @@ void bitarray_unset_all(struct bitarray* bits)
     memset(bits->array, 0x00, bits->len / 8);
 }
 
+void bitarray_c_array_dump(struct bitarray* bits)
+{
+    uint64_t i;
+    fprintf(stdout, "uint8 bits[] = { ");
+    for (i = 0; i < bits->len / 8; i++)
+    {
+        fprintf(stdout, ", 0x%"PRIx8, bits->array[i]);
+    }
+    fprintf(stdout, "} \n");
+}
+
 void bitarray_print(struct bitarray* bits)
 {
     fprintf_yellow(stdout, "bits->array [pointer]: %p\n", bits->array);
@@ -50,6 +61,7 @@ void bitarray_print(struct bitarray* bits)
     fprintf_light_yellow(stdout, " -- hexdump(bits->array) -- \n");
     hexdump(bits->array, bits->len / 8);
     fprintf_light_yellow(stdout, " -- end hexdump(bits->array) -- \n");
+    bitarray_c_array_dump(bits);
 }
 
 struct bitarray* bitarray_init(uint64_t len)
