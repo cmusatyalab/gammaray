@@ -21,3 +21,15 @@
    Highest set bit code was included written by Sean Eron Anderson, released
    into the public domain from:
       http://graphics.stanford.edu/~seander/bithacks.html#IntegerLogObvious 
+
+   BSON support in Python is provided by the bson Python library package,
+   which is open source software, written by Kou Man Tong, and copyright is
+   held by him.  bson is licensed under the BSD 3-Clause License.  bson is
+   available from:
+      https://github.com/martinkou/bson
+
+   Redis support in Python is provided by the redis-py Python library package,
+   which is open source software, written by Andy McCurdy, and copyright is
+   held by him.  redis-py is licensed under the MIT License.  redis-py is
+   available from:
+      https://github.com/andymccurdy/redis-py
