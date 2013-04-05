@@ -1,4 +1,27 @@
-#include <math.h>
+/*****************************************************************************
+ * bitarray.c                                                                *
+ *                                                                           *
+ * This file contains implementations for functions implementing an in-memory*
+ * bit array.                                                                *
+ *                                                                           *
+ *                                                                           *
+ *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
+ *                                                                           *
+ *                                                                           *
+ *   Copyright 2013 Carnegie Mellon University                               *
+ *                                                                           *
+ *   Licensed under the Apache License, Version 2.0 (the "License");         *
+ *   you may not use this file except in compliance with the License.        *
+ *   You may obtain a copy of the License at                                 *
+ *                                                                           *
+ *       http://www.apache.org/licenses/LICENSE-2.0                          *
+ *                                                                           *
+ *   Unless required by applicable law or agreed to in writing, software     *
+ *   distributed under the License is distributed on an "AS IS" BASIS,       *
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.*
+ *   See the License for the specific language governing permissions and     *
+ *   limitations under the License.                                          *
+ *****************************************************************************/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -48,9 +71,7 @@ void bitarray_c_array_dump(struct bitarray* bits)
     uint64_t i;
     fprintf(stdout, "uint8 bits[] = { ");
     for (i = 0; i < bits->len / 8; i++)
-    {
         fprintf(stdout, ", 0x%"PRIx8, bits->array[i]);
-    }
     fprintf(stdout, "} \n");
 }
 
@@ -70,7 +91,7 @@ struct bitarray* bitarray_init(uint64_t len)
 
     if (bits)
     {
-        bits->len = ((uint64_t) 1) << (uint64_t) ((log((double) len) / log(2)) + 0.5);
+        bits->len = ((uint64_t) 1) << highest_bit_set64(len);
         bits->array = (uint8_t*) malloc((bits->len + 7) / 8);
         bitarray_unset_all(bits);
     }
@@ -84,7 +105,7 @@ struct bitarray* bitarray_init_data(uint8_t* data, uint64_t len)
 
     if (bits)
     {
-        bits->len = ((uint64_t) 1) << (uint64_t) ((log((double) len) / log(2)) + 0.5);
+        bits->len = ((uint64_t) 1) << highest_bit_set64(len);
         bits->array = (uint8_t*) malloc((bits->len + 7) / 8);
         memcpy(bits->array, data, len / 8);
     }
