@@ -22,8 +22,8 @@
  *   See the License for the specific language governing permissions and     *
  *   limitations under the License.                                          *
  *****************************************************************************/
-#ifndef GAMMARAY_DISK_CRAWLER_EXT4_H
-#define GAMMARAY_DISK_CRAWLER_EXT4_H
+#ifndef __GAMMARAY_DISK_CRAWLER_EXT4_H
+#define __GAMMARAY_DISK_CRAWLER_EXT4_H
 
 /* Some struct definitions from Linux Kernel Source: http://goo.gl/dyM8I */
 
