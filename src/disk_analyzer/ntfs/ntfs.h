@@ -1,5 +1,30 @@
-#ifndef XRAY_DISK_ANALYZER_NTFS_H
-#define XRAY_DISK_ANALYZER_NTFS_H
+/*****************************************************************************
+ * ntfs.h                                                                    *
+ *                                                                           *
+ * This file contains function prototypes that can read and interpret an NTFS*
+ * file system.                                                              *
+ *                                                                           *
+ *                                                                           *
+ *                                                                           *
+ *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
+ *                                                                           *
+ *                                                                           *
+ *   Copyright 2013 Carnegie Mellon University                               *
+ *                                                                           *
+ *   Licensed under the Apache License, Version 2.0 (the "License");         *
+ *   you may not use this file except in compliance with the License.        *
+ *   You may obtain a copy of the License at                                 *
+ *                                                                           *
+ *       http://www.apache.org/licenses/LICENSE-2.0                          *
+ *                                                                           *
+ *   Unless required by applicable law or agreed to in writing, software     *
+ *   distributed under the License is distributed on an "AS IS" BASIS,       *
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.*
+ *   See the License for the specific language governing permissions and     *
+ *   limitations under the License.                                          *
+ *****************************************************************************/
+#ifndef __GAMMARAY_DISK_ANALYZER_NTFS_H
+#define __GAMMARAY_DISK_ANALYZER_NTFS_H
 
 #include <stdint.h>
 #include <stdio.h>
@@ -249,18 +274,11 @@ int ntfs_print_boot_file(struct ntfs_boot_file* bootf,
                          int64_t partition_offset);
 int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf, struct bitarray* bits,
                   int64_t partition_offset);
-int ntfs_diff_file_records(FILE* disk, uint64_t recorda, uint64_t recordb,
-                           int64_t partition_offset,
-                           struct ntfs_boot_file* bootf,
-                           struct bitarray* bits);
 int ntfs_read_file_record(FILE* disk, uint64_t record_num,
                           int64_t partition_offset, 
                           struct ntfs_boot_file* bootf, uint8_t** mft,
                           struct bitarray* bits,
                           uint8_t* buf, struct bson_info* bson);
-int ntfs_diff_file_record_buffs(uint8_t* recorda, uint8_t* recordb,
-                                int64_t partition_offset,
-                                struct ntfs_boot_file* bootf);
 int ntfs_get_attribute(uint8_t* record, void* attr, uint64_t* offset,
                        enum NTFS_ATTRIBUTE_TYPE type, char* name);
 int ntfs_get_size(uint8_t* data, struct ntfs_standard_attribute_header* sah,
