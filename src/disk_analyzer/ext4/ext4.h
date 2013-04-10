@@ -1,7 +1,31 @@
-#ifndef XRAY_DISK_ANALYZER_EXT4_H
-#define XRAY_DISK_ANALYZER_EXT4_H
+/*****************************************************************************
+ * ext4.h                                                                    *
+ *                                                                           *
+ * This file contains function prototypes that can read and interpret an ext4*
+ * file system.                                                              *
+ *                                                                           *
+ *                                                                           *
+ *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
+ *                                                                           *
+ *                                                                           *
+ *   Copyright 2013 Carnegie Mellon University                               *
+ *                                                                           *
+ *   Licensed under the Apache License, Version 2.0 (the "License");         *
+ *   you may not use this file except in compliance with the License.        *
+ *   You may obtain a copy of the License at                                 *
+ *                                                                           *
+ *       http://www.apache.org/licenses/LICENSE-2.0                          *
+ *                                                                           *
+ *   Unless required by applicable law or agreed to in writing, software     *
+ *   distributed under the License is distributed on an "AS IS" BASIS,       *
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.*
+ *   See the License for the specific language governing permissions and     *
+ *   limitations under the License.                                          *
+ *****************************************************************************/
+#ifndef GAMMARAY_DISK_CRAWLER_EXT4_H
+#define GAMMARAY_DISK_CRAWLER_EXT4_H
 
-/* Thanks: http://git.kernel.org/?p=linux/kernel/git/torvalds/linux.git;a=blob_plain;f=fs/ext4/ext4.h;hb=10c63c9aec648402f593b6c883ca247ece7b2af9 */
+/* Some struct definitions from Linux Kernel Source: http://goo.gl/dyM8I */
 
 #include <inttypes.h>
 #include <stdint.h>

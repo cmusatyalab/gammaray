@@ -1,3 +1,27 @@
+/*****************************************************************************
+ * ext4.c                                                                    *
+ *                                                                           *
+ * This file contains function implementations that can read and interpret an*
+ * ext4 file system.                                                         *
+ *                                                                           *
+ *                                                                           *
+ *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
+ *                                                                           *
+ *                                                                           *
+ *   Copyright 2013 Carnegie Mellon University                               *
+ *                                                                           *
+ *   Licensed under the Apache License, Version 2.0 (the "License");         *
+ *   you may not use this file except in compliance with the License.        *
+ *   You may obtain a copy of the License at                                 *
+ *                                                                           *
+ *       http://www.apache.org/licenses/LICENSE-2.0                          *
+ *                                                                           *
+ *   Unless required by applicable law or agreed to in writing, software     *
+ *   distributed under the License is distributed on an "AS IS" BASIS,       *
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.*
+ *   See the License for the specific language governing permissions and     *
+ *   limitations under the License.                                          *
+ *****************************************************************************/
 #define _FILE_OFFSET_BITS 64
 
 #include "bson.h"
@@ -14,28 +38,28 @@
 #include <sys/types.h>
 
 /* for s_flags */
-#define EXT2_FLAGS_TEST_FILESYS           0x0004
+#define EXT2_FLAGS_TEST_FILESYS                 0x0004
 
 /* for s_feature_compat */
 #define EXT3_FEATURE_COMPAT_HAS_JOURNAL         0x0004
 
 /* for s_feature_ro_compat */
 #define EXT2_FEATURE_RO_COMPAT_SPARSE_SUPER     0x0001
-#define EXT2_FEATURE_RO_COMPAT_LARGE_FILE 0x0002
-#define EXT2_FEATURE_RO_COMPAT_BTREE_DIR  0x0004
-#define EXT4_FEATURE_RO_COMPAT_HUGE_FILE  0x0008
+#define EXT2_FEATURE_RO_COMPAT_LARGE_FILE       0x0002
+#define EXT2_FEATURE_RO_COMPAT_BTREE_DIR        0x0004
+#define EXT4_FEATURE_RO_COMPAT_HUGE_FILE        0x0008
 #define EXT4_FEATURE_RO_COMPAT_GDT_CSUM         0x0010
-#define EXT4_FEATURE_RO_COMPAT_DIR_NLINK  0x0020
+#define EXT4_FEATURE_RO_COMPAT_DIR_NLINK        0x0020
 #define EXT4_FEATURE_RO_COMPAT_EXTRA_ISIZE      0x0040
 
 /* for s_feature_incompat */
 #define EXT2_FEATURE_INCOMPAT_FILETYPE          0x0002
 #define EXT3_FEATURE_INCOMPAT_RECOVER           0x0004
-#define EXT3_FEATURE_INCOMPAT_JOURNAL_DEV 0x0008
+#define EXT3_FEATURE_INCOMPAT_JOURNAL_DEV       0x0008
 #define EXT2_FEATURE_INCOMPAT_META_BG           0x0010
 #define EXT4_FEATURE_INCOMPAT_EXTENTS           0x0040 /* extents support */
-#define EXT4_FEATURE_INCOMPAT_64BIT       0x0080
-#define EXT4_FEATURE_INCOMPAT_MMP         0x0100
+#define EXT4_FEATURE_INCOMPAT_64BIT             0x0080
+#define EXT4_FEATURE_INCOMPAT_MMP               0x0100
 #define EXT4_FEATURE_INCOMPAT_FLEX_BG           0x0200
 
 #define EXT2_FEATURE_RO_COMPAT_SUPP (EXT2_FEATURE_RO_COMPAT_SPARSE_SUPER| \
@@ -103,7 +127,8 @@ uint64_t ext4_s_free_blocks_count(struct ext4_superblock superblock)
     uint32_t s_free_blocks_count_lo = superblock.s_free_blocks_count_lo;
     uint32_t s_free_blocks_count_hi = superblock.s_free_blocks_count_hi;
 
-    return (((uint64_t) s_free_blocks_count_hi) << 32) | s_free_blocks_count_lo;
+    return (((uint64_t) s_free_blocks_count_hi) << 32) |
+            s_free_blocks_count_lo;
 }
 
 int ext4_print_features(struct ext4_superblock* superblock)
@@ -208,7 +233,7 @@ int ext4_print_superblock(struct ext4_superblock superblock)
     fprintf_yellow(stdout, "s_creator_os: %"PRIu32"\n",
                            superblock.s_creator_os);
     fprintf_light_yellow(stdout, "Resolved OS: %s\n",
-                                 ext4_s_creator_os_LUT[superblock.s_creator_os]);
+                               ext4_s_creator_os_LUT[superblock.s_creator_os]);
     fprintf_yellow(stdout, "s_rev_level: %"PRIu32"\n",
                            superblock.s_rev_level);
     fprintf_light_yellow(stdout, "Revision Level: %s\n",
@@ -262,7 +287,6 @@ int ext4_print_superblock(struct ext4_superblock superblock)
     return 0;
 }
 
-
 uint64_t ext4_block_size(struct ext4_superblock superblock)
 {
     return ((uint64_t) 1024) << superblock.s_log_block_size;
@@ -307,12 +331,10 @@ uint32_t ext4_next_block_group_descriptor(FILE* disk,
                 return 0;
             }
 
-            if (fread(bgd, 1, sizeof(struct ext4_block_group_descriptor), disk) !=
-                sizeof(struct ext4_block_group_descriptor))
+            if (fread(bgd, 1, sizeof(*bgd), disk) != sizeof(*bgd))
             {
-                fprintf_light_red(stderr, 
-                                  "error while trying to read ext4 block group "
-                                  "descriptor.\n");
+                fprintf_light_red(stderr, "error while trying to read ext4 "
+                                          "block group descriptor.\n");
                 return 0;
             }
         }
@@ -329,32 +351,6 @@ uint32_t ext4_next_block_group_descriptor(FILE* disk,
     }
 
     return 0; 
-}
-
-int ext4_write_block(FILE* dest, uint32_t total_size, uint32_t block_size,
-                uint8_t* buf)
-{
-    if (total_size <= block_size)
-    {
-        if (fwrite(buf, 1, total_size, dest) != total_size)
-        {
-            fprintf_light_red(stderr, "Error writing to destination file."
-                                      "\n");
-            return -1;
-        }
-        return 0;
-    }
-    else
-    {
-        if (fwrite(buf, 1, block_size, dest) != block_size)
-        {
-            fprintf_light_red(stderr, "Error writing to destination file."
-                                      "\n");
-            return -1;
-        }
-        total_size -= block_size;
-    }
-    return total_size;
 }
 
 int ext4_print_dir_entry(uint32_t entry, struct ext4_dir_entry dir)
@@ -385,57 +381,8 @@ int ext4_print_dir_entries(uint8_t* bytes, uint32_t len)
     return 0;
 }
 
-mode_t ext4_inode_mode(uint16_t i_mode)
-{
-    mode_t mode = 0;
-
-    /* file format */
-    if ((i_mode & 0xc000) == 0xc000)
-        mode |= S_IFSOCK;
-    if ((i_mode & 0xa000) == 0xa000)
-        mode |= S_IFLNK;
-    if (i_mode & 0x8000)
-        mode |= S_IFREG;
-    if ((i_mode & 0x6000) == 0x6000)
-        mode |= S_IFBLK;
-    if (i_mode & 0x4000)
-        mode |= S_IFDIR;
-    if (i_mode & 0x2000)
-        mode |= S_IFCHR;
-    if (i_mode & 0x1000)
-        mode |= S_IFIFO;
-
-    /* process execution/group override */
-    if (i_mode & 0x0800)
-        mode |= S_ISUID;
-    if (i_mode & 0x0400)
-        mode |= S_ISGID;
-    if (i_mode & 0x0200)
-        mode |= S_ISVTX;
-
-    /* access control */
-    if (i_mode & 0x0100)
-        mode |= S_IRUSR;
-    if (i_mode & 0x0080)
-        mode |= S_IWUSR;
-    if (i_mode & 0x0040)
-        mode |= S_IXUSR;
-    if (i_mode & 0x0020)
-        mode |= S_IRGRP;
-    if (i_mode & 0x0010)
-        mode |= S_IWGRP;
-    if (i_mode & 0x0008)
-        mode |= S_IXGRP;
-    if (i_mode & 0x0004)
-        mode |= S_IROTH;
-    if (i_mode & 0x0002)
-        mode |= S_IWOTH;
-    if (i_mode & 0x0001)
-        mode |= S_IXOTH;
-    return mode;
-}
-
-uint64_t ext4_block_offset(uint64_t block_num, struct ext4_superblock superblock)
+uint64_t ext4_block_offset(uint64_t block_num,
+                           struct ext4_superblock superblock)
 {
     uint64_t block_size = ext4_block_size(superblock);
     return block_size * block_num;
@@ -451,8 +398,8 @@ int ext4_read_block(FILE* disk, int64_t partition_offset,
 
     if (fseeko(disk, offset, 0))
     {
-        fprintf_light_red(stderr, "Error while reading block seeking to position 0x%lx.\n", 
-                                  offset);
+        fprintf_light_red(stderr, "Error while reading block seeking to "
+                                  "position 0x%lx.\n", offset);
         return -1;
     }
 
@@ -469,14 +416,16 @@ uint32_t ext4_bgd_free_blocks_count(struct ext4_block_group_descriptor bgd)
 {
     uint16_t bg_free_blocks_count_lo = bgd.bg_free_blocks_count_lo;
     uint16_t bg_free_blocks_count_hi = 0;
-    return ((uint32_t) bg_free_blocks_count_hi << 16) | bg_free_blocks_count_lo;
+    return ((uint32_t) bg_free_blocks_count_hi << 16) |
+            bg_free_blocks_count_lo;
 }
 
 uint32_t ext4_bgd_free_inodes_count(struct ext4_block_group_descriptor bgd)
 {
     uint16_t bg_free_inodes_count_lo = bgd.bg_free_inodes_count_lo;
     uint16_t bg_free_inodes_count_hi = 0;
-    return ((uint32_t) bg_free_inodes_count_hi << 16) | bg_free_inodes_count_lo;
+    return ((uint32_t) bg_free_inodes_count_hi << 16) |
+            bg_free_inodes_count_lo;
 }
 
 uint32_t ext4_bgd_used_dirs_count(struct ext4_block_group_descriptor bgd)
@@ -615,36 +564,10 @@ int64_t ext4_sector_from_block(uint64_t block, struct ext4_superblock super,
     return (block * ext4_block_size(super) + partition_offset) / SECTOR_SIZE;
 }
 
-int ext4_print_extent_header(struct ext4_extent_header hdr)
-{
-    fprintf_yellow(stdout, "eh_magic: 0x%0.4"PRIx16"\n", hdr.eh_magic);
-    
-    if (hdr.eh_magic == 0xf30a)
-        fprintf_light_blue(stdout, "\teh_magic MATCHES.\n");
-    else
-    {
-        fprintf_light_red(stdout, "\teh_magic DOES NOT MATCH.\n");
-    }
-
-    fprintf_yellow(stdout, "eh_entries: %"PRIu16"\n", hdr.eh_entries);
-    fprintf_yellow(stdout, "eh_max: %"PRIu16"\n", hdr.eh_max);
-    fprintf_yellow(stdout, "eh_depth: %"PRIu16"\n", hdr.eh_depth);
-    fprintf_yellow(stdout, "eh_generation: %"PRIu32"\n", hdr.eh_generation);
-    return EXIT_SUCCESS;
-}
-
 uint64_t ext4_extent_start(struct ext4_extent extent)
 {
     uint64_t start = (uint64_t) extent.ee_start_hi << 48;
     return start | extent.ee_start_lo;
-}
-
-int ext4_print_extent(struct ext4_extent extent)
-{
-    fprintf_light_yellow(stdout, "ee_block: %"PRIu32"\n", extent.ee_block);
-    fprintf_yellow(stdout, "ee_len: %"PRIu16"\n", extent.ee_len);
-    fprintf_yellow(stdout, "ee_start: %"PRIu64"\n", ext4_extent_start(extent));
-    return EXIT_SUCCESS;
 }
 
 uint64_t ext4_extent_index_leaf(struct ext4_extent_idx idx)
@@ -653,17 +576,9 @@ uint64_t ext4_extent_index_leaf(struct ext4_extent_idx idx)
     return leaf | idx.ei_leaf_lo;
 }
 
-int ext4_print_extent_index(struct ext4_extent_idx idx)
-{
-    fprintf_light_yellow(stdout, "ei_block: %"PRIu32"\n", idx.ei_block);
-    fprintf_yellow(stdout, "ei_leaf: %"PRIu64"\n",
-                           ext4_extent_index_leaf(idx));
-    return EXIT_SUCCESS;
-}
-
 uint64_t ext4_sector_extent_block(FILE* disk, int64_t partition_offset,
-                           struct ext4_superblock superblock, uint32_t block_num,
-                           struct ext4_inode inode)
+                           struct ext4_superblock superblock,
+                           uint32_t block_num, struct ext4_inode inode)
 {
     int i;
     struct ext4_extent_header hdr; 
@@ -727,8 +642,9 @@ uint64_t ext4_sector_extent_block(FILE* disk, int64_t partition_offset,
 }
 
 int ext4_read_extent_block(FILE* disk, int64_t partition_offset,
-                           struct ext4_superblock superblock, uint32_t block_num,
-                           struct ext4_inode inode, uint8_t* buf)
+                           struct ext4_superblock superblock,
+                           uint32_t block_num, struct ext4_inode inode,
+                           uint8_t* buf)
 {
     int i;
     struct ext4_extent_header hdr; 
@@ -795,7 +711,8 @@ uint64_t ext4_sector_file_block(FILE* disk, int64_t partition_offset,
                          struct ext4_superblock superblock, uint64_t block_num,
                          struct ext4_inode inode)
 {
-    fprintf_light_blue(stderr, "in ext4_read_file_block, block_num = %"PRIu64"\n", block_num);
+    fprintf_light_blue(stderr, "in ext4_read_file_block, block_num = %"
+                               PRIu64"\n", block_num);
     uint64_t block_size = ext4_block_size(superblock);
     uint64_t addresses_in_block = block_size / 4;
     
@@ -833,7 +750,8 @@ uint64_t ext4_sector_file_block(FILE* disk, int64_t partition_offset,
     /* INDIRECT */
     if (block_num <= indirect_high)
     {
-        block_num -= indirect_low; /* rebase, 0 is beginning indirect block range */
+        block_num -= indirect_low; /* rebase, 0 is beginning indirect block
+                                      range */
         
         if (inode.i_block[12] == 0)
             return 0; /* finished */
@@ -891,7 +809,8 @@ uint64_t ext4_sector_file_block(FILE* disk, int64_t partition_offset,
         
         ext4_read_block(disk, partition_offset, /* double */
                         superblock,
-                        buf[block_num / (addresses_in_block*addresses_in_block)],
+                        buf[block_num /
+                        (addresses_in_block*addresses_in_block)],
                         (uint8_t*) buf);
 
         if (buf[block_num / addresses_in_block] == 0)
@@ -916,7 +835,8 @@ int ext4_read_file_block(FILE* disk, int64_t partition_offset,
                          struct ext4_superblock superblock, uint64_t block_num,
                          struct ext4_inode inode, uint32_t* buf)
 {
-    fprintf_light_blue(stderr, "in ext4_read_file_block, block_num = %"PRIu64"\n", block_num);
+    fprintf_light_blue(stderr, "in ext4_read_file_block, block_num = %"
+                               PRIu64"\n", block_num);
     uint64_t block_size = ext4_block_size(superblock);
     uint64_t addresses_in_block = block_size / 4;
     
@@ -953,7 +873,8 @@ int ext4_read_file_block(FILE* disk, int64_t partition_offset,
     /* INDIRECT */
     if (block_num <= indirect_high)
     {
-        block_num -= indirect_low; /* rebase, 0 is beginning indirect block range */
+        block_num -= indirect_low; /* rebase, 0 is beginning indirect
+                                      block range */
         
         if (inode.i_block[12] == 0)
             return 1; /* finished */
@@ -1013,7 +934,8 @@ int ext4_read_file_block(FILE* disk, int64_t partition_offset,
         
         ext4_read_block(disk, partition_offset, /* double */
                         superblock,
-                        buf[block_num / (addresses_in_block*addresses_in_block)],
+                        buf[block_num /
+                        (addresses_in_block*addresses_in_block)],
                         (uint8_t*) buf);
 
         if (buf[block_num / addresses_in_block] == 0)
@@ -1026,146 +948,6 @@ int ext4_read_file_block(FILE* disk, int64_t partition_offset,
         if (buf[block_num % addresses_in_block] == 0)
             return 1;
 
-        ext4_read_block(disk, partition_offset, /* real */
-                        superblock, buf[block_num % addresses_in_block],  
-                        (uint8_t*) buf);
-
-        return 0;
-    }
-
-    return -1;
-}
-
-int ext4_read_file_block_sectors(FILE* disk, int64_t partition_offset,
-                                 struct ext4_superblock superblock, uint64_t block_num,
-                                 struct ext4_inode inode, uint32_t* buf)
-{
-    uint64_t block_size = ext4_block_size(superblock);
-    uint64_t addresses_in_block = block_size / 4;
-    
-    /* ranges for lookup */
-    uint64_t direct_low = 0;
-    uint64_t direct_high = 11;
-    uint64_t indirect_low = direct_high + 1;
-    uint64_t indirect_high = direct_high + (addresses_in_block);
-    uint64_t double_low = indirect_high + 1;
-    uint64_t double_high = indirect_high + (addresses_in_block)*
-                                           (addresses_in_block);
-    uint64_t triple_low = double_high + 1;
-    uint64_t triple_high = double_high + (addresses_in_block)*
-                                         (addresses_in_block)*
-                                         (addresses_in_block);
-
-    if (block_num < direct_low || block_num > triple_high)
-    {
-        fprintf_light_red(stderr, "File block outside of range of inode.\n");
-        return -1;
-    }
-
-    /* figure out type of block lookup (direct, indirect, double, treble) */
-    /* DIRECT */
-    if (block_num <= direct_high)
-    {
-        if (inode.i_block[block_num] == 0)
-            return 1; /* finished */
-
-        fprintf_yellow(stderr, "bst_insert(tree, %"PRId64", (void*) 1);\n",
-                                (inode.i_block[block_num] *
-                                ext4_block_size(superblock) +
-                                partition_offset) / SECTOR_SIZE);
-        ext4_read_block(disk, partition_offset, superblock,
-                        inode.i_block[block_num], (uint8_t*) buf);
-        return 0;
-    }
-
-    /* INDIRECT */
-    if (block_num <= indirect_high)
-    {
-        block_num -= indirect_low; /* rebase, 0 is beginning indirect block range */
-        
-        if (inode.i_block[12] == 0)
-            return 1; /* finished */
-
-        ext4_read_block(disk, partition_offset, superblock, inode.i_block[12],
-                        (uint8_t*) buf);
-
-        if (buf[block_num] == 0)
-            return 1;
-
-        fprintf_yellow(stderr, "bst_insert(tree, %"PRId64", (void*) 1);\n",
-                                (buf[block_num] *
-                                ext4_block_size(superblock) +
-                                partition_offset) / SECTOR_SIZE);
-        ext4_read_block(disk, partition_offset, superblock, buf[block_num],
-                        (uint8_t*) buf);
-        return 0;
-    }
-
-    /* DOUBLE */
-    if (block_num <= double_high)
-    {
-        block_num -= double_low;
-
-        if (inode.i_block[13] == 0)
-            return 1;
-
-        ext4_read_block(disk, partition_offset, /* double */
-                        superblock, inode.i_block[13], (uint8_t*) buf);
-
-        if (buf[block_num / addresses_in_block] == 0)
-            return 1;
-
-        ext4_read_block(disk, partition_offset, /* indirect */
-                        superblock, buf[block_num / addresses_in_block],
-                        (uint8_t*) buf);
-
-        if (buf[block_num % addresses_in_block] == 0)
-            return 1;
-
-        fprintf_yellow(stderr, "bst_insert(tree, %"PRId64", (void*) 1);\n",
-                                (buf[block_num % addresses_in_block] *
-                                ext4_block_size(superblock) +
-                                partition_offset) / SECTOR_SIZE);
-        ext4_read_block(disk, partition_offset, /* real */
-                        superblock, buf[block_num % addresses_in_block],
-                        (uint8_t*) buf);
-
-        return 0;
-    }
-
-    /* TRIPLE */
-    if (block_num <= triple_high)
-    {
-        block_num -= triple_low;
-
-        if (inode.i_block[14] == 0)
-            return 1;
-
-        ext4_read_block(disk, partition_offset, /* triple */
-                        superblock, inode.i_block[14], (uint8_t*) buf);
-
-        if (buf[block_num / (addresses_in_block*addresses_in_block)] == 0)
-            return 1;
-        
-        ext4_read_block(disk, partition_offset, /* double */
-                        superblock,
-                        buf[block_num / (addresses_in_block*addresses_in_block)],
-                        (uint8_t*) buf);
-
-        if (buf[block_num / addresses_in_block] == 0)
-            return 1;
-
-        ext4_read_block(disk, partition_offset, /* indirect */
-                        superblock, buf[block_num / addresses_in_block],
-                        (uint8_t*) buf);
-
-        if (buf[block_num % addresses_in_block] == 0)
-            return 1;
-
-        fprintf_yellow(stderr, "bst_insert(tree, %"PRId64", (void*) 1);\n",
-                                (buf[block_num % addresses_in_block] *
-                                ext4_block_size(superblock) +
-                                partition_offset) / SECTOR_SIZE);
         ext4_read_block(disk, partition_offset, /* real */
                         superblock, buf[block_num % addresses_in_block],  
                         (uint8_t*) buf);
@@ -1187,90 +969,6 @@ uint64_t ext4_file_size(struct ext4_inode inode)
     uint64_t total_size = ((uint64_t) inode.i_size_high) << 32;
     total_size |= inode.i_size_lo;
     return total_size;
-}
-
-int ext4_print_file_sectors(FILE* disk, int64_t partition_offset,
-                            struct ext4_superblock superblock, 
-                            struct ext4_inode inode, char* copy_path)
-{
-    FILE* copy;
-    uint64_t block_size = ext4_block_size(superblock),
-             file_size = ext4_file_size(inode);
-    uint8_t buf[block_size];
-    uint64_t num_blocks;
-    uint64_t i;
-    int ret_check;
-
-    if (inode.i_mode & 0x4000) /* dir entry, not a file */
-    {
-        fprintf_light_red(stderr, "Refusing to reconstruct dir inode, dir != "
-                                  "file.\n");
-        return -1;
-    }
-
-    if (file_size == 0)
-    {
-        num_blocks = 0;
-    }
-    else
-    {
-        num_blocks = file_size / block_size;
-        if (file_size % block_size != 0)
-            num_blocks += 1;
-    }
-
-    if ((copy = fopen(copy_path, "wb")) == NULL)
-    {
-        fprintf_light_red(stderr, "Error opening copy file for writing.\n");
-        return -1;
-    }
-
-    /* go through each valid block of the inode */
-    for (i = 0; i < num_blocks; i++)
-    {
-        ret_check = ext4_read_file_block(disk, partition_offset, superblock, i,
-                                         inode, (uint32_t*) buf);
-        
-        if (ret_check < 0) /* error reading */
-        {
-            fprintf_light_red(stderr, "Error reading file block.\n");
-            fclose(copy);
-            return -1;
-        }
-        else if (ret_check > 0) /* no more blocks? */
-        {
-            fprintf_light_red(stderr, "Premature ending of file blocks.\n");
-            fclose(copy);
-            return -1;
-        }
-
-
-        if (file_size >= block_size)
-        {
-            if (fwrite(buf, sizeof(uint8_t), block_size, copy) != block_size)
-            {
-                fprintf_light_red(stderr, "Error could not write expected "
-                                          "number of bytes to copy file.\n");
-                return -1;
-            }
-            file_size -= block_size;
-        }
-        else
-        {
-            if (fwrite(buf, sizeof(uint8_t), file_size, copy) != file_size)
-            {
-                fprintf_light_red(stderr, "Error could not write expected"
-                                          "number of bytes to copy file.\n");
-                return -1;
-            }
-            break;
-        }
-
-    }
-
-    fclose(copy);
-
-   return 0;
 }
 
 int ext4_print_inode_mode(uint16_t i_mode)
@@ -1524,7 +1222,8 @@ int print_ext4_superblock(struct ext4_superblock superblock)
     }
     else
     {
-        fprintf_light_red(stdout, "Magic value does not match EXT_SUPER_MAGIC\n");
+        fprintf_light_red(stdout, "Magic value does not match "
+                                  "EXT_SUPER_MAGIC\n");
     }
     fprintf_yellow(stdout, "s_state: %"PRIu16"\n",
                            superblock.s_state);
@@ -1543,7 +1242,7 @@ int print_ext4_superblock(struct ext4_superblock superblock)
     fprintf_yellow(stdout, "s_creator_os: %"PRIu32"\n",
                            superblock.s_creator_os);
     fprintf_light_yellow(stdout, "Resolved OS: %s\n",
-                                 ext4_s_creator_os_LUT[superblock.s_creator_os]);
+                               ext4_s_creator_os_LUT[superblock.s_creator_os]);
     fprintf_yellow(stdout, "s_rev_level: %"PRIu32"\n",
                            superblock.s_rev_level);
     fprintf_light_yellow(stdout, "Revision Level: %s\n",
@@ -1592,7 +1291,8 @@ int print_ext4_superblock(struct ext4_superblock superblock)
     return 0;
 }
 
-int ext4_probe(FILE* disk, int64_t partition_offset, struct ext4_superblock* superblock)
+int ext4_probe(FILE* disk, int64_t partition_offset,
+               struct ext4_superblock* superblock)
 {
     if (partition_offset == 0)
     {
@@ -1605,8 +1305,8 @@ int ext4_probe(FILE* disk, int64_t partition_offset, struct ext4_superblock* sup
 
     if (fseeko(disk, partition_offset, 0))
     {
-        fprintf_light_red(stderr, "Error seeking to position 0x%.16"PRIx64".\n",
-                                  partition_offset);
+        fprintf_light_red(stderr, "Error seeking to position 0x%.16"
+                                  PRIx64".\n", partition_offset);
         return -1;
     }
 
@@ -1629,22 +1329,6 @@ int ext4_probe(FILE* disk, int64_t partition_offset, struct ext4_superblock* sup
         return -1;
     }
 
-    return 0;
-}
-
-int print_sectors_ext4_block_group_descriptor(int64_t offset, struct ext4_block_group_descriptor bgd, struct ext4_superblock superblock)
-{
-    uint32_t block_size = ext4_block_size(superblock);
-    fprintf_yellow(stdout, "bg_block_bitmap sector %"PRId64"\n",
-                           (ext4_bgd_block_bitmap(bgd) * block_size + offset) / SECTOR_SIZE);
-    fprintf_yellow(stdout, "bg_inode_bitmap sector %"PRIu32"\n",
-                           (ext4_bgd_inode_bitmap(bgd) * block_size + offset) / SECTOR_SIZE);
-    fprintf_yellow(stdout, "bg_inode_table sector start %"PRIu32"\n",
-                           (ext4_bgd_inode_table(bgd) * block_size + offset) / SECTOR_SIZE);
-    fprintf_yellow(stdout, "bg_inode_table sector end %"PRIu32"\n",
-                            (ext4_bgd_inode_table(bgd) * block_size + offset + superblock.s_inodes_per_group * sizeof(struct ext4_inode)) / SECTOR_SIZE);
-    fprintf_yellow(stdout, "BGD end sector %"PRId64"\n",
-                           (ext4_bgd_block_bitmap(bgd) * block_size + offset + superblock.s_blocks_per_group * block_size) / SECTOR_SIZE);
     return 0;
 }
 
@@ -2003,11 +1687,14 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
 }
 
 int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
-                                 struct ext4_superblock superblock,
-                                 struct bitarray* bits, uint32_t block_num,
-                                 struct ext4_inode inode, struct bson_info* sectors,
-                                 struct bson_info* data, struct bson_info* extents,
-                                 bool data_save, bool save_extents)
+                                      struct ext4_superblock superblock,
+                                      struct bitarray* bits,
+                                      uint32_t block_num,
+                                      struct ext4_inode inode,
+                                      struct bson_info* sectors
+                                      struct bson_info* data,
+                                      struct bson_info* extents,
+                                      bool data_save, bool save_extents)
 {
     uint32_t block_size = ext4_block_size(superblock);
     uint32_t addresses_in_block = block_size / 4;
@@ -2083,7 +1770,8 @@ int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
     /* INDIRECT */
     if (block_num <= indirect_high)
     {
-        block_num -= indirect_low; /* rebase, 0 is beginning indirect block range */
+        block_num -= indirect_low; /* rebase, 0 is beginning indirect
+                                      block range */
         
         if (inode.i_block[12] == 0)
             return 1; /* finished */
@@ -2199,7 +1887,8 @@ int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
         if (buf[block_num / (addresses_in_block*addresses_in_block)] == 0)
             return 1;
         
-        if (save_extents && block_num / (addresses_in_block*addresses_in_block) == 0)
+        if (save_extents && block_num /
+                            (addresses_in_block*addresses_in_block) == 0)
         {
             sector = (uint32_t) (inode.i_block[14] * sectors_per_block +
                                  partition_offset / SECTOR_SIZE);
@@ -2330,14 +2019,20 @@ int ext4_serialize_file_sectors(FILE* disk, int64_t partition_offset,
     while (num_blocks) 
     {
         if (inode.i_flags & 0x80000) /* check if extents in use */
-            ret_check = ext4_serialize_file_extent_sectors(disk, partition_offset,
-                                                          superblock, bits, count, inode,
-                                                          sectors, data, extents, save_data,
-                                                          save_extents);
+            ret_check = ext4_serialize_file_extent_sectors(disk,
+                                                           partition_offset,
+                                                           superblock, bits,
+                                                           count, inode,
+                                                           sectors, data,
+                                                           extents, save_data,
+                                                           save_extents);
         else
-            ret_check = ext4_serialize_file_block_sectors(disk, partition_offset,
-                                                          superblock, bits, count, inode,
-                                                          sectors, data, extents, save_data,
+            ret_check = ext4_serialize_file_block_sectors(disk,
+                                                          partition_offset,
+                                                          superblock, bits,
+                                                          count, inode,
+                                                          sectors, data,
+                                                          extents, save_data,
                                                           save_extents);
         
         if (ret_check < 0) /* error reading */
@@ -2509,7 +2204,8 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
         bson_cleanup(bson);
         return 0;
     }
-    else if ((root_inode.i_mode & 0x8000) == 0x8000) /* file, no dir entries more */
+    else if ((root_inode.i_mode & 0x8000) == 0x8000) /* file, no dir
+                                                        entries more */
     {
         value.type = BSON_STRING;
         value.size = strlen(prefix);
@@ -2690,9 +2386,12 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
     for (i = 0; i < num_blocks; i++)
     {
         if (root_inode.i_flags & 0x80000)
-            ret_check = ext4_read_extent_block(disk, partition_offset, superblock, i, root_inode, buf);
+            ret_check = ext4_read_extent_block(disk, partition_offset,
+                                               superblock, i, root_inode, buf);
         else
-            ret_check = ext4_read_file_block(disk, partition_offset, superblock, i, root_inode, (uint32_t*) buf);
+            ret_check = ext4_read_file_block(disk, partition_offset,
+                                             superblock, i, root_inode,
+                                             (uint32_t*) buf);
 
         if (root_inode.i_flags & 0x80000)
             sector = ext4_sector_extent_block(disk, partition_offset,
@@ -2744,7 +2443,7 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
             bson2 = bson_init();
 
             if (ext4_read_inode_serialized(disk, partition_offset, superblock,
-                                       dir.inode, &child_inode, bson2, icache, bcache))
+                               dir.inode, &child_inode, bson2, icache, bcache))
             {
                fprintf_light_red(stderr, "Error reading child inode.\n");
                return -1;
@@ -2768,7 +2467,8 @@ int ext4_serialize_tree(FILE* disk, int64_t partition_offset,
                 }
                 ext4_serialize_tree(disk, partition_offset, superblock, bits,
                                     child_inode, path, serializef,
-                                    bson2, icache, bcache); /* recursive call */
+                                    bson2, icache, bcache); /* recursive
+                                                               call */
             }
 
             position += dir.rec_len;
@@ -2829,13 +2529,14 @@ int ext4_serialize_fs_tree(FILE* disk, int64_t partition_offset,
 }
 
 int ext4_cache_bgds(FILE* disk, int64_t partition_offset,
-                      struct ext4_superblock* superblock, uint8_t** cache)
+                    struct ext4_superblock* superblock, uint8_t** cache)
 {
     uint64_t num_block_groups = ext4_num_block_groups(*superblock);
     uint32_t i = 0;
     uint8_t* cachep;
 
-    *cache = malloc(sizeof(struct ext4_block_group_descriptor) * num_block_groups);
+    *cache = malloc(sizeof(struct ext4_block_group_descriptor) *
+                    num_block_groups);
     cachep = *cache;
 
     if (cachep == NULL)

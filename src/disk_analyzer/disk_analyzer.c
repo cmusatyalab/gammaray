@@ -1,10 +1,27 @@
 /*****************************************************************************
- * Author: Wolfgang Richter <wolf@cs.cmu.edu>                                *
- * Purpose: Analyze a raw disk image and produce summary datastructures of   *
- *          the partition table, and file system metadata.                   *
+ * disk_analyzer.c                                                           *
  *                                                                           *
+ * Analyze a raw disk image and produce summary datastructures of            *
+ * the partition table, and file system metadata.                            *
+ *                                                                           *
+ *                                                                           *
+ *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
+ *                                                                           *
+ *                                                                           *
+ *   Copyright 2013 Carnegie Mellon University                               *
+ *                                                                           *
+ *   Licensed under the Apache License, Version 2.0 (the "License");         *
+ *   you may not use this file except in compliance with the License.        *
+ *   You may obtain a copy of the License at                                 *
+ *                                                                           *
+ *       http://www.apache.org/licenses/LICENSE-2.0                          *
+ *                                                                           *
+ *   Unless required by applicable law or agreed to in writing, software     *
+ *   distributed under the License is distributed on an "AS IS" BASIS,       *
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.*
+ *   See the License for the specific language governing permissions and     *
+ *   limitations under the License.                                          *
  *****************************************************************************/
-
 #define _FILE_OFFSET_BITS 64
 
 #include <inttypes.h>
@@ -35,6 +52,7 @@ int disk_analyzer_serialize_bitarray(struct bitarray* bits, FILE* serializef)
 
     serialized = bson_init();
     size = bitarray_get_array(bits, &array);
+    bitarray_print(bits);
 
     if (size == 0)
         return EXIT_FAILURE;
@@ -304,7 +322,8 @@ int main(int argc, char* args[])
                 }
 
                 if (ext4_serialize_bgds(disk, partition_offset,
-                                        &ext4_superblock, bits, serializef, bcache))
+                                        &ext4_superblock, bits,
+                                        serializef, bcache))
                 {
                     fprintf_light_red(stderr, "Error writing serialized "
                                               "BGDs\n");
