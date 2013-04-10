@@ -1,5 +1,30 @@
-#ifndef __XRAY_DISK_ANALYZER_MBR_H
-#define __XRAY_DISK_ANALYZER_MBR_H
+/*****************************************************************************
+ * mbr.h                                                                     *
+ *                                                                           *
+ * This file contains function prototypes that can read and interpret a      *
+ * Master Boot Record (MBR).                                                 *
+ *                                                                           *
+ *                                                                           *
+ *                                                                           *
+ *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
+ *                                                                           *
+ *                                                                           *
+ *   Copyright 2013 Carnegie Mellon University                               *
+ *                                                                           *
+ *   Licensed under the Apache License, Version 2.0 (the "License");         *
+ *   you may not use this file except in compliance with the License.        *
+ *   You may obtain a copy of the License at                                 *
+ *                                                                           *
+ *       http://www.apache.org/licenses/LICENSE-2.0                          *
+ *                                                                           *
+ *   Unless required by applicable law or agreed to in writing, software     *
+ *   distributed under the License is distributed on an "AS IS" BASIS,       *
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.*
+ *   See the License for the specific language governing permissions and     *
+ *   limitations under the License.                                          *
+ *****************************************************************************/
+#ifndef __GAMMARAY_DISK_ANALYZER_MBR_H
+#define __GAMMARAY_DISK_ANALYZER_MBR_H
 
 #include <inttypes.h>
 #include <stdint.h>
@@ -29,20 +54,10 @@ struct disk_mbr
     uint8_t signature[2];
 }__attribute__((packed));
 
-enum MBR_FS_TYPES
-{
-    MBR_FS_TYPE_EXT2,
-    MBR_FS_TYPE_EXT4
-};
-
 int mbr_print_mbr(struct disk_mbr mbr);
-int mbr_print_partition(struct partition_table_entry pte);
-int mbr_print_partition_sectors(struct partition_table_entry pte);
 int mbr_parse_mbr(FILE* disk, struct disk_mbr* mbr);
-int64_t mbr_partition_offset(struct disk_mbr mbr, int pte);
 int mbr_get_partition_table_entry(struct disk_mbr mbr, int pte_num,
                                   struct partition_table_entry* pte);
-int mbr_print_numbers(struct disk_mbr mbr);
 int mbr_serialize_mbr(struct disk_mbr mbr, struct bitarray* bits,
                       uint32_t active, FILE* serializef);
 int mbr_serialize_partition(uint32_t pte_num, struct partition_table_entry pte,

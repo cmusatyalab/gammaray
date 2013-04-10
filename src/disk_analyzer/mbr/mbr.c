@@ -1,10 +1,35 @@
-#include "bson.h"
-#include "mbr.h"
-#include "util.h"
-
+/*****************************************************************************
+ * mbr.c                                                                     *
+ *                                                                           *
+ * This file contains function implementations that can read and interpret a *
+ * Master Boot Record (MBR).                                                 *
+ *                                                                           *
+ *                                                                           *
+ *                                                                           *
+ *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
+ *                                                                           *
+ *                                                                           *
+ *   Copyright 2013 Carnegie Mellon University                               *
+ *                                                                           *
+ *   Licensed under the Apache License, Version 2.0 (the "License");         *
+ *   you may not use this file except in compliance with the License.        *
+ *   You may obtain a copy of the License at                                 *
+ *                                                                           *
+ *       http://www.apache.org/licenses/LICENSE-2.0                          *
+ *                                                                           *
+ *   Unless required by applicable law or agreed to in writing, software     *
+ *   distributed under the License is distributed on an "AS IS" BASIS,       *
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.*
+ *   See the License for the specific language governing permissions and     *
+ *   limitations under the License.                                          *
+ *****************************************************************************/
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "bson.h"
+#include "mbr.h"
+#include "util.h"
 
 char* MBR_PT_LUT[] = { "Empty","","","","","Extended","","HPFS/NTFS","","","","W95 FAT32","","","","", /* 0x00 - 0x0f */
                        "","","","","","","","","","","","","","","","", /* 0x10 - 0x1f */
@@ -154,46 +179,6 @@ int mbr_parse_mbr(FILE* disk, struct disk_mbr* mbr)
     return 0;
 }
 
-/* REENTRANT */
-int64_t mbr_partition_offset(struct disk_mbr mbr, int pte)
-{
-    /* linux partition match */
-    if (mbr.pt[pte].partition_type == 0x83)
-    {
-        return SECTOR_SIZE*mbr.pt[pte].first_sector_lba;
-    }
-
-    /* Extended partition match */
-    if (mbr.pt[pte].partition_type == 0x05)
-    {
-        return SECTOR_SIZE*mbr.pt[pte].first_sector_lba;
-    }
-
-    /* NTFS partition match */
-    if (mbr.pt[pte].partition_type == 0x07)
-    {
-        return SECTOR_SIZE*mbr.pt[pte].first_sector_lba;
-    }
-
-    /* LVM partition match */
-    if (mbr.pt[pte].partition_type == 0x8e)
-    {
-        return SECTOR_SIZE*mbr.pt[pte].first_sector_lba;
-    }
-
-    return 0;
-}
-
-int print_partition_sectors(struct partition_table_entry pte)
-{
-    fprintf_yellow(stdout, "Partition Sector Start %"
-                            PRIu32"\nPartition Sector End %"PRIu32"\n",
-                            pte.first_sector_lba,
-                            pte.first_sector_lba +
-                            pte.sector_count);
-    return 0;
-}
-
 int mbr_serialize_mbr(struct disk_mbr mbr, struct bitarray* bits,
                       uint32_t active, FILE* serializef)
 {
@@ -287,13 +272,6 @@ int mbr_serialize_partition(uint32_t pte_num, struct partition_table_entry pte,
     ret = bson_writef(serialized, serializef);
     bson_cleanup(serialized);
      
-    return 0;
-}
-
-int mbr_print_numbers(struct disk_mbr mbr)
-{
-    fprintf_yellow(stdout, "MBR Start Sector 0\n");
-    fprintf_yellow(stdout, "MBR End Sector 0\n");
     return 0;
 }
 
