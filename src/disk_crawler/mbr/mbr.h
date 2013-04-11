@@ -23,8 +23,8 @@
  *   See the License for the specific language governing permissions and     *
  *   limitations under the License.                                          *
  *****************************************************************************/
-#ifndef __GAMMARAY_DISK_ANALYZER_MBR_H
-#define __GAMMARAY_DISK_ANALYZER_MBR_H
+#ifndef __GAMMARAY_DISK_CRAWLER_MBR_H
+#define __GAMMARAY_DISK_CRAWLER_MBR_H
 
 #include <inttypes.h>
 #include <stdint.h>

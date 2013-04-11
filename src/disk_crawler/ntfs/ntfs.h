@@ -23,8 +23,8 @@
  *   See the License for the specific language governing permissions and     *
  *   limitations under the License.                                          *
  *****************************************************************************/
-#ifndef __GAMMARAY_DISK_ANALYZER_NTFS_H
-#define __GAMMARAY_DISK_ANALYZER_NTFS_H
+#ifndef __GAMMARAY_DISK_CRAWLER_NTFS_H
+#define __GAMMARAY_DISK_CRAWLER_NTFS_H
 
 #include <stdint.h>
 #include <stdio.h>

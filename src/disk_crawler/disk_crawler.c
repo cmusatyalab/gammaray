@@ -1,5 +1,5 @@
 /*****************************************************************************
- * disk_analyzer.c                                                           *
+ * disk_crawler.c                                                            *
  *                                                                           *
  * Analyze a raw disk image and produce summary datastructures of            *
  * the partition table, and file system metadata.                            *
@@ -42,7 +42,7 @@
 #include "ntfs.h"
 #include "mbr.h"
 
-int disk_analyzer_serialize_bitarray(struct bitarray* bits, FILE* serializef)
+int disk_crawler_serialize_bitarray(struct bitarray* bits, FILE* serializef)
 {
     struct bson_info* serialized;
     struct bson_kv value;
@@ -93,7 +93,7 @@ int main(int argc, char* args[])
     struct stat fstats;
     uint8_t* icache = NULL, *bcache = NULL;
 
-    fprintf_blue(stdout, "Raw Disk Analyzer -- By: Wolfgang Richter "
+    fprintf_blue(stdout, "Raw Disk Crawler -- By: Wolfgang Richter "
                          "<wolf@cs.cmu.edu>\n");
 
     if (argc < 3)
@@ -344,7 +344,7 @@ int main(int argc, char* args[])
                                        serializef,
                                        icache,
                                        bcache);
-                disk_analyzer_serialize_bitarray(bits, serializef);
+                disk_crawler_serialize_bitarray(bits, serializef);
             }
 
             if (ntfs_probe(disk, partition_offset, &ntfs_bootf))
@@ -382,7 +382,7 @@ int main(int argc, char* args[])
 
                 ntfs_serialize_fs_tree(disk, &ntfs_bootf, bits,
                                        partition_offset, "/", serializef);
-                disk_analyzer_serialize_bitarray(bits, serializef);
+                disk_crawler_serialize_bitarray(bits, serializef);
             }
         }
     }
