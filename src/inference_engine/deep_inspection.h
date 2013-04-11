@@ -22,8 +22,8 @@
  *   See the License for the specific language governing permissions and     *
  *   limitations under the License.                                          *
  *****************************************************************************/
-#ifndef __ANALYSIS_ENGINE_DEEP_INSPECTION_H
-#define __ANALYSIS_ENGINE_DEEP_INSPECTION_H
+#ifndef __INFERENCE_ENGINE_DEEP_INSPECTION_H
+#define __INFERENCE_ENGINE_DEEP_INSPECTION_H
 
 #include <stdbool.h>
 

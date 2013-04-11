@@ -22,8 +22,8 @@
  *   See the License for the specific language governing permissions and     *
  *   limitations under the License.                                          *
  *****************************************************************************/
-#ifndef __STREAM_ANALYZER_REDIS_QUEUE_H
-#define __STREAM_ANALYZER_REDIS_QUEUE_H
+#ifndef __INFERENCE_ENGINE_REDIS_QUEUE_H
+#define __INFERENCE_ENGINE_REDIS_QUEUE_H
 
 #include "bitarray.h"
 #include "qemu_common.h"
