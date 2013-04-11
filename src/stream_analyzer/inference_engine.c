@@ -1,25 +1,41 @@
 /*****************************************************************************
- * Author: Wolfgang Richter <wolf@cs.cmu.edu>                                *
- * Purpose: Analyze a stream of disk block writes and infer file-level       * 
- *          mutations given context from a pre-indexed raw disk image.       *
+ * inference_engine.c                                                        *
  *                                                                           *
+ * This file implements a process that analyzes a stream of disk block writes*
+ * and infer file-level mutations given context from a pre-indexed raw disk  *
+ * image.                                                                    *
+ *                                                                           *
+ *                                                                           *
+ *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
+ *                                                                           *
+ *                                                                           *
+ *   Copyright 2013 Carnegie Mellon University                               *
+ *                                                                           *
+ *   Licensed under the Apache License, Version 2.0 (the "License");         *
+ *   you may not use this file except in compliance with the License.        *
+ *   You may obtain a copy of the License at                                 *
+ *                                                                           *
+ *       http://www.apache.org/licenses/LICENSE-2.0                          *
+ *                                                                           *
+ *   Unless required by applicable law or agreed to in writing, software     *
+ *   distributed under the License is distributed on an "AS IS" BASIS,       *
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.*
+ *   See the License for the specific language governing permissions and     *
+ *   limitations under the License.                                          *
  *****************************************************************************/
-
-#include "color.h"
-#include "util.h"
-
-#include "deep_inspection.h"
-#include "redis_queue.h"
-
-#include <inttypes.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
 #include <fcntl.h>
-
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+#include "color.h"
+#include "util.h"
+#include "deep_inspection.h"
+#include "redis_queue.h"
 
 #define SECTOR_SIZE 512 
 
@@ -63,7 +79,8 @@ int read_loop(struct kv_store* store, char* vmname, FILE* index)
         gettimeofday(&end, NULL);
         time = diff_time(start, end);
         pretty_print_microseconds(time, pretty_time, 32);
-        fprintf_cyan(stdout, "[%"PRIu64"] write inference in %s.\n", write_counter, pretty_time);
+        fprintf_cyan(stdout, "[%"PRIu64"] write inference in %s.\n",
+                             write_counter, pretty_time);
         if (write.data)
             free(write.data);
     }

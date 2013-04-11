@@ -1,5 +1,31 @@
+/*****************************************************************************
+ * deep_inspection.h                                                         *
+ *                                                                           *
+ * This file contains function prototypes for performing inference on sector *
+ * writes.                                                                   *
+ *                                                                           *
+ *                                                                           *
+ *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
+ *                                                                           *
+ *                                                                           *
+ *   Copyright 2013 Carnegie Mellon University                               *
+ *                                                                           *
+ *   Licensed under the Apache License, Version 2.0 (the "License");         *
+ *   you may not use this file except in compliance with the License.        *
+ *   You may obtain a copy of the License at                                 *
+ *                                                                           *
+ *       http://www.apache.org/licenses/LICENSE-2.0                          *
+ *                                                                           *
+ *   Unless required by applicable law or agreed to in writing, software     *
+ *   distributed under the License is distributed on an "AS IS" BASIS,       *
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.*
+ *   See the License for the specific language governing permissions and     *
+ *   limitations under the License.                                          *
+ *****************************************************************************/
 #ifndef __ANALYSIS_ENGINE_DEEP_INSPECTION_H
 #define __ANALYSIS_ENGINE_DEEP_INSPECTION_H
+
+#include <stdbool.h>
 
 #include "ext2.h"
 #include "ext4.h"
@@ -8,7 +34,6 @@
 #include "redis_queue.h"
 #include "qemu_common.h"
 
-#include <stdbool.h>
 
 #define FIELD_COMPARE(field, fname, type, btype) {\
     if (old->field != new->field) \
@@ -104,9 +129,9 @@ enum SECTOR_TYPE qemu_infer_ntfs_sector_type(struct ntfs_boot_file* bootf,
                                              struct qemu_bdrv_write* write, 
                                              struct kv_store* store);
 int qemu_deep_inspect_ntfs(struct ntfs_boot_file* bootf,
-                           struct qemu_bdrv_write* write, struct kv_store* store,
-                           uint64_t write_counter, char* vmname,
-                           uint64_t partition_offset);
+                           struct qemu_bdrv_write* write,
+                           struct kv_store* store, uint64_t write_counter,
+                           char* vmname, uint64_t partition_offset);
 int qemu_get_superinfo(struct kv_store* store,
                        struct super_info* superblock,
                        uint64_t fs_id);

@@ -1,4 +1,36 @@
+/*****************************************************************************
+ * deep_inspection.c                                                         *
+ *                                                                           *
+ * This file contains function implementations for performing inference on   *
+ * sector writes.                                                            *
+ *                                                                           *
+ *                                                                           *
+ *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
+ *                                                                           *
+ *                                                                           *
+ *   Copyright 2013 Carnegie Mellon University                               *
+ *                                                                           *
+ *   Licensed under the Apache License, Version 2.0 (the "License");         *
+ *   you may not use this file except in compliance with the License.        *
+ *   You may obtain a copy of the License at                                 *
+ *                                                                           *
+ *       http://www.apache.org/licenses/LICENSE-2.0                          *
+ *                                                                           *
+ *   Unless required by applicable law or agreed to in writing, software     *
+ *   distributed under the License is distributed on an "AS IS" BASIS,       *
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.*
+ *   See the License for the specific language governing permissions and     *
+ *   limitations under the License.                                          *
+ *****************************************************************************/
 #define _GNU_SOURCE
+
+#include <assert.h>
+#include <errno.h>
+#include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
 #include "__bson.h"
 #include "bson.h"
 #include "color.h"
@@ -7,14 +39,6 @@
 #include "ntfs.h"
 #include "redis_queue.h"
 #include "util.h"
-
-#include <stdbool.h>
-#include <stdlib.h>
-#include <string.h>
-
-#include <assert.h>
-#include <errno.h>
-#include <unistd.h>
 
 #ifndef HOST_NAME_MAX
     #define HOST_NAME_MAX 256
@@ -225,7 +249,8 @@ int __emit_created_file(struct kv_store* store,  char* channel,
     struct bson_info* bson = bson_init();
     struct bson_kv val;
 
-    fprintf_light_blue(stdout, "CREATE[%.*s] in channel %s.\n", flen, file, channel);
+    fprintf_light_blue(stdout, "CREATE[%.*s] in channel %s.\n",
+                               flen, file, channel);
 
     if (bson == NULL)
     {
@@ -273,7 +298,8 @@ int __emit_rename_file(struct kv_store* store,  char* channel,
     struct bson_info* bson = bson_init();
     struct bson_kv val;
 
-    fprintf_light_blue(stdout, "CREATE[%.*s] in channel %s.\n", flen, file, channel);
+    fprintf_light_blue(stdout, "CREATE[%.*s] in channel %s.\n",
+                               flen, file, channel);
 
     if (bson == NULL)
     {
@@ -758,9 +784,12 @@ int __diff_superblock(uint8_t* write, struct kv_store* store,
                     new->s_free_inodes_count -
                     new->s_first_ino + 2;
 
-    DIRECT_FIELD_COMPARE(block_size, "superblock.block_size", "metadata", BSON_INT64);
-    DIRECT_FIELD_COMPARE(num_block_groups, "superblock.num_block_groups", "metadata", BSON_INT32);
-    DIRECT_FIELD_COMPARE(num_files, "superblock.num_files", "metadata", BSON_INT32);
+    DIRECT_FIELD_COMPARE(block_size, "superblock.block_size", "metadata",
+                         BSON_INT64);
+    DIRECT_FIELD_COMPARE(num_block_groups, "superblock.num_block_groups",
+                         "metadata", BSON_INT32);
+    DIRECT_FIELD_COMPARE(num_files, "superblock.num_files", "metadata",
+                         BSON_INT32);
 
     free(channel);
 
@@ -834,13 +863,22 @@ int __diff_bgds(uint8_t* write, struct kv_store* store,
                                         offset) /
                                         SECTOR_SIZE;
 
-        DIRECT_FIELD_COMPARE(block_bitmap_sector_start, "bgd.block_bitmap_sector_start", "metadata", BSON_INT64);
-        DIRECT_FIELD_COMPARE(inode_bitmap_sector_start, "bgd.inode_bitmap_sector_start", "metadata", BSON_INT64);
-        DIRECT_FIELD_COMPARE(inode_table_sector_start, "bgd.inode_table_sector_start", "metadata", BSON_INT64);
+        DIRECT_FIELD_COMPARE(block_bitmap_sector_start,
+                             "bgd.block_bitmap_sector_start", "metadata",
+                             BSON_INT64);
+        DIRECT_FIELD_COMPARE(inode_bitmap_sector_start,
+                             "bgd.inode_bitmap_sector_start", "metadata",
+                             BSON_INT64);
+        DIRECT_FIELD_COMPARE(inode_table_sector_start,
+                             "bgd.inode_table_sector_start", "metadata",
+                             BSON_INT64);
 
-        SET_FIELD(REDIS_BGD_SECTOR_INSERT, bgd, block_bitmap_sector_start, len);
-        SET_FIELD(REDIS_BGD_SECTOR_INSERT, bgd, inode_bitmap_sector_start, len);
-        SET_FIELD(REDIS_BGD_SECTOR_INSERT, bgd, inode_table_sector_start, len);
+        SET_FIELD(REDIS_BGD_SECTOR_INSERT, bgd, block_bitmap_sector_start,
+                  len);
+        SET_FIELD(REDIS_BGD_SECTOR_INSERT, bgd, inode_bitmap_sector_start,
+                  len);
+        SET_FIELD(REDIS_BGD_SECTOR_INSERT, bgd, inode_table_sector_start,
+                  len);
     } 
 
     redis_free_list(list, len);
@@ -850,8 +888,8 @@ int __diff_bgds(uint8_t* write, struct kv_store* store,
 
 int __ext4_new_extent_leaf_block(struct kv_store* store, uint64_t file,
                                  uint64_t block, struct super_info* superblock,
-                                 uint64_t partition_offset, uint64_t write_counter,
-                                 char* vmname) 
+                                 uint64_t partition_offset,
+                                 uint64_t write_counter, char* vmname) 
 {
     uint64_t sector = block * superblock->block_size;
     sector += partition_offset;
@@ -874,16 +912,17 @@ int __ext4_new_extent_leaf_block(struct kv_store* store, uint64_t file,
         return EXIT_FAILURE;
     }
 
-    __reinspect_write(superblock, store, partition_offset, sector, write_counter,
-                      vmname);
+    __reinspect_write(superblock, store, partition_offset, sector,
+                      write_counter, vmname);
 
     return EXIT_SUCCESS;
 }
 
 int __ext4_new_extent(struct kv_store* store, uint64_t file,
                       struct super_info* superblock, 
-                      uint64_t partition_offset, struct ext4_extent* extent_new,
-                      char* vmname, uint64_t write_counter)
+                      uint64_t partition_offset,
+                      struct ext4_extent* extent_new, char* vmname,
+                      uint64_t write_counter)
 {
     uint64_t sector = ext4_extent_start(*extent_new) * superblock->block_size;
     sector += partition_offset;
@@ -898,7 +937,8 @@ int __ext4_new_extent(struct kv_store* store, uint64_t file,
                                   sector);
         redis_reverse_file_data_pointer_set(store, 
                                             sector,
-                                            counter, counter + superblock->block_size,
+                                            counter,
+                                            counter + superblock->block_size,
                                             file);
         D_PRINT64(counter);
         D_PRINT64(extent_new->ee_block);
@@ -977,7 +1017,9 @@ int __diff_ext4_extents(struct kv_store* store, char* vmname, uint64_t file,
 
             if ((extent_sector = ext4_extent_index_leaf(*idx_new)))
             {
-                fprintf_light_white(stdout, "found new extent position fs block = %"PRIu64".\n", extent_sector);
+                fprintf_light_white(stdout, "found new extent position fs "
+                                            "block = %"PRIu64".\n",
+                                            extent_sector);
 
                 extent_sector *= superblock->block_size;
                 extent_sector += partition_offset;
@@ -986,15 +1028,17 @@ int __diff_ext4_extents(struct kv_store* store, char* vmname, uint64_t file,
                 if (old_extent_len == 0)
                 {
                     redis_hash_field_set(store, REDIS_EXTENT_SECTOR_INSERT,
-                                             extent_sector, "file", (uint8_t*) &file, sizeof(file));
+                                         extent_sector, "file",
+                                         (uint8_t*) &file, sizeof(file));
                     redis_reverse_pointer_set(store, REDIS_EXTENTS_INSERT,
                                           file,
                                           extent_sector);
-                    redis_reverse_pointer_set(store, REDIS_EXTENTS_SECTOR_INSERT,
-                                          extent_sector,
-                                          extent_sector);
-                    __reinspect_write(superblock, store, partition_offset, extent_sector,
-                                      write_counter, vmname);
+                    redis_reverse_pointer_set(store,
+                                              REDIS_EXTENTS_SECTOR_INSERT,
+                                              extent_sector,
+                                              extent_sector);
+                    __reinspect_write(superblock, store, partition_offset,
+                                      extent_sector, write_counter, vmname);
                 }
 
                 /* check if new leaf block */
@@ -1152,11 +1196,14 @@ int __diff_data_ntfs(struct kv_store* store, struct ntfs_boot_file* bootf,
         real_size = nrh.real_size;
 
         data_offset += nrh.data_run_offset - sizeof(sah) - sizeof(nrh);
-        while (ntfs_parse_data_run(data, &data_offset, &run_length, &run_lcn) &&
-               real_size > 0)
+        while (
+              ntfs_parse_data_run(data, &data_offset, &run_length, &run_lcn) &&
+              real_size > 0)
         {
             fprintf_light_blue(stderr, "got a sequence %d\n", counter++);
-            run_length_bytes = run_length * bootf->bytes_per_sector * bootf->sectors_per_cluster;
+            run_length_bytes = run_length *
+                               bootf->bytes_per_sector *
+                               bootf->sectors_per_cluster;
             fprintf_light_red(stderr, "prev_lcn: %"PRIx64"\n", prev_lcn);
             fprintf_light_red(stderr, "run_lcn: %"PRIx64" (%"PRId64")\n",
                                       run_lcn, run_lcn);
@@ -1253,8 +1300,8 @@ int __diff_inodes_ntfs(uint8_t* write, struct kv_store* store,
 
 
         len2 = sizeof(offset);
-        if (redis_hash_field_get(store, REDIS_FILE_SECTOR_GET, file, "inode_offset",
-                                 (uint8_t*) &offset, &len2))
+        if (redis_hash_field_get(store, REDIS_FILE_SECTOR_GET, file,
+                                 "inode_offset", (uint8_t*) &offset, &len2))
         {
             fprintf_light_red(stdout, "Error getting offset for file %"PRIu64
                                       "from Redis.\n", file);
@@ -1269,8 +1316,8 @@ int __diff_inodes_ntfs(uint8_t* write, struct kv_store* store,
         
         /* last step: overwrite old record with new */
         len2 = ntfs_file_record_size(bootf);
-        if (redis_hash_field_set(store, REDIS_FILE_SECTOR_INSERT, file, "inode",
-                                 (uint8_t*) new, len2))
+        if (redis_hash_field_set(store, REDIS_FILE_SECTOR_INSERT, file,
+                                 "inode", (uint8_t*) new, len2))
         {
             fprintf_light_red(stdout, "Error getting offset for file %"PRIu64
                                       "from Redis.\n", file);
@@ -1284,7 +1331,8 @@ int __diff_inodes_ntfs(uint8_t* write, struct kv_store* store,
 
 int __diff_inodes(uint8_t* write, struct kv_store* store,
                   char* vmname, uint64_t write_counter, char* pointer,
-                  size_t write_len, struct super_info* superblock, uint64_t partition_offset)
+                  size_t write_len, struct super_info* superblock,
+                  uint64_t partition_offset)
 {
     uint64_t file = 0, lfiles = 0, i, offset, last_sector;
     uint8_t** list;
@@ -1330,8 +1378,8 @@ int __diff_inodes(uint8_t* write, struct kv_store* store,
         path[len2] = '\0';
 
         len2 = sizeof(offset);
-        if (redis_hash_field_get(store, REDIS_FILE_SECTOR_GET, file, "inode_offset",
-                                 (uint8_t*) &offset, &len2))
+        if (redis_hash_field_get(store, REDIS_FILE_SECTOR_GET, file,
+                                 "inode_offset", (uint8_t*) &offset, &len2))
         {
             fprintf_light_red(stdout, "Error getting offset for file %"PRIu64
                                       "from Redis.\n", file);
@@ -1365,7 +1413,8 @@ int __diff_inodes(uint8_t* write, struct kv_store* store,
         DIRECT_FIELD_COMPARE(is_dir, "file.is_dir", "metadata", BSON_BOOLEAN);
         DIRECT_FIELD_COMPARE(size, "file.size", "metadata", BSON_INT64);
         DIRECT_FIELD_COMPARE(mode, "file.mode", "metadata", BSON_INT64);
-        DIRECT_FIELD_COMPARE(link_count, "file.link_count", "metadata", BSON_INT64);
+        DIRECT_FIELD_COMPARE(link_count, "file.link_count", "metadata",
+                             BSON_INT64);
         DIRECT_FIELD_COMPARE(uid, "file.uid", "metadata", BSON_INT64);
         DIRECT_FIELD_COMPARE(gid, "file.gid", "metadata", BSON_INT64);
         DIRECT_FIELD_COMPARE(atime, "file.atime", "metadata", BSON_INT64);
@@ -1401,8 +1450,8 @@ int __diff_inodes(uint8_t* write, struct kv_store* store,
         {
             if (redis_last_file_sector(store, file, &last_sector))
             {
-                fprintf_light_red(stdout, "Error getting offset for file %"PRIu64
-                                          "from Redis.\n", file);
+                fprintf_light_red(stdout, "Error getting offset for file %"
+                                          PRIu64"from Redis.\n", file);
                 return EXIT_FAILURE;
             }
             fprintf_light_white(stdout, "Size mismatch. Checking for last "
@@ -1476,14 +1525,15 @@ int __qemu_dispatch_write_ntfs(uint8_t* data,
         __emit_file_bytes(data, store, vmname, write_counter, pointer, len,
                           sector);
     else if(strncmp(pointer, "fs", strlen("fs")) == 0)
-        __diff_superblock_ntfs(data, store, vmname, write_counter, pointer, len);
+        __diff_superblock_ntfs(data, store, vmname, write_counter, pointer,
+                               len);
     //else if(strncmp(pointer, "mbr", strlen("mbr")) == 0)
     //    __diff_mbr(data, store, vmname, pointer);
     //else if(strncmp(pointer, "lbgds", strlen("lbgds")) == 0)
     //    __diff_bgds(data, store, vmname, write_counter, pointer, len);
     else if(strncmp(pointer, "lfiles", strlen("lfiles")) == 0)
-        __diff_inodes_ntfs(data, store, vmname, write_counter, pointer, len, bootf,
-                      partition_offset);
+        __diff_inodes_ntfs(data, store, vmname, write_counter, pointer, len,
+                           bootf, partition_offset);
     //else if(strncmp(pointer, "bgd", strlen("bgd")) == 0)
     //    __diff_bitmap(data, store, vmname, pointer);
     //else if(strncmp(pointer, "extent", strlen("extent")) == 0)
@@ -1671,7 +1721,8 @@ int qemu_deep_inspect_ntfs(struct ntfs_boot_file* bootf,
             D_PRINT64(partition_offset);
             __qemu_dispatch_write_ntfs(data, store, vmname, write_counter,
                                        (char *) result, (size_t) size, bootf,
-                                       partition_offset, write->header.sector_num);
+                                       partition_offset,
+                                       write->header.sector_num);
         }
         else
         {
@@ -1706,14 +1757,16 @@ int qemu_deep_inspect(struct super_info* superblock,
     uint64_t size = 0;
     uint8_t* data;
 
-    for (i = 0; i < write->header.nb_sectors; i += superblock->block_size / SECTOR_SIZE)
+    for (i = 0; i < write->header.nb_sectors; i +=
+                                          superblock->block_size / SECTOR_SIZE)
     {
         len = 1024;
         if (redis_sector_lookup(store, write->header.sector_num + i,
             result, &len))
         {
             fprintf_light_red(stdout, "Error doing sector lookup.\n");
-            if ((write->header.nb_sectors - i) * SECTOR_SIZE < superblock->block_size)
+            if ((write->header.nb_sectors - i) * SECTOR_SIZE <
+                superblock->block_size)
             {
                 size = (write->header.nb_sectors - i) * SECTOR_SIZE;
             }
@@ -1730,11 +1783,13 @@ int qemu_deep_inspect(struct super_info* superblock,
 
         if (len)
         {
-            fprintf_light_red(stdout, "Returned sector lookup, now dispatching.\n");
+            fprintf_light_red(stdout, "Returned sector lookup, now "
+                                      "dispatching.\n");
             result[len] = 0;
             data = &(write->data[i*SECTOR_SIZE]);
 
-            if ((write->header.nb_sectors - i) * SECTOR_SIZE < superblock->block_size)
+            if ((write->header.nb_sectors - i) * SECTOR_SIZE <
+                superblock->block_size)
             {
                 size = (write->header.nb_sectors - i)* SECTOR_SIZE;
             }
@@ -1753,7 +1808,8 @@ int qemu_deep_inspect(struct super_info* superblock,
         else
         {
             fprintf_light_red(stdout, "Returned sector lookup empty.\n");
-            if ((write->header.nb_sectors - i) * SECTOR_SIZE < superblock->block_size)
+            if ((write->header.nb_sectors - i) * SECTOR_SIZE <
+                superblock->block_size)
             {
                 size = (write->header.nb_sectors - i) * SECTOR_SIZE;
             }
@@ -1761,7 +1817,8 @@ int qemu_deep_inspect(struct super_info* superblock,
             {
                 size = superblock->block_size;
             }
-            fprintf_light_red(stdout, "enqueueing() %"PRIu64"\n", write->header.sector_num + i);
+            fprintf_light_red(stdout, "enqueueing() %"PRIu64"\n",
+                                      write->header.sector_num + i);
 
             redis_enqueue_pipelined(store, write->header.sector_num + i,
                                     &(write->data[i*SECTOR_SIZE]),
@@ -1924,7 +1981,8 @@ enum SECTOR_TYPE qemu_infer_ntfs_sector_type(struct ntfs_boot_file* bootf,
     return SECTOR_UNKNOWN;
 }
 
-int __deserialize_mbr(struct bson_info* bson, struct kv_store* store, uint64_t id)
+int __deserialize_mbr(struct bson_info* bson, struct kv_store* store,
+                      uint64_t id)
 {
     struct bson_kv value1, value2;
 
@@ -1940,7 +1998,8 @@ int __deserialize_mbr(struct bson_info* bson, struct kv_store* store, uint64_t i
         else
         {
             if (redis_hash_field_set(store, REDIS_MBR_SECTOR_INSERT, id,
-                                 value1.key, (const uint8_t*) value1.data, (size_t) value1.size))
+                                 value1.key, (const uint8_t*) value1.data,o
+                                 (size_t) value1.size))
                 return EXIT_FAILURE;
         }
     }
@@ -2141,7 +2200,8 @@ int __deserialize_file_lazy(struct ext4_superblock* superblock,
             if (bson2->buffer == NULL)
                 return EXIT_FAILURE;
 
-            memcpy(bson2->buffer, (uint8_t *)value2.data, (size_t) value2.size);
+            memcpy(bson2->buffer, (uint8_t *)value2.data,
+                   (size_t) value2.size);
             bson_make_readable(bson2);
 
             while (bson_deserialize(bson2, &value1, &value2) == 1)
@@ -2216,7 +2276,8 @@ int __deserialize_file(struct ext4_superblock* superblock,
                 sscanf((const char*) value1.key, "%"SCNu64, &sector);
 
                 if (redis_hash_field_set(store, REDIS_DIR_SECTOR_INSERT,
-                                         sector, "file", (uint8_t*) &id, sizeof(id)))
+                                         sector, "file", (uint8_t*) &id,
+                                         sizeof(id)))
                 {
                     bson_cleanup(bson2);
                     return EXIT_FAILURE;
@@ -2279,7 +2340,8 @@ int __deserialize_file(struct ext4_superblock* superblock,
             if (bson2->buffer == NULL)
                 return EXIT_FAILURE;
 
-            memcpy(bson2->buffer, (uint8_t *)value2.data, (size_t) value2.size);
+            memcpy(bson2->buffer, (uint8_t *)value2.data,
+                   (size_t) value2.size);
             bson_make_readable(bson2);
 
             while (bson_deserialize(bson2, &value1, &value2) == 1)
@@ -2287,7 +2349,8 @@ int __deserialize_file(struct ext4_superblock* superblock,
                 sscanf((const char*) value1.key, "%"SCNu64, &sector);
 
                 if (redis_hash_field_set(store, REDIS_EXTENT_SECTOR_INSERT,
-                                         sector, "file", (uint8_t*) &id, sizeof(id)))
+                                         sector, "file", (uint8_t*) &id,
+                                         sizeof(id)))
                 {
                     bson_cleanup(bson2);
                     return EXIT_FAILURE;
@@ -2301,9 +2364,10 @@ int __deserialize_file(struct ext4_superblock* superblock,
                     return EXIT_FAILURE;
                 }
 
-                if (redis_reverse_pointer_set(store, REDIS_EXTENTS_SECTOR_INSERT,
-                                      sector,
-                                      sector))
+                if (redis_reverse_pointer_set(store,
+                                              REDIS_EXTENTS_SECTOR_INSERT,
+                                              sector,
+                                              sector))
                 {
                     bson_cleanup(bson2);
                     return EXIT_FAILURE;
@@ -2359,7 +2423,8 @@ int qemu_load_md_filter(FILE* index, struct bitarray** bits)
 
             if (strcmp(value1.key, "bitarray") == 0)
             {
-                *bits = bitarray_init_data((uint8_t*) value1.data, value1.size);
+                *bits = bitarray_init_data((uint8_t*) value1.data,
+                                           value1.size);
                 return EXIT_SUCCESS;
             }
             else
@@ -2471,7 +2536,7 @@ int qemu_load_index(FILE* index, struct kv_store* store)
 
     while (bson_readf(bson, index) == 1)
     {
-        qemu_load_document(store, bson, false, &bgd_counter, &file_counter);
+        qemu_load_document(store, bson, true, &bgd_counter, &file_counter);
     }
 
     fprintf_light_yellow(stdout, "-- Deserialized %"PRIu64" bgd's --\n",

@@ -1,26 +1,42 @@
 /*****************************************************************************
- * Author: Wolfgang Richter <wolf@cs.cmu.edu>                                *
- * Purpose: Push asynchronously all writes into a Redis queue.               * 
+ * async_queuer.c                                                            *
  *                                                                           *
+ * This file implements a process that pushes asynchronously all writes into *
+ * a Redis queue.                                                            *
+ *                                                                           *
+ *                                                                           *
+ *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
+ *                                                                           *
+ *                                                                           *
+ *   Copyright 2013 Carnegie Mellon University                               *
+ *                                                                           *
+ *   Licensed under the Apache License, Version 2.0 (the "License");         *
+ *   you may not use this file except in compliance with the License.        *
+ *   You may obtain a copy of the License at                                 *
+ *                                                                           *
+ *       http://www.apache.org/licenses/LICENSE-2.0                          *
+ *                                                                           *
+ *   Unless required by applicable law or agreed to in writing, software     *
+ *   distributed under the License is distributed on an "AS IS" BASIS,       *
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.*
+ *   See the License for the specific language governing permissions and     *
+ *   limitations under the License.                                          *
  *****************************************************************************/
-
-#include "bitarray.h"
-#include "color.h"
-#include "util.h"
-
-#include "deep_inspection.h"
-#include "redis_queue.h"
-#include "qemu_common.h"
-
-#include <inttypes.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
 #include <fcntl.h>
-
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+#include "bitarray.h"
+#include "color.h"
+#include "deep_inspection.h"
+#include "redis_queue.h"
+#include "qemu_common.h"
+#include "util.h"
 
 int read_loop(int fd, struct kv_store* handle, struct bitarray* bits)
 {
@@ -157,7 +173,8 @@ int main(int argc, char* args[])
 
     if (indexf == NULL)
     {
-        fprintf_light_red(stderr, "Error opening index file to get MD filter.\n");
+        fprintf_light_red(stderr, "Error opening index file to get MD "
+                                  "filter.\n");
         return EXIT_FAILURE;
     }
 

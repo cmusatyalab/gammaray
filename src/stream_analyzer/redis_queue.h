@@ -1,5 +1,29 @@
-#ifndef __STREAM_ANALYZER_REDIS_H
-#define __STREAM_ANALYZER_REDIS_H
+/*****************************************************************************
+ * redis_queue.h                                                             *
+ *                                                                           *
+ * This file contains function prototypes for connecting to and interfacing  *
+ * with Redis.                                                               *
+ *                                                                           *
+ *                                                                           *
+ *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
+ *                                                                           *
+ *                                                                           *
+ *   Copyright 2013 Carnegie Mellon University                               *
+ *                                                                           *
+ *   Licensed under the Apache License, Version 2.0 (the "License");         *
+ *   you may not use this file except in compliance with the License.        *
+ *   You may obtain a copy of the License at                                 *
+ *                                                                           *
+ *       http://www.apache.org/licenses/LICENSE-2.0                          *
+ *                                                                           *
+ *   Unless required by applicable law or agreed to in writing, software     *
+ *   distributed under the License is distributed on an "AS IS" BASIS,       *
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.*
+ *   See the License for the specific language governing permissions and     *
+ *   limitations under the License.                                          *
+ *****************************************************************************/
+#ifndef __STREAM_ANALYZER_REDIS_QUEUE_H
+#define __STREAM_ANALYZER_REDIS_QUEUE_H
 
 #include "bitarray.h"
 #include "qemu_common.h"
@@ -32,10 +56,12 @@
 #define REDIS_FILE_SECTOR_GET "HGET file:%"PRIu64" %s"
 #define REDIS_FILE_SECTORS_INSERT "RPUSH filesectors:%"PRIu64" sector:%"PRId64
 #define REDIS_FILE_SECTORS_LGET "LRANGE filesectors:%"PRIu64" 0 -1"
-#define REDIS_FILE_SECTORS_LGET_VAR "LRANGE filesectors:%"PRIu64" %"PRIu64" %"PRIu64
+#define REDIS_FILE_SECTORS_LGET_VAR "LRANGE filesectors:%"PRIu64" %"PRIu64 \
+                                    " %"PRIu64
 #define REDIS_FILE_SECTORS_LAST_SECTOR "LINDEX filesectors:%"PRIu64" -1"
 #define REDIS_FILE_SECTORS_LLEN "LLEN filesectors:%"PRIu64
-#define REDIS_FILE_SECTORS_LSET "LSET filesectors:%"PRIu64" %"PRIu64" sector:%"PRId64
+#define REDIS_FILE_SECTORS_LSET "LSET filesectors:%"PRIu64" %"PRIu64 \
+                                " sector:%"PRId64
 #define REDIS_FILE_SECTORS_DELETE "DEL filesectors:%"PRIu64
 #define REDIS_FILES_INSERT "RPUSH files:%"PRIu64" file:%"PRIu64
 #define REDIS_FILES_LGET "LRANGE files:%"PRIu64" 0 -1"
@@ -49,7 +75,8 @@
 #define REDIS_EXTENT_SECTOR_GET "HGET extent:%"PRIu64" %s"
 #define REDIS_EXTENTS_INSERT "RPUSH extents:%"PRIu64" extent:%"PRIu64
 #define REDIS_EXTENTS_LGET "LRANGE extents:%"PRIu64" 0 -1"
-#define REDIS_EXTENTS_LINSERT "LINSERT extents:%"PRIu64" BEFORE %"PRIu64" extent:%"PRIu64
+#define REDIS_EXTENTS_LINSERT "LINSERT extents:%"PRIu64" BEFORE %"PRIu64 \
+                              " extent:%"PRIu64
 #define REDIS_EXTENTS_LLEN "LLEN extents:%"PRIu64
 #define REDIS_EXTENTS_SECTOR_INSERT "SET sector:%"PRIu64" extent:%"PRIu64
 

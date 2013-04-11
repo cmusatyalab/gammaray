@@ -1,22 +1,43 @@
-#include "util.h"
-
-#include "redis_queue.h"
-
-#include "hiredis.h"
-
+/*****************************************************************************
+ * redis_queue.h                                                             *
+ *                                                                           *
+ * This file contains function prototypes for connecting to and interfacing  *
+ * with Redis.                                                               *
+ *                                                                           *
+ *                                                                           *
+ *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
+ *                                                                           *
+ *                                                                           *
+ *   Copyright 2013 Carnegie Mellon University                               *
+ *                                                                           *
+ *   Licensed under the Apache License, Version 2.0 (the "License");         *
+ *   you may not use this file except in compliance with the License.        *
+ *   You may obtain a copy of the License at                                 *
+ *                                                                           *
+ *       http://www.apache.org/licenses/LICENSE-2.0                          *
+ *                                                                           *
+ *   Unless required by applicable law or agreed to in writing, software     *
+ *   distributed under the License is distributed on an "AS IS" BASIS,       *
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.*
+ *   See the License for the specific language governing permissions and     *
+ *   limitations under the License.                                          *
+ *****************************************************************************/
+#include <assert.h>
 #define __USE_GNU
 #include <pthread.h>
 #undef __USE_GNU
-
 #include <semaphore.h>
-
-#include <assert.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
-#define REDIS_DEFAULT_TIMEOUT 300 /* seconds; 5 minute */
+#include "hiredis.h"
+
+#include "redis_queue.h"
+#include "util.h"
+
+#define REDIS_DEFAULT_TIMEOUT 30 /* seconds; 5 minute */
 #define REDIS_DEFAULT_FLUSH_TICK 5 /* seconds; 5 */
 #define REDIS_DEFAULT_PIPELINED 16384 /* unitless; 16384 (4096*16384=64MB) */
 #define REDIS_DEFAULT_BYTES 262144000 /* bytes; 250 MiB */
@@ -320,7 +341,8 @@ int redis_hash_field_set(struct kv_store* handle, const char* fmt,
 }
 
 int redis_hash_field_get(struct kv_store* handle, const char* fmt,
-                         uint64_t src, const char* field, uint8_t* data, size_t* len)
+                         uint64_t src, const char* field, uint8_t* data,
+                         size_t* len)
 {
     redisReply* reply;
     redis_flush_pipeline(handle);
@@ -347,7 +369,8 @@ int redis_last_file_sector(struct kv_store* handle, uint64_t id,
     uint8_t data[64];
     redisReply* reply;
     redis_flush_pipeline(handle);
-    reply = redisCommand(handle->connection, REDIS_FILE_SECTORS_LAST_SECTOR, id);
+    reply = redisCommand(handle->connection,
+                         REDIS_FILE_SECTORS_LAST_SECTOR, id);
     if (reply->type == REDIS_REPLY_STRING &&
         reply->len > 0 &&
         reply->len <= 64)
