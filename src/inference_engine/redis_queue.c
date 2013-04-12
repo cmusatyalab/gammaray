@@ -146,7 +146,7 @@ void* redis_flush_thread_pipeline(void* data)
         {
             fprintf(stderr, "ERROR FLUSHING\n");
             //pthread_mutex_unlock(&(job->handle->flush_lock));
-            assert(true);
+            assert(false);
         }
         pthread_mutex_unlock(&(job->handle->conn_lock));
         job->cmds_to_process--;
@@ -247,7 +247,7 @@ int redis_enqueue_pipelined(struct kv_store* handle, uint64_t sector_num,
     {
         if (redis_flush_pipeline(handle))
         {
-            assert(true);
+            assert(false);
         }
     }
     return EXIT_SUCCESS;
@@ -295,7 +295,7 @@ int redis_delqueue_pipelined(struct kv_store* handle, uint64_t sector_num)
     {
         if (redis_flush_pipeline(handle))
         {
-            assert(true);
+            assert(false);
         }
     }
     return EXIT_SUCCESS;
@@ -313,7 +313,7 @@ int redis_reverse_pointer_set(struct kv_store* handle, const char* fmt,
     {
         if (redis_flush_pipeline(handle))
         {
-            assert(true);
+            assert(false);
         }
     }
     return EXIT_SUCCESS;
@@ -334,7 +334,7 @@ int redis_hash_field_set(struct kv_store* handle, const char* fmt,
     {
         if (redis_flush_pipeline(handle))
         {
-            assert(true);
+            assert(false);
         }
     }
     return EXIT_SUCCESS;
@@ -435,7 +435,7 @@ int redis_list_set(struct kv_store* handle, char* fmt, uint64_t src,
     {
         if (redis_flush_pipeline(handle))
         {
-            assert(true);
+            assert(false);
         }
     }
     return EXIT_SUCCESS;
@@ -454,7 +454,7 @@ int redis_binary_insert(struct kv_store* handle, const char* fmt,
     {
         if (redis_flush_pipeline(handle))
         {
-            assert(true);
+            assert(false);
         }
     }
     return EXIT_SUCCESS;
@@ -475,7 +475,7 @@ int redis_reverse_file_data_pointer_set(struct kv_store* handle,
     {
         if (redis_flush_pipeline(handle))
         {
-            assert(true);
+            assert(false);
         }
     }
     return EXIT_SUCCESS;
@@ -491,7 +491,7 @@ int redis_path_set(struct kv_store* handle, const uint8_t* path, size_t len,
     {
         if (redis_flush_pipeline(handle))
         {
-            assert(true);
+            assert(false);
         }
     }
     return EXIT_SUCCESS;
@@ -523,7 +523,7 @@ int redis_metadata_set(struct kv_store* handle, const uint8_t* data,
     {
         if (redis_flush_pipeline(handle))
         {
-            assert(true);
+            assert(false);
         }
     }
     return EXIT_SUCCESS;
@@ -711,7 +711,7 @@ int redis_async_write_enqueue(struct kv_store* handle, struct bitarray* bits,
         sem_post(&(handle->thread_counter));
         if (pthread_create(&thread, NULL, redis_flush_thread_pipeline, job))
         {
-            assert(true);
+            assert(false);
         }
         handle->outstanding_bytes = 0;
     }
@@ -831,7 +831,7 @@ int redis_delete_key(struct kv_store* handle, char* fmt, uint64_t id)
     {
         if (redis_flush_pipeline(handle))
         {
-            assert(true);
+            assert(false);
         }
     }
     return EXIT_SUCCESS;
