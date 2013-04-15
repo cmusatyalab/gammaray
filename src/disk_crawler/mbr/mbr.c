@@ -69,6 +69,35 @@ uint16_t get_cylinder(uint8_t bytes[2])
     return cylinder | b2;
 }
 
+int64_t mbr_partition_offset(struct disk_mbr mbr, int pte)
+{
+    /* linux partition match */
+    if (mbr.pt[pte].partition_type == 0x83)
+    {
+        return SECTOR_SIZE*mbr.pt[pte].first_sector_lba;
+    }
+
+    /* Extended partition match */
+    if (mbr.pt[pte].partition_type == 0x05)
+    {
+        return SECTOR_SIZE*mbr.pt[pte].first_sector_lba;
+    }
+
+    /* NTFS partition match */
+    if (mbr.pt[pte].partition_type == 0x07)
+    {
+        return SECTOR_SIZE*mbr.pt[pte].first_sector_lba;
+    }
+
+    /* LVM partition match */
+    if (mbr.pt[pte].partition_type == 0x8e)
+    {
+        return SECTOR_SIZE*mbr.pt[pte].first_sector_lba;
+    }
+
+    return 0;
+}
+
 /* prints partition entry according to Wikipedia:
  * http://en.wikipedia.org/wiki/Master_boot_record */
 int mbr_print_partition(struct partition_table_entry pte)
