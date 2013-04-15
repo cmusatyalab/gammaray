@@ -28,7 +28,8 @@ libqemucommon_la_SOURCES = src/inference_engine/qemu_common.c
 libqemucommon_la_LIBADD = libbson.la
 
 # binaries
-bin_PROGRAMS = bitarray_test bson_printer bson_test async_queuer
+bin_PROGRAMS = bitarray_test bson_printer bson_test async_queuer \
+			   inference_engine
 bindir = $(srcdir)/bin
 
 bitarray_test_SOURCES = src/datastructures/bitarray_test.c
@@ -43,3 +44,9 @@ bson_test_LDADD = libbson.la
 async_queuer_SOURCES = src/inference_engine/async_queuer.c
 async_queuer_LDADD = libbitarray.la libcolor.la libredis.la \
 					 libutil.la libqemucommon.la -lpthread
+
+inference_engine_SOURCES = src/inference_engine/inference_engine.c \
+						   src/inference_engine/deep_inspection.c
+inference_engine_LDADD = libbitarray.la libcolor.la libredis.la \
+						 libutil.la libqemucommon.la libext4.la \
+						 libntfs.la -lpthread

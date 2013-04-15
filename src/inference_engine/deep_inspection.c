@@ -1998,7 +1998,7 @@ int __deserialize_mbr(struct bson_info* bson, struct kv_store* store,
         else
         {
             if (redis_hash_field_set(store, REDIS_MBR_SECTOR_INSERT, id,
-                                 value1.key, (const uint8_t*) value1.data,o
+                                 value1.key, (const uint8_t*) value1.data,
                                  (size_t) value1.size))
                 return EXIT_FAILURE;
         }
