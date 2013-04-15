@@ -14,6 +14,7 @@ AC_CONFIG_HEADERS([src/common/config.h])
 AC_PROG_CC
 AC_PROG_INSTALL
 AC_PROG_MAKE_SET
+AM_PROG_CC_C_O
 
 # Checks for libraries.
 AC_CHECK_LIB([hiredis], [redisConnect])
@@ -22,7 +23,7 @@ AC_CHECK_LIB([hiredis], [redisConnect])
 LT_INIT
 
 # Checks for header files.
-AC_CHECK_HEADERS([fcntl.h inttypes.h locale.h stddef.h stdint.h stdlib.h
+AC_CHECK_HEADERS([fcntl.h inttypes.h locale.h stddef.h stdint.h stdlib.h \
                   string.h sys/time.h unistd.h wchar.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
@@ -50,5 +51,7 @@ AC_FUNC_MALLOC
 AC_FUNC_REALLOC
 AC_FUNC_STRNLEN
 AC_CHECK_FUNCS([gethostname gettimeofday memmove memset setlocale])
+
+AC_CONFIG_FILES([Makefile])
 
 AC_OUTPUT
