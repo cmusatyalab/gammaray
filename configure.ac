@@ -48,7 +48,7 @@ AC_SUBST([LIBGAMMARAY_API_VERSION], [1.0])
 AC_FUNC_FSEEKO
 AC_FUNC_MALLOC
 AC_FUNC_REALLOC
-AC_CHECK_FUNCS([gethostname gettimeofday memmove memset setlocale])
 AC_FUNC_STRNLEN
+AC_CHECK_FUNCS([gethostname gettimeofday memmove memset setlocale])
 
 AC_OUTPUT
