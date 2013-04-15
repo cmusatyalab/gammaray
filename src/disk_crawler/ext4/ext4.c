@@ -1691,7 +1691,7 @@ int ext4_serialize_file_block_sectors(FILE* disk, int64_t partition_offset,
                                       struct bitarray* bits,
                                       uint32_t block_num,
                                       struct ext4_inode inode,
-                                      struct bson_info* sectors
+                                      struct bson_info* sectors,
                                       struct bson_info* data,
                                       struct bson_info* extents,
                                       bool data_save, bool save_extents)

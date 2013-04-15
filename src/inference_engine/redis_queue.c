@@ -84,7 +84,7 @@ struct kv_store
 
 int check_redis_return(struct kv_store* handle, redisReply* reply)
 {
-    if (reply == NULL || ((int) reply) == REDIS_ERR)
+    if (reply == NULL || ((int64_t) reply) == REDIS_ERR)
     {
         switch(handle->connection->err)
         {
@@ -356,7 +356,7 @@ int redis_hash_field_get(struct kv_store* handle, const char* fmt,
     }
     else
     {
-        fprintf(stdout, "reply->len = %zu len = %zu\n", reply->len, *len);
+        fprintf(stdout, "reply->len = %d len = %zu\n", reply->len, *len);
         *len = 0;
     }
 

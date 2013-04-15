@@ -121,7 +121,7 @@ int read_loop(int fd, struct kv_store* handle, struct bitarray* bits)
 
         gettimeofday(&end, NULL);
         fprintf(stderr, "[%"PRIu64"]read_loop finished in %"PRIu64
-                        " microseconds [%zu bytes]\n", counter++,
+                        " microseconds [%d bytes]\n", counter++,
                         diff_time(start, end),
                         write.header.nb_sectors*SECTOR_SIZE);
     }
