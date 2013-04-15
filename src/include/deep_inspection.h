@@ -27,13 +27,11 @@
 
 #include <stdbool.h>
 
-#include "ext2.h"
 #include "ext4.h"
 #include "ntfs.h"
 #include "mbr.h"
 #include "redis_queue.h"
 #include "qemu_common.h"
-
 
 #define FIELD_COMPARE(field, fname, type, btype) {\
     if (old->field != new->field) \
@@ -120,7 +118,6 @@ struct super_info
 
 /* functions */
 int qemu_load_index(FILE* index, struct kv_store* store);
-int qemu_load_md_filter(FILE* index, struct bitarray** bits);
 int qemu_print_write(struct qemu_bdrv_write* write);
 enum SECTOR_TYPE qemu_infer_sector_type(struct ext4_superblock* super,
                                         struct qemu_bdrv_write* write, 

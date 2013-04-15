@@ -25,6 +25,9 @@
 #define __INFERENCE_ENGINE_QEMU_COMMON_H
 
 #include <inttypes.h>
+#include <stdio.h>
+
+#include "bitarray.h"
 
 #define QEMU_HEADER_SIZE sizeof(struct qemu_bdrv_write_header)
 #define SECTOR_SIZE 512
@@ -55,6 +58,7 @@ struct qemu_bdrv_write
     uint8_t* data;
 };
 
+int qemu_load_md_filter(FILE* index, struct bitarray** bits);
 void qemu_parse_header(uint8_t* event_stream, struct qemu_bdrv_write* write);
 
 #endif
