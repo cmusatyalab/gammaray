@@ -37,7 +37,6 @@
 
 #include "bitarray.h"
 #include "color.h"
-#include "ext2.h"
 #include "ext4.h"
 #include "ntfs.h"
 #include "mbr.h"
@@ -82,7 +81,6 @@ int main(int argc, char* args[])
 {
     FILE* disk, *serializef;
     struct disk_mbr mbr;
-    struct ext2_superblock ext2_superblock;
     struct ext4_superblock ext4_superblock;
     struct ntfs_boot_file ntfs_bootf;
     struct partition_table_entry pte;
@@ -162,8 +160,7 @@ int main(int argc, char* args[])
     {
         if ((partition_offset = mbr_partition_offset(mbr, i)) > 0)
         {
-            if (ext2_probe(disk, partition_offset, &ext2_superblock) &&
-                ext4_probe(disk, partition_offset, &ext4_superblock) &&
+            if (ext4_probe(disk, partition_offset, &ext4_superblock) &&
                 ntfs_probe(disk, partition_offset, &ntfs_bootf))
             {
                 continue;
@@ -185,96 +182,6 @@ int main(int argc, char* args[])
     {
         if ((partition_offset = mbr_partition_offset(mbr, i)) > 0)
         {
-            if (ext2_probe(disk, partition_offset, &ext2_superblock))
-            {
-                fprintf_light_red(stderr, "ext2 probe failed.\n");
-            }
-            else
-            {
-                fprintf(stdout, "\n");
-                fprintf_light_green(stdout, "--- Analyzing ext2 Partition at "
-                                            "Offset 0x%.16"PRIx64" ---\n",
-                                            partition_offset);
-                mbr_get_partition_table_entry(mbr, i, &pte);
-
-                fprintf_light_blue(stdout, "Serializing Partition Data to: "
-                                          "%s\n\n", args[2]);
-
-                if (mbr_serialize_partition(i, pte, serializef))
-                {
-                    fprintf_light_red(stderr, "Error writing serialized "
-                                              "partition table entry.\n");
-                    return EXIT_FAILURE;
-                }
-                
-                if (ext2_serialize_fs(&ext2_superblock, 
-                                      ext2_last_mount_point(&ext2_superblock),
-                                      serializef))
-                {
-                    fprintf_light_red(stderr, "Error writing serialized fs "
-                                              "entry.\n");
-                    return EXIT_FAILURE;
-                }
-
-                if (ext2_serialize_bgds(disk, partition_offset,
-                                        &ext2_superblock, serializef))
-                {
-                    fprintf_light_red(stderr, "Error writing serialized "
-                                              "BGDs\n");
-                    return EXIT_FAILURE;
-                }
-
-                ext2_serialize_fs_tree(disk, partition_offset, 
-                                       &ext2_superblock,
-                                       ext2_last_mount_point(&ext2_superblock),
-                                       serializef);
-            }
-
-            if (ext3_probe(disk, partition_offset, &ext2_superblock))
-            {
-                fprintf_light_red(stderr, "ext3 probe failed.\n");
-            }
-            else
-            {
-                fprintf(stdout, "\n");
-                fprintf_light_green(stdout, "--- Analyzing ext3 Partition at "
-                                            "Offset 0x%.16"PRIx64" ---\n",
-                                            partition_offset);
-                mbr_get_partition_table_entry(mbr, i, &pte);
-
-                fprintf_light_blue(stdout, "Serializing Partition Data to: "
-                                          "%s\n\n", args[2]);
-
-                if (mbr_serialize_partition(i, pte, serializef))
-                {
-                    fprintf_light_red(stderr, "Error writing serialized "
-                                              "partition table entry.\n");
-                    return EXIT_FAILURE;
-                }
-                
-                if (ext2_serialize_fs(&ext2_superblock, 
-                                      ext2_last_mount_point(&ext2_superblock),
-                                      serializef))
-                {
-                    fprintf_light_red(stderr, "Error writing serialized fs "
-                                              "entry.\n");
-                    return EXIT_FAILURE;
-                }
-
-                if (ext2_serialize_bgds(disk, partition_offset,
-                                        &ext2_superblock, serializef))
-                {
-                    fprintf_light_red(stderr, "Error writing serialized "
-                                              "BGDs\n");
-                    return EXIT_FAILURE;
-                }
-
-                ext2_serialize_fs_tree(disk, partition_offset, 
-                                       &ext2_superblock,
-                                       ext2_last_mount_point(&ext2_superblock),
-                                       serializef);
-            }
-
             if (ext4_probe(disk, partition_offset, &ext4_superblock))
             {
                 fprintf_light_red(stderr, "ext4 probe failed.\n");

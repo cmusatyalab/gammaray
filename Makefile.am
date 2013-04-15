@@ -29,7 +29,7 @@ libqemucommon_la_LIBADD = libbson.la
 
 # binaries
 bin_PROGRAMS = bitarray_test bson_printer bson_test async_queuer \
-			   inference_engine
+			   inference_engine disk_crawler
 bindir = $(srcdir)/bin
 
 bitarray_test_SOURCES = src/datastructures/bitarray_test.c
@@ -50,3 +50,7 @@ inference_engine_SOURCES = src/inference_engine/inference_engine.c \
 inference_engine_LDADD = libbitarray.la libcolor.la libredis.la \
 						 libutil.la libqemucommon.la libext4.la \
 						 libntfs.la -lpthread
+
+disk_crawler_SOURCES = src/disk_crawler/disk_crawler.c
+disk_crawler_LDADD = libbitarray.la libbson.la libcolor.la libutil.la \
+					 libmbr.la libext4.la libntfs.la
