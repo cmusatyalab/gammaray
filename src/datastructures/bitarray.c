@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <inttypes.h>
 
 #include "color.h"
 #include "bitarray.h"
@@ -91,7 +92,7 @@ struct bitarray* bitarray_init(uint64_t len)
 
     if (bits)
     {
-        bits->len = ((uint64_t) 1) << highest_bit_set64(len);
+        bits->len = ((uint64_t) 1) << highest_set_bit64(len);
         bits->array = (uint8_t*) malloc((bits->len + 7) / 8);
         bitarray_unset_all(bits);
     }
@@ -105,7 +106,7 @@ struct bitarray* bitarray_init_data(uint8_t* data, uint64_t len)
 
     if (bits)
     {
-        bits->len = ((uint64_t) 1) << highest_bit_set64(len);
+        bits->len = ((uint64_t) 1) << highest_set_bit64(len);
         bits->array = (uint8_t*) malloc((bits->len + 7) / 8);
         memcpy(bits->array, data, len / 8);
     }
