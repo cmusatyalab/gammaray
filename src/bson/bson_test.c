@@ -177,7 +177,7 @@ void test_encoding()
     int32_t len5 = 6;
     char val5bin[6] = {0xff,0xde,0xad,0xbe,0xef,0xff};
     uint8_t buf5[6];
-    memcpy(&buf5[4], val5bin, len5);
+    memcpy(buf5, val5bin, len5);
     struct bson_kv val5 = {
                                 .type = BSON_BINARY,
                                 .subtype = BSON_BINARY_GENERIC,
