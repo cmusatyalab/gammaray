@@ -29,16 +29,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define KB 1024
-#define MB KB*1024
-#define GB MB*1024
-#define TB GB*1024
+#define KB 1024L
+#define MB (KB*1024)
+#define GB (MB*1024)
+#define TB (GB*1024)
 
-#define MILLIS 1000
-#define SECONDS MILLIS*MILLIS
-#define MINUTES SECONDS*60
-#define HOURS MINUTES*60
-#define DAYS HOURS*24
+#define MILLIS 1000L
+#define SECONDS (MILLIS*MILLIS)
+#define MINUTES (SECONDS*60)
+#define HOURS (MINUTES*60)
+#define DAYS (HOURS*24)
 
 bool top_bit_set(uint8_t byte)
 {
@@ -164,13 +164,13 @@ int hexdump(uint8_t* buf, uint64_t len)
 int pretty_print_bytes(uint64_t bytes, char* buf, uint64_t bufsize)
 {
     if (bytes > TB)
-        snprintf(buf, bufsize, "%0.3f TiB", ((double) bytes) / TB);
+        snprintf(buf, bufsize, "%0.3Lf TiB", ((long double) bytes) / TB);
     else if (bytes > GB)
-        snprintf(buf, bufsize, "%0.3f GiB", ((double) bytes) / GB);
+        snprintf(buf, bufsize, "%0.3Lf GiB", ((long double) bytes) / GB);
     else if (bytes > MB)
-        snprintf(buf, bufsize, "%0.3f MiB", ((double) bytes) / MB);
+        snprintf(buf, bufsize, "%0.3Lf MiB", ((long double) bytes) / MB);
     else if(bytes > KB)
-        snprintf(buf, bufsize, "%0.3f KiB", ((double) bytes) / KB);
+        snprintf(buf, bufsize, "%0.3Lf KiB", ((long double) bytes) / KB);
     else
         snprintf(buf, bufsize, "%"PRIu64" B", bytes);
 
@@ -181,16 +181,20 @@ int pretty_print_bytes(uint64_t bytes, char* buf, uint64_t bufsize)
 int pretty_print_microseconds(uint64_t micros, char* buf, uint64_t bufsize)
 {
     if (micros > DAYS)
-        snprintf(buf, bufsize, "%0.3f days", ((double) micros) / DAYS);
+        snprintf(buf, bufsize, "%0.3Lf days",
+                                            ((long double) micros) / DAYS);
     else if (micros > HOURS)
-        snprintf(buf, bufsize, "%0.3f hours", ((double) micros) / HOURS);
+        snprintf(buf, bufsize, "%0.3Lf hours",
+                                            ((long double) micros) / HOURS);
     else if (micros > MINUTES)
-        snprintf(buf, bufsize, "%0.3f minutes", ((double) micros ) / MINUTES);
+        snprintf(buf, bufsize, "%0.3Lf minutes",
+                                            ((long double) micros ) / MINUTES);
     else if (micros > SECONDS)
-        snprintf(buf, bufsize, "%0.3f seconds", ((double) micros) / SECONDS);
+        snprintf(buf, bufsize, "%0.3Lf seconds",
+                                            ((long double) micros) / SECONDS);
     else if (micros > MILLIS)
-        snprintf(buf, bufsize, "%0.3f milliseconds",
-                                                ((double) micros) / MILLIS);
+        snprintf(buf, bufsize, "%0.3Lf milliseconds",
+                                            ((long double) micros) / MILLIS);
     else
         snprintf(buf, bufsize, "%"PRIu64" microseconds", micros);
 
