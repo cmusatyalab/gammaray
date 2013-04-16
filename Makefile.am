@@ -27,7 +27,7 @@ ACLOCAL_AMFLAGS = -I build-aux/m4
 AM_CFLAGS = -I$(srcdir)/src/include
 
 # distribution
-EXTRA_DIST = LICENSE NOTICE README
+EXTRA_DIST = LICENSE NOTICE README src/include/*.h
 
 # helper libraries
 noinst_LTLIBRARIES = libbitarray.la libbson.la libcolor.la libredis.la \
