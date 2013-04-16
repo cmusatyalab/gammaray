@@ -21,8 +21,6 @@
 #   See the License for the specific language governing permissions and       #
 #   limitations under the License.                                            #
 ###############################################################################
-
-
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
@@ -67,7 +65,7 @@ AC_TYPE_UINT64_T
 AC_TYPE_UINT8_T
 
 # lib substitutions
-AC_SUBST([LIBGAMMARAY_SO_VERSION], [0:0:0]])
+AC_SUBST([LIBGAMMARAY_SO_VERSION], [0:0:0])
 AC_SUBST([LIBGAMMARAY_API_VERSION], [1.0])
 
 # Checks for library functions.
