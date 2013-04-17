@@ -44,6 +44,6 @@ bin_toolsdir = $(bindir)/tools
 include $(srcdir)/src/bson/build.mk
 include $(srcdir)/src/datastructures/build.mk
 include $(srcdir)/src/disk_crawler/build.mk
-#TODO include $(srcdir)/src/fuse_driver/build.mk
+include $(srcdir)/src/fuse_driver/build.mk
 include $(srcdir)/src/inference_engine/build.mk
 include $(srcdir)/src/util/build.mk
