@@ -11,7 +11,9 @@ lib_libredis_la_CFLAGS  = $(AM_CFLAGS) \
 
 lib_libqemucommon_la_SOURCES = src/inference_engine/deep_inspection.c \
 							   src/inference_engine/qemu_common.c
-lib_libqemucommon_la_LIBADD  = $(libdir)/libbson.la
+lib_libqemucommon_la_LIBADD  = $(libdir)/libbson.la \
+							   $(libdir)/libext4.la \
+							   $(libdir)/libntfs.la
 
 bin_async_queuer_SOURCES = src/inference_engine/async_queuer.c
 bin_async_queuer_LDADD   = $(libdir)/libbitarray.la \
