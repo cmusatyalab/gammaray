@@ -8,8 +8,8 @@ lib_libext4_la_SOURCES = src/gray-crawler/ext4/ext4.c
 lib_libntfs_la_SOURCES = src/gray-crawler/ntfs/ntfs.c
 lib_libmbr_la_SOURCES  = src/gray-crawler/mbr/mbr.c
 
-bin_disk_crawler_SOURCES = src/gray-crawler/gray-crawler.c
-bin_disk_crawler_LDADD   = $(libdir)/libbitarray.la \
+bin_gray_crawler_SOURCES = src/gray-crawler/gray-crawler.c
+bin_gray_crawler_LDADD   = $(libdir)/libbitarray.la \
 						   $(libdir)/libbson.la \
 						   $(libdir)/libcolor.la \
 						   $(libdir)/libext4.la \

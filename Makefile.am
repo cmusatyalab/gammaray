@@ -43,7 +43,7 @@ bin_toolsdir = $(bindir)/tools
 # subprojects
 include $(srcdir)/src/bson/build.mk
 include $(srcdir)/src/datastructures/build.mk
-include $(srcdir)/src/disk_crawler/build.mk
-include $(srcdir)/src/fuse_driver/build.mk
-include $(srcdir)/src/inference_engine/build.mk
+include $(srcdir)/src/gray-crawler/build.mk
+include $(srcdir)/src/gray-fs/build.mk
+include $(srcdir)/src/gray-inferencer/build.mk
 include $(srcdir)/src/util/build.mk

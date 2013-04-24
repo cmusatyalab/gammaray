@@ -23,7 +23,7 @@ bin_gray_ndb_queuer_LDADD   = $(libdir)/libbitarray.la \
 							  $(libdir)/libutil.la \
 							  -lpthread
 
-bin_gray_inferencer_SOURCES = src//gray-inferencer/gray-inferencer.c
+bin_gray_inferencer_SOURCES = src/gray-inferencer/gray-inferencer.c
 bin_gray_inferencer_LDADD   = $(libdir)/libbitarray.la \
 							  $(libdir)/libcolor.la \
 							  $(libdir)/libext4.la \
