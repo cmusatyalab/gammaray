@@ -1,5 +1,5 @@
 /*****************************************************************************
- * inference_engine.c                                                        *
+ * gray-inferencer.c                                                         *
  *                                                                           *
  * This file implements a process that analyzes a stream of disk block writes*
  * and infer file-level mutations given context from a pre-indexed raw disk  *
@@ -100,7 +100,7 @@ int main(int argc, char* args[])
     struct timeval start, end;
     char pretty_micros[32];
 
-    fprintf_blue(stdout, "VM Disk Analysis Engine -- "
+    fprintf_blue(stdout, "gammaray Inference Engine -- "
                          "By: Wolfgang Richter "
                          "<wolf@cs.cmu.edu>\n");
     redis_print_version();

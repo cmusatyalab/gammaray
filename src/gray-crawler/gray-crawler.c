@@ -1,5 +1,5 @@
 /*****************************************************************************
- * disk_crawler.c                                                            *
+ * gray-crawler.c                                                            *
  *                                                                           *
  * Analyze a raw disk image and produce summary datastructures of            *
  * the partition table, and file system metadata.                            *
@@ -41,7 +41,7 @@
 #include "ntfs.h"
 #include "mbr.h"
 
-int disk_crawler_serialize_bitarray(struct bitarray* bits, FILE* serializef)
+int gray_crawler_serialize_bitarray(struct bitarray* bits, FILE* serializef)
 {
     struct bson_info* serialized;
     struct bson_kv value;
@@ -251,7 +251,7 @@ int main(int argc, char* args[])
                                        serializef,
                                        icache,
                                        bcache);
-                disk_crawler_serialize_bitarray(bits, serializef);
+                gray_crawler_serialize_bitarray(bits, serializef);
             }
 
             if (ntfs_probe(disk, partition_offset, &ntfs_bootf))
@@ -289,7 +289,7 @@ int main(int argc, char* args[])
 
                 ntfs_serialize_fs_tree(disk, &ntfs_bootf, bits,
                                        partition_offset, "/", serializef);
-                disk_crawler_serialize_bitarray(bits, serializef);
+                gray_crawler_serialize_bitarray(bits, serializef);
             }
         }
     }

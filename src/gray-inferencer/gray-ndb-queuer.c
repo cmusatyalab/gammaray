@@ -1,5 +1,5 @@
 /*****************************************************************************
- * async_queuer.c                                                            *
+ * gray-ndb-queuer.c                                                         *
  *                                                                           *
  * This file implements a process that pushes asynchronously all writes into *
  * a Redis queue.                                                            *
@@ -143,7 +143,7 @@ int main(int argc, char* args[])
     FILE* indexf;
     struct bitarray* bits;
 
-    fprintf_blue(stdout, "Async Qemu Queue Pusher -- "
+    fprintf_blue(stdout, "gammaray Async Queuer -- "
                          "By: Wolfgang Richter "
                          "<wolf@cs.cmu.edu>\n");
     redis_print_version();
