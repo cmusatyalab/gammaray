@@ -32,27 +32,28 @@
 struct nbd_handle
 {
     int fd;
-    int socket;
     uint64_t fsize;
     uint64_t handle;
     char* export_name;
-    struct event_base* ebase;
+    struct event_base* eb;
+    struct evconnlistener* conn;
 };
 
 int main(int argc, char* argv[])
 {
     struct nbd_handle* handle = nbd_init_file("test", "test",
-                                              GAMMARAY_NBD_PORT);
+                                              "127.0.0.1", "10809");
 
     assert(handle != NULL);
-    nbd_shutdown(handle);
-
     assert(handle->fd != 0);
     assert(strncmp("test", handle->export_name, strlen("test")) == 0);
-    assert(handle->ebase != NULL);
-    assert(handle->socket != 0);
+    assert(handle->eb != NULL);
+    assert(handle->conn != NULL);
     assert(handle->fsize == 10*1024*1024);
     
+    nbd_run_loop(handle);
+    nbd_shutdown(handle);
+
     fprintf_light_green(stdout, "-- Passed all tests --\n");
     return EXIT_SUCCESS;
 }

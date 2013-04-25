@@ -26,17 +26,23 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <sys/types.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <netdb.h>
 #include <unistd.h>
 
-#include <event2/event.h>
+#include <event2/buffer.h>
+#include <event2/bufferevent.h>
+#include <event2/listener.h>
 
 #include "nbd.h"
 
 #define GAMMARAY_NBD_MAGIC "NBDMAGIC"
+#define GAMMARAY_NBD_SERVICE "nbd"
 
 #define GAMMARAY_NBD_OLD_PROTOCOL 0x00420281861253LL
 #define GAMMARAY_NBD_NEW_PROTOCOL 0x49484156454F5054LL
@@ -125,23 +131,72 @@ struct nbd_res_header
 struct nbd_handle
 {
     int fd;
-    int socket;
     uint64_t fsize;
     uint64_t handle;
     char* export_name;
-    struct event_base* ebase;
+    struct event_base* eb;
+    struct evconnlistener* conn;
 };
 
-struct nbd_handle* nbd_init_file(char* export_name, char* fname,
-                                 unsigned int port)
+/* private helper callbacks */
+static void nbd_echo(struct bufferevent* bev, void* handle)
 {
-    struct nbd_handle* ret = NULL;
-    struct event_base* eb = NULL;
-    struct stat st_buf;
-    int fd = 0, socket = 0;
+    struct evbuffer* in = bufferevent_get_input(bev);
+    struct evbuffer* out = bufferevent_get_output(bev);
 
-    if (export_name == NULL || fname == NULL || port > 65535)
+    evbuffer_add_buffer(out, in);
+}
+
+static void nbd_event_echo(struct bufferevent* bev, short events, void* handle)
+{
+    if (events & BEV_EVENT_ERROR)
+        return;
+
+    if (events & (BEV_EVENT_EOF | BEV_EVENT_ERROR))
+        bufferevent_free(bev);
+}
+
+static void nbd_new_conn(struct evconnlistener *conn, evutil_socket_t sock,
+                         struct sockaddr *addr, int len, void *ptr)
+{
+    struct event_base* eb = evconnlistener_get_base(conn);
+    struct bufferevent* bev = bufferevent_socket_new(eb, sock,
+                                                     BEV_OPT_CLOSE_ON_FREE);
+
+    bufferevent_setcb(bev, &nbd_echo, NULL, &nbd_event_echo, NULL);
+    bufferevent_enable(bev, EV_READ|EV_WRITE);
+}
+
+static void nbd_event_error(struct evconnlistener* conn, void* ptr)
+{
+    struct event_base* eb = evconnlistener_get_base(conn);
+    event_base_loopexit(eb, NULL);
+}
+
+void nbd_run_loop(struct nbd_handle* handle)
+{
+    event_base_dispatch(handle->eb);
+}
+
+/* public library methods */
+struct nbd_handle* nbd_init_file(char* export_name, char* fname,
+                                 char* nodename, char* port)
+{
+    int fd = 0;
+    struct stat st_buf;
+    struct addrinfo hints;
+    struct addrinfo* server = NULL;
+    evutil_socket_t socket = 0;
+    struct event_base* eb = NULL;
+    struct nbd_handle* ret = NULL;
+    struct evconnlistener* conn = NULL;
+
+    /* sanity check */
+    if (export_name == NULL || fname == NULL || port == NULL)
         return NULL;
+
+    /* check and open file */
+    memset(&st_buf, 0, sizeof(struct stat));
 
     if (stat(fname, &st_buf))
         return NULL;
@@ -149,19 +204,66 @@ struct nbd_handle* nbd_init_file(char* export_name, char* fname,
     if ((fd = open(fname, O_RDWR)) == -1)
         return NULL;
 
-    if ((eb = event_base_new()) == NULL)
-        return NULL;
+    /* setup network socket */
+    memset(&hints, 0, sizeof(struct addrinfo));
 
-    if ((ret = (struct nbd_handle*) malloc(sizeof(struct nbd_handle))) == NULL)
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+
+    if (getaddrinfo(nodename, port, &hints, &server))
+    {
+        if (server)
+            freeaddrinfo(server);
         return NULL;
+    }
+
+    /* initialize libevent */
+    if ((eb = event_base_new()) == NULL)
+    {
+        freeaddrinfo(server);
+        close(fd);
+        return NULL;
+    }
+
+    /* initialize this NBD module */
+    if ((ret = (struct nbd_handle*) malloc(sizeof(struct nbd_handle))) == NULL)
+    {
+        freeaddrinfo(server);
+        close(fd);
+        event_base_free(eb);
+        return NULL;
+    }
+
+    /* setup network connection */
+    if ((conn = evconnlistener_new_bind(eb, &nbd_new_conn, ret,
+                                        LEV_OPT_CLOSE_ON_FREE |
+                                        LEV_OPT_REUSEABLE, -1,
+                                        server->ai_addr,
+                                        server->ai_addrlen)) == NULL)
+    {
+        freeaddrinfo(server);
+        close(fd);
+        event_base_free(eb);
+        free(ret);
+        return NULL;
+    }
+
+    evconnlistener_set_error_cb(conn, nbd_event_error);
 
     ret->fd = fd;
     ret->fsize = st_buf.st_size;
-    ret->socket = socket;
     ret->export_name = export_name;
-    ret->ebase = eb;
+    ret->eb = eb;
+    ret->conn = conn;
+
+    freeaddrinfo(server);
 
     return ret;
+}
+
+void nbd_run(struct nbd_handle* handle)
+{
+    event_base_dispatch(handle->eb);
 }
 
 void nbd_shutdown(struct nbd_handle* handle)
@@ -172,6 +274,6 @@ void nbd_shutdown(struct nbd_handle* handle)
     if (handle->fd)
         close(handle->fd);
 
-    if (handle->ebase)
-        event_base_free(handle->ebase);
+    if (handle->eb)
+        event_base_free(handle->eb);
 }

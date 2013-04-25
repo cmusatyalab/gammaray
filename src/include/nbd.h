@@ -31,7 +31,7 @@ struct nbd_handle;
 struct nbd_req_header;
 
 struct nbd_handle* nbd_init_file(char* export_name, char* fname,
-                                 unsigned int port);
+                                 char* nodename, char* port);
 void nbd_shutdown(struct nbd_handle* handle);
 int nbd_handle_read(struct nbd_handle* handle, struct nbd_req_header* hdr);
 int nbd_handle_write(struct nbd_handle* handle, struct nbd_req_header* hdr);
@@ -39,6 +39,6 @@ int nbd_handle_disconnect(struct nbd_handle* handle,
                           struct nbd_req_header* hdr);
 int nbd_handle_flush(struct nbd_handle* handle, struct nbd_req_header* hdr);
 int nbd_handle_trim(struct nbd_handle* handle, struct nbd_req_header* hdr);
-int nbd_loop(struct nbd_handle* handle);
+void nbd_run_loop(struct nbd_handle* handle);
 
 #endif
