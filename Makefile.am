@@ -46,4 +46,5 @@ include $(srcdir)/src/datastructures/build.mk
 include $(srcdir)/src/gray-crawler/build.mk
 include $(srcdir)/src/gray-fs/build.mk
 include $(srcdir)/src/gray-inferencer/build.mk
+include $(srcdir)/src/nbd/build.mk
 include $(srcdir)/src/util/build.mk
