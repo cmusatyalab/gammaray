@@ -1,7 +1,7 @@
 /*****************************************************************************
- * color_test.c                                                              *
+ * util-test.c                                                               *
  *                                                                           *
- * This file executes all of the colorized version of fprintf to test them.  *
+ * This file executes utility functions to test them.                        *
  *                                                                           *
  *                                                                           *
  *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
@@ -21,29 +21,15 @@
  *   See the License for the specific language governing permissions and     *
  *   limitations under the License.                                          *
  *****************************************************************************/
-#include "color.h"
+#include "util.h"
 
 #include <stdlib.h>
 
 int main(int argc, char* argv[])
 {
-    fprintf_black(stdout, "fprintf_black\n");
-    fprintf_red(stdout, "fprintf_red\n");
-    fprintf_blue(stdout, "fprintf_blue\n");
-    fprintf_green(stdout, "fprintf_green\n");
-    fprintf_yellow(stdout, "fprintf_yellow\n");
-    fprintf_magenta(stdout, "fprintf_magenta\n");
-    fprintf_cyan(stdout, "fprintf_cyan\n");
-    fprintf_white(stdout, "fprintf_white\n");
+    uint64_t test = 4;
 
-    fprintf_light_black(stdout, "fprintf_light_black\n");
-    fprintf_light_red(stdout, "fprintf_light_red\n");
-    fprintf_light_blue(stdout, "fprintf_light_blue\n");
-    fprintf_light_green(stdout, "fprintf_light_green\n");
-    fprintf_light_yellow(stdout, "fprintf_light_yellow\n");
-    fprintf_light_magenta(stdout, "fprintf_light_magenta\n");
-    fprintf_light_cyan(stdout, "fprintf_light_cyan\n");
-    fprintf_light_white(stdout, "fprintf_light_white\n");
+    hexdump((uint8_t*) &test, sizeof(uint64_t));
 
     return EXIT_SUCCESS;
 }
