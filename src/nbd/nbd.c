@@ -24,6 +24,7 @@
  *****************************************************************************/
 #define _FILE_OFFSET_BITS 64
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -32,6 +33,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <endian.h>
 #include <netdb.h>
 #include <unistd.h>
 
@@ -41,11 +43,12 @@
 
 #include "nbd.h"
 
-#define GAMMARAY_NBD_MAGIC "NBDMAGIC"
+#define GAMMARAY_NBD_MAGIC 0x4e42444d41474943LL
 #define GAMMARAY_NBD_SERVICE "nbd"
 
 #define GAMMARAY_NBD_OLD_PROTOCOL 0x00420281861253LL
 #define GAMMARAY_NBD_NEW_PROTOCOL 0x49484156454F5054LL
+#define GAMMARAY_NBD_REPLY_MAGIC  0x3e889045565a9LL
 
 enum NBD_CMD
 {
@@ -88,14 +91,14 @@ enum NBD_REP_TYPE
     NBD_REP_ERR_PLATFORM    = 0x080000004
 };
 
-struct nbd_old_handshake
+enum NBD_CLIENT_STATE
 {
-    uint64_t magic;
-    uint64_t protocol;
-    uint64_t size;
-    uint32_t flags;
-    uint8_t pad[124];
-} __attribute__((packed));
+    NBD_HANDSHAKE_SENT,
+    NBD_ZERO_RECEIVED,
+    NBD_OPTION_SETTING,
+    NBD_DATA_PUSHING,
+    NBD_DISCONNECTED
+};
 
 struct nbd_new_handshake
 {
@@ -109,6 +112,13 @@ struct nbd_new_handshake_finish
     uint64_t size;
     uint16_t export_flags;
     uint8_t pad[124];
+} __attribute__((packed));
+
+struct nbd_opt_header
+{
+    uint64_t magic;
+    uint32_t option;
+    uint32_t len;
 } __attribute__((packed));
 
 struct nbd_req_header
@@ -128,42 +138,186 @@ struct nbd_res_header
     uint32_t handle;
 } __attribute__((packed));
 
+struct nbd_res_opt_header
+{
+    uint64_t magic;
+    uint32_t option;
+    uint32_t type;
+    uint32_t len;
+} __attribute__((packed));
+
 struct nbd_handle
 {
     int fd;
-    uint64_t fsize;
+    uint64_t size;
     uint64_t handle;
     char* export_name;
+    uint32_t name_len;
     struct event_base* eb;
     struct evconnlistener* conn;
 };
 
-/* private helper callbacks */
-static void nbd_echo(struct bufferevent* bev, void* handle)
+struct nbd_client
 {
-    struct evbuffer* in = bufferevent_get_input(bev);
-    struct evbuffer* out = bufferevent_get_output(bev);
+    struct nbd_handle* handle;
+    evutil_socket_t socket;
+    enum NBD_CLIENT_STATE state;
+    uint8_t* buf;
+};
 
-    evbuffer_add_buffer(out, in);
+bool __check_zero_handshake(struct evbuffer* in,
+                            struct nbd_client* client)
+{
+    uint32_t* peek;
+    peek = (uint32_t*) evbuffer_pullup(in, 4);
+
+    if (peek && (*peek == 0))
+    {
+        evbuffer_drain(in, 4);
+        client->state = NBD_ZERO_RECEIVED;
+        return false;
+    }
+
+    return true;
 }
 
-static void nbd_event_echo(struct bufferevent* bev, short events, void* handle)
+bool __send_export_info(struct evbuffer* out, struct nbd_handle* handle)
+{
+    struct nbd_new_handshake_finish hdr = {
+                                            .size = htobe64(handle->size),
+                                            .export_flags =
+                                                htobe16(NBD_FLAG_HAS_FLAGS |
+                                                        NBD_FLAG_SEND_FLUSH |
+                                                        NBD_FLAG_SEND_FUA |
+                                                        NBD_FLAG_ROTATIONAL |
+                                                        NBD_FLAG_SEND_TRIM),
+                                            .pad = {0}
+                                          };
+    evbuffer_add(out, &hdr, sizeof(hdr));
+    return true;
+}
+
+bool __send_unsupported_opt(struct evbuffer* out, uint32_t option)
+{
+    struct nbd_res_opt_header hdr = {
+                                        .magic =
+                                            htobe64(GAMMARAY_NBD_REPLY_MAGIC), 
+                                        .option = option,
+                                        .type = htobe32(NBD_REP_ERR_UNSUP),
+                                        .len = 0
+                                    };
+    evbuffer_add(out, &hdr, sizeof(hdr));
+    return true;
+}
+
+bool __check_opt_header(struct evbuffer* in, struct evbuffer* out,
+                        struct nbd_client* client)
+{
+    struct nbd_opt_header* peek;
+    char* export_name;
+    uint32_t name_len;
+    peek = (struct nbd_opt_header*)
+           evbuffer_pullup(in, sizeof(struct nbd_opt_header));
+
+    if (peek)
+    {
+        if (be64toh(peek->magic) == GAMMARAY_NBD_NEW_PROTOCOL)
+        {
+            switch (be32toh(peek->option))
+            {
+                NBD_OPT_EXPORT_NAME:
+                    name_len = be32toh(peek->len);
+
+                    if (name_len != client->handle->name_len)
+                        goto fail;
+
+                    export_name = evbuffer_pullup(in, name_len);
+
+                    if (export_name == NULL)
+                        return true;
+                    
+                    if (strncmp(export_name,
+                                          client->handle->export_name,
+                                          name_len) == 0)
+                    {
+                        __send_export_info(out, client->handle);
+                        client->state = NBD_DATA_PUSHING;
+                        return false;
+                    }
+
+                NBD_OPT_ABORT:
+                    goto fail;
+
+                NBD_OPT_LIST:
+                default:
+                    __send_unsupported_opt(out, peek->option);
+                    return true;
+            };
+        }
+fail:
+        evutil_closesocket(client->socket);
+        return true;
+    }
+
+    return true;
+}
+
+/* private helper callbacks */
+static void nbd_client_handler(struct bufferevent* bev, void* client)
+{
+    struct evbuffer* in  = bufferevent_get_input(bev);
+    struct evbuffer* out = bufferevent_get_output(bev);
+
+    switch (((struct nbd_client*) client)->state)
+    {
+        case NBD_HANDSHAKE_SENT:
+           if (__check_zero_handshake(in, client))
+               break;
+        case NBD_ZERO_RECEIVED:
+           if (__check_opt_header(in, out, client))
+              break; 
+        case NBD_DATA_PUSHING:
+        case NBD_DISCONNECTED:
+        default:
+            break;
+    };
+}
+
+static void nbd_ev_handler(struct bufferevent* bev, short events, void* client)
 {
     if (events & BEV_EVENT_ERROR)
         return;
 
     if (events & (BEV_EVENT_EOF | BEV_EVENT_ERROR))
+    {
         bufferevent_free(bev);
+        free(client);
+    }
 }
 
 static void nbd_new_conn(struct evconnlistener *conn, evutil_socket_t sock,
-                         struct sockaddr *addr, int len, void *ptr)
+                         struct sockaddr *addr, int len, void * handle)
 {
     struct event_base* eb = evconnlistener_get_base(conn);
     struct bufferevent* bev = bufferevent_socket_new(eb, sock,
                                                      BEV_OPT_CLOSE_ON_FREE);
+    struct evbuffer* out = bufferevent_get_output(bev);
+    struct nbd_new_handshake hdr = { .magic        =
+                                            htobe64(GAMMARAY_NBD_MAGIC),
+                                     .protocol     =
+                                            htobe64(GAMMARAY_NBD_NEW_PROTOCOL),
+                                     .global_flags =
+                                            htobe16(NBD_FLAG_FIXED_NEWSTYLE)
+                                   };
+    struct nbd_client* client = (struct nbd_client*)
+                                    malloc(sizeof(struct nbd_client));
 
-    bufferevent_setcb(bev, &nbd_echo, NULL, &nbd_event_echo, NULL);
+    client->handle = handle;
+    client->state = NBD_HANDSHAKE_SENT;
+    client->socket = sock;
+
+    bufferevent_setcb(bev, &nbd_client_handler, NULL, &nbd_ev_handler, client);
+    evbuffer_add(out, &hdr, sizeof(hdr));
     bufferevent_enable(bev, EV_READ|EV_WRITE);
 }
 
@@ -251,8 +405,9 @@ struct nbd_handle* nbd_init_file(char* export_name, char* fname,
     evconnlistener_set_error_cb(conn, nbd_event_error);
 
     ret->fd = fd;
-    ret->fsize = st_buf.st_size;
+    ret->size = st_buf.st_size;
     ret->export_name = export_name;
+    ret->name_len = strlen(export_name);
     ret->eb = eb;
     ret->conn = conn;
 
