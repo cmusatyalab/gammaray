@@ -24,7 +24,7 @@
 
 #setup 
 ACLOCAL_AMFLAGS = -I build-aux/m4
-AM_CFLAGS = -I$(srcdir)/src/include
+AM_CFLAGS = -Wall -Werror -I$(srcdir)/src/include
 
 # distribution
 EXTRA_DIST = LICENSE NOTICE README src/include/*.h
