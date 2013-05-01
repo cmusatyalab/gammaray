@@ -408,7 +408,10 @@ bool __check_request(struct evbuffer* in, struct evbuffer* out,
                 case NBD_CMD_FLUSH:
                     fprintf(stderr, "got flush.\n");
                     evbuffer_drain(in, sizeof(struct nbd_res_header));
-                    __send_response(out, 0, handle, NULL, 0);
+                    if (fsync(client->handle->fd))
+                        __send_response(out, errno, handle, NULL, 0);
+                    else
+                        __send_response(out, 0, handle, NULL, 0);
                     return false;
                 case NBD_CMD_TRIM:
                     fprintf(stderr, "got trim.\n");
