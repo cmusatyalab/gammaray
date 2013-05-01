@@ -22,6 +22,7 @@
  *   See the License for the specific language governing permissions and     *
  *   limitations under the License.                                          *
  *****************************************************************************/
+#define _GNU_SOURCE
 #define _LARGEFILE64_SOURCE
 #define _FILE_OFFSET_BITS 64
 
@@ -38,6 +39,7 @@
 #include <endian.h>
 #include <errno.h>
 #include <netdb.h>
+#include <linux/falloc.h>
 #include <unistd.h>
 
 #include <event2/buffer.h>
@@ -411,7 +413,14 @@ bool __check_request(struct evbuffer* in, struct evbuffer* out,
                 case NBD_CMD_TRIM:
                     fprintf(stderr, "got trim.\n");
                     evbuffer_drain(in, sizeof(struct nbd_res_header));
-                    __send_response(out, 0, handle, NULL, 0);
+                    if (fallocate(client->handle->fd,
+                                  FALLOC_FL_PUNCH_HOLE |
+                                  FALLOC_FL_KEEP_SIZE,
+                                  be64toh(peek->offset),
+                                  be32toh(peek->length)))
+                        __send_response(out, errno, handle, NULL, 0);
+                    else
+                        __send_response(out, 0, handle, NULL, 0);
                     return false;
                 default:
                     test = evbuffer_pullup(in, sizeof(struct nbd_res_header) +
