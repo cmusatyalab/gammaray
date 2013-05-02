@@ -57,7 +57,7 @@
 #define GAMMARAY_NBD_REPLY_MAGIC  0x3e889045565a9LL
 
 #define GAMMARAY_NBD_REQ_MAGIC 0x25609513
-#define GAMMARAY_NBD_RES_MAGIC 0x67446698
+#define GAMMARAY_NBD_REP_MAGIC 0x67446698
 
 enum NBD_CMD
 {
@@ -223,9 +223,9 @@ bool __send_response(struct evbuffer* out, uint32_t error,
                      uint64_t handle, uint8_t* data, uint32_t len)
 {
     struct nbd_res_header hdr = {
-                                    .magic = GAMMARAY_NBD_RES_MAGIC,
-                                    .error = error,
-                                    .handle = handle 
+                                    .magic  = htobe32(GAMMARAY_NBD_REP_MAGIC),
+                                    .error  = htobe32(error),
+                                    .handle = htobe64(handle) 
                                 };
 
     evbuffer_add(out, &hdr, sizeof(hdr));
