@@ -143,7 +143,7 @@ struct nbd_res_header
 {
     uint32_t magic;
     uint32_t error;
-    uint32_t handle;
+    uint64_t handle;
 } __attribute__((packed));
 
 struct nbd_res_opt_header
@@ -394,7 +394,7 @@ bool __check_request(struct evbuffer* in, struct evbuffer* out,
                     err = __handle_read(peek, client);
                     if (err == -1)
                         return true;
-                    evbuffer_drain(in, sizeof(struct nbd_res_header));
+                    evbuffer_drain(in, sizeof(struct nbd_req_header));
                     __send_response(out, err, handle,
                                     client->buf, be32toh(peek->length));
                     return false;
@@ -410,12 +410,12 @@ bool __check_request(struct evbuffer* in, struct evbuffer* out,
                 case NBD_CMD_DISC:
                     fprintf(stderr, "got disconnect.\n");
                     client->state = NBD_DISCONNECTED;
-                    evbuffer_drain(in, sizeof(struct nbd_res_header));
+                    evbuffer_drain(in, sizeof(struct nbd_req_header));
                     evutil_closesocket(client->socket);
                     return false;
                 case NBD_CMD_FLUSH:
                     fprintf(stderr, "got flush.\n");
-                    evbuffer_drain(in, sizeof(struct nbd_res_header));
+                    evbuffer_drain(in, sizeof(struct nbd_req_header));
                     if (fsync(client->handle->fd))
                         __send_response(out, errno, handle, NULL, 0);
                     else
@@ -423,7 +423,7 @@ bool __check_request(struct evbuffer* in, struct evbuffer* out,
                     return false;
                 case NBD_CMD_TRIM:
                     fprintf(stderr, "got trim.\n");
-                    evbuffer_drain(in, sizeof(struct nbd_res_header));
+                    evbuffer_drain(in, sizeof(struct nbd_req_header));
                     if (fallocate(client->handle->fd,
                                   FALLOC_FL_PUNCH_HOLE |
                                   FALLOC_FL_KEEP_SIZE,
@@ -434,10 +434,10 @@ bool __check_request(struct evbuffer* in, struct evbuffer* out,
                         __send_response(out, 0, handle, NULL, 0);
                     return false;
                 default:
-                    test = evbuffer_pullup(in, sizeof(struct nbd_res_header) +
+                    test = evbuffer_pullup(in, sizeof(struct nbd_req_header) +
                                                be32toh(peek->length));
                     if (test)
-                        evbuffer_drain(in, sizeof(struct nbd_res_header) +
+                        evbuffer_drain(in, sizeof(struct nbd_req_header) +
                                        be32toh(peek->length));
                     fprintf(stderr, "unknown command!\n");
             };
