@@ -257,6 +257,10 @@ bool __check_opt_header(struct evbuffer* in, struct evbuffer* out,
                     if (name_len != client->handle->name_len)
                         goto fail;
 
+                    if (evbuffer_get_length(in) <
+                        sizeof(struct nbd_opt_header) + name_len)
+                        return true;
+
                     evbuffer_drain(in, sizeof(struct nbd_opt_header));
                     export_name = (char*) evbuffer_pullup(in, name_len);
 
@@ -272,6 +276,10 @@ bool __check_opt_header(struct evbuffer* in, struct evbuffer* out,
                         evbuffer_drain(in, name_len);
                         fprintf(stderr, "client state now: NBD_DATA_PUSHING\n");
                         return false;
+                    }
+                    else
+                    {
+                        client->state = NBD_DISCONNECTED;
                     }
 
                 case NBD_OPT_ABORT:
@@ -465,6 +473,7 @@ static void nbd_client_handler(struct bufferevent* bev, void* client)
                }
                break;
             case NBD_DISCONNECTED:
+                evutil_closesocket(((struct nbd_client*) client)->socket);
             default:
                return;
         };
