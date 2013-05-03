@@ -49,7 +49,7 @@ int main(int argc, char* argv[])
     assert(strncmp("test", handle->export_name, strlen("test")) == 0);
     assert(handle->eb != NULL);
     assert(handle->conn != NULL);
-    assert(handle->fsize == 5*1024*1024*1024LL);
+    assert(handle->fsize == 10*1024*1024*1024LL);
     
     nbd_run_loop(handle);
     nbd_shutdown(handle);
