@@ -274,7 +274,6 @@ bool __check_opt_header(struct evbuffer* in, struct evbuffer* out,
                         __send_export_info(out, client->handle);
                         client->state = NBD_DATA_PUSHING;
                         evbuffer_drain(in, name_len);
-                        fprintf(stderr, "client state now: NBD_DATA_PUSHING\n");
                         return false;
                     }
                     else
@@ -381,9 +380,6 @@ bool __check_request(struct evbuffer* in, struct evbuffer* out,
 
     if (peek)
     {
-        fprintf(stderr, "PEEKED\n");
-        hexdump((uint8_t*) &(peek->magic), 4);
-        if (be32toh(peek->magic) == GAMMARAY_NBD_REQ_MAGIC)
         {
             handle = be64toh(peek->handle);
             fprintf(stderr, "magic matched\n");
@@ -457,7 +453,6 @@ static void nbd_client_handler(struct bufferevent* bev, void* client)
 
     while (evbuffer_get_length(in) && counter-- > 0)
     {
-        fprintf(stderr, "LOOPING %zd\n", evbuffer_get_length(in));
         switch (((struct nbd_client*) client)->state)
         {
             case NBD_HANDSHAKE_SENT:
@@ -468,8 +463,6 @@ static void nbd_client_handler(struct bufferevent* bev, void* client)
                   break; 
             case NBD_DATA_PUSHING:
                if (__check_request(in, out, client))
-               {
-                   fprintf(stderr, "RETURNING.\n");
                    return;
                }
                break;
