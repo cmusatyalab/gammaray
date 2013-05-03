@@ -370,39 +370,37 @@ bool __check_request(struct evbuffer* in, struct evbuffer* out,
                      struct nbd_client* client)
 {
     struct nbd_req_header* peek = NULL;
+    struct nbd_req_header req;
     uint32_t err = 0;
     uint64_t handle = 0;
     void* test = NULL;
     peek = (struct nbd_req_header*)
            evbuffer_pullup(in, sizeof(struct nbd_req_header));
 
-    fprintf(stderr, "checking req\n");
-
     if (peek)
     {
+        memcpy(&req, peek, sizeof(struct nbd_req_header));
+        
+        if (be32toh(req.magic) == GAMMARAY_NBD_REQ_MAGIC)
         {
-            handle = be64toh(peek->handle);
-            fprintf(stderr, "magic matched\n");
+            handle = be64toh(req.handle);
 
-            switch(be32toh(peek->type))
+            switch(be32toh(req.type))
             {
                 case NBD_CMD_READ:
-                    fprintf(stderr, "got read.\n");
                     err = __handle_read(peek, client);
                     if (err == -1)
                         return true;
                     evbuffer_drain(in, sizeof(struct nbd_req_header));
                     __send_response(out, err, handle,
-                                    client->buf, be32toh(peek->length));
+                                    client->buf, be32toh(req.length));
                     return false;
                 case NBD_CMD_WRITE:
-                    fprintf(stderr, "got write.\n");
                     err = __handle_write(peek, client, in);
                     if (err == -1)
                         return true;
-                    evbuffer_drain(in, be32toh(peek->length));
+                    evbuffer_drain(in, be32toh(req.length));
                     __send_response(out, err, handle, NULL, 0);
-                    fprintf(stderr, "returning from write.\n");
                     return false;
                 case NBD_CMD_DISC:
                     fprintf(stderr, "got disconnect.\n");
@@ -424,18 +422,18 @@ bool __check_request(struct evbuffer* in, struct evbuffer* out,
                     if (fallocate(client->handle->fd,
                                   FALLOC_FL_PUNCH_HOLE |
                                   FALLOC_FL_KEEP_SIZE,
-                                  be64toh(peek->offset),
-                                  be32toh(peek->length)))
+                                  be64toh(req.offset),
+                                  be32toh(req.length)))
                         __send_response(out, errno, handle, NULL, 0);
                     else
                         __send_response(out, 0, handle, NULL, 0);
                     return false;
                 default:
                     test = evbuffer_pullup(in, sizeof(struct nbd_req_header) +
-                                               be32toh(peek->length));
+                                               be32toh(req.length));
                     if (test)
                         evbuffer_drain(in, sizeof(struct nbd_req_header) +
-                                       be32toh(peek->length));
+                                       be32toh(req.length));
                     fprintf(stderr, "unknown command!\n");
             };
         }
@@ -464,7 +462,6 @@ static void nbd_client_handler(struct bufferevent* bev, void* client)
             case NBD_DATA_PUSHING:
                if (__check_request(in, out, client))
                    return;
-               }
                break;
             case NBD_DISCONNECTED:
                 evutil_closesocket(((struct nbd_client*) client)->socket);
