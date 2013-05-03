@@ -346,9 +346,6 @@ uint32_t __handle_write(struct nbd_req_header* req, struct nbd_client* client,
     assert(in != NULL);
     assert(buf != NULL);
 
-    if (evbuffer_pullup(in, len + sizeof(struct nbd_req_header)) == NULL)
-        return -1;
-
     if (evbuffer_get_length(in) < sizeof(struct nbd_req_header) + len)
         return -1;
 
