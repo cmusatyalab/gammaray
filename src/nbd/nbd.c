@@ -46,8 +46,9 @@
 #include <event2/bufferevent.h>
 #include <event2/listener.h>
 
-#include "util.h"
+#include "color.h"
 #include "nbd.h"
+#include "util.h"
 
 #define GAMMARAY_NBD_MAGIC 0x4e42444d41474943LL
 #define GAMMARAY_NBD_SERVICE "nbd"
@@ -174,6 +175,20 @@ struct nbd_client
     uint8_t* buf;
 };
 
+static void nbd_ev_handler(struct bufferevent* bev, short events, void* client)
+{
+    if (events & BEV_EVENT_ERROR)
+        return;
+
+    if (events & (BEV_EVENT_EOF | BEV_EVENT_ERROR))
+    {
+        bufferevent_free(bev);
+        if (((struct nbd_client*) client)->buf)
+            free(((struct nbd_client*) client)->buf);
+        free(client);
+    }
+}
+
 bool __check_zero_handshake(struct evbuffer* in,
                             struct nbd_client* client)
 {
@@ -236,8 +251,8 @@ bool __send_response(struct evbuffer* out, uint32_t error,
     return true;
 }
 
-bool __check_opt_header(struct evbuffer* in, struct evbuffer* out,
-                        struct nbd_client* client)
+bool __check_opt_header(struct bufferevent* bev, struct evbuffer* in,
+                        struct evbuffer* out, struct nbd_client* client)
 {
     struct nbd_opt_header* peek;
     char* export_name;
@@ -291,7 +306,7 @@ bool __check_opt_header(struct evbuffer* in, struct evbuffer* out,
             };
         }
 fail:
-        evutil_closesocket(client->socket);
+        nbd_ev_handler(bev, BEV_EVENT_EOF, client);
         return true;
     }
 
@@ -366,8 +381,8 @@ uint32_t __handle_write(struct nbd_req_header* req, struct nbd_client* client,
     return 0;
 }
 
-bool __check_request(struct evbuffer* in, struct evbuffer* out,
-                     struct nbd_client* client)
+bool __check_request(struct bufferevent* bev, struct evbuffer* in,
+                     struct evbuffer* out, struct nbd_client* client)
 {
     struct nbd_req_header* peek = NULL;
     struct nbd_req_header req;
@@ -406,7 +421,7 @@ bool __check_request(struct evbuffer* in, struct evbuffer* out,
                     fprintf(stderr, "got disconnect.\n");
                     client->state = NBD_DISCONNECTED;
                     evbuffer_drain(in, sizeof(struct nbd_req_header));
-                    evutil_closesocket(client->socket);
+                    nbd_ev_handler(bev, BEV_EVENT_EOF, client);
                     return false;
                 case NBD_CMD_FLUSH:
                     fprintf(stderr, "got flush.\n");
@@ -447,7 +462,7 @@ static void nbd_client_handler(struct bufferevent* bev, void* client)
 {
     struct evbuffer* in  = bufferevent_get_input(bev);
     struct evbuffer* out = bufferevent_get_output(bev);
-    int counter = 10;
+    int counter = 3;
 
     while (evbuffer_get_length(in) && counter-- > 0)
     {
@@ -457,33 +472,20 @@ static void nbd_client_handler(struct bufferevent* bev, void* client)
                if (__check_zero_handshake(in, client))
                    break;
             case NBD_ZERO_RECEIVED:
-               if (__check_opt_header(in, out, client))
+               if (__check_opt_header(bev, in, out, client))
                   break; 
             case NBD_DATA_PUSHING:
-               if (__check_request(in, out, client))
+               if (__check_request(bev, in, out, client))
                    return;
                break;
             case NBD_DISCONNECTED:
-                evutil_closesocket(((struct nbd_client*) client)->socket);
+               nbd_ev_handler(bev, BEV_EVENT_EOF, client);
             default:
                return;
         };
     }
 }
 
-static void nbd_ev_handler(struct bufferevent* bev, short events, void* client)
-{
-    if (events & BEV_EVENT_ERROR)
-        return;
-
-    if (events & (BEV_EVENT_EOF | BEV_EVENT_ERROR))
-    {
-        bufferevent_free(bev);
-        if (((struct nbd_client*) client)->buf)
-            free(((struct nbd_client*) client)->buf);
-        free(client);
-    }
-}
 
 static void nbd_new_conn(struct evconnlistener *conn, evutil_socket_t sock,
                          struct sockaddr *addr, int len, void * handle)
