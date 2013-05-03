@@ -195,8 +195,14 @@ bool __check_zero_handshake(struct evbuffer* in,
     uint32_t* peek;
     peek = (uint32_t*) evbuffer_pullup(in, 4);
 
-    if (peek && (*peek == 0))
+    if (peek)
     {
+        if (*peek != 0)
+        {
+            client->state = NBD_DISCONNECTED;
+            return false;
+        }
+
         evbuffer_drain(in, 4);
         client->state = NBD_ZERO_RECEIVED;
         return false;
@@ -205,7 +211,7 @@ bool __check_zero_handshake(struct evbuffer* in,
     return true;
 }
 
-bool __send_export_info(struct evbuffer* out, struct nbd_handle* handle)
+bool __send_export_info(struct bufferevent* bev, struct nbd_handle* handle)
 {
     struct nbd_new_handshake_finish hdr = {
                                             .size = htobe64(handle->size),
@@ -217,7 +223,7 @@ bool __send_export_info(struct evbuffer* out, struct nbd_handle* handle)
                                                         NBD_FLAG_SEND_TRIM),
                                             .pad = {0}
                                           };
-    evbuffer_add(out, &hdr, sizeof(hdr));
+    bufferevent_write(bev, &hdr, sizeof(hdr));
     return true;
 }
 
@@ -234,7 +240,7 @@ bool __send_unsupported_opt(struct evbuffer* out, uint32_t option)
     return true;
 }
 
-bool __send_response(struct evbuffer* out, uint32_t error,
+bool __send_response(struct bufferevent* bev, uint32_t error,
                      uint64_t handle, uint8_t* data, uint32_t len)
 {
     struct nbd_res_header hdr = {
@@ -243,10 +249,9 @@ bool __send_response(struct evbuffer* out, uint32_t error,
                                     .handle = htobe64(handle) 
                                 };
 
-    evbuffer_add(out, &hdr, sizeof(hdr));
-
+    bufferevent_write(bev, &hdr, sizeof(hdr));
     if (data && len)
-        evbuffer_add(out, data, (size_t) len);
+        bufferevent_write(bev, data, (size_t) len);
 
     return true;
 }
@@ -280,13 +285,16 @@ bool __check_opt_header(struct bufferevent* bev, struct evbuffer* in,
                     export_name = (char*) evbuffer_pullup(in, name_len);
 
                     if (export_name == NULL)
-                        return true;
+                    {
+                        client->state = NBD_DISCONNECTED;
+                        return false;
+                    }
 
                     if (strncmp(export_name,
                                 client->handle->export_name,
                                 name_len) == 0)
                     {
-                        __send_export_info(out, client->handle);
+                        __send_export_info(bev, client->handle);
                         client->state = NBD_DATA_PUSHING;
                         evbuffer_drain(in, name_len);
                         return false;
@@ -294,6 +302,7 @@ bool __check_opt_header(struct bufferevent* bev, struct evbuffer* in,
                     else
                     {
                         client->state = NBD_DISCONNECTED;
+                        return false;
                     }
 
                 case NBD_OPT_ABORT:
@@ -302,12 +311,12 @@ bool __check_opt_header(struct bufferevent* bev, struct evbuffer* in,
                 case NBD_OPT_LIST:
                 default:
                     __send_unsupported_opt(out, peek->option);
-                    return true;
+                    return false;
             };
         }
 fail:
-        nbd_ev_handler(bev, BEV_EVENT_EOF, client);
-        return true;
+        client->state = NBD_DISCONNECTED;
+        return false;
     }
 
     return true;
@@ -407,7 +416,7 @@ bool __check_request(struct bufferevent* bev, struct evbuffer* in,
                     if (err == -1)
                         return true;
                     evbuffer_drain(in, sizeof(struct nbd_req_header));
-                    __send_response(out, err, handle,
+                    __send_response(bev, err, handle,
                                     client->buf, be32toh(req.length));
                     return false;
                 case NBD_CMD_WRITE:
@@ -415,7 +424,7 @@ bool __check_request(struct bufferevent* bev, struct evbuffer* in,
                     if (err == -1)
                         return true;
                     evbuffer_drain(in, be32toh(req.length));
-                    __send_response(out, err, handle, NULL, 0);
+                    __send_response(bev, err, handle, NULL, 0);
                     return false;
                 case NBD_CMD_DISC:
                     fprintf(stderr, "got disconnect.\n");
@@ -427,9 +436,9 @@ bool __check_request(struct bufferevent* bev, struct evbuffer* in,
                     fprintf(stderr, "got flush.\n");
                     evbuffer_drain(in, sizeof(struct nbd_req_header));
                     if (fsync(client->handle->fd))
-                        __send_response(out, errno, handle, NULL, 0);
+                        __send_response(bev, errno, handle, NULL, 0);
                     else
-                        __send_response(out, 0, handle, NULL, 0);
+                        __send_response(bev, 0, handle, NULL, 0);
                     return false;
                 case NBD_CMD_TRIM:
                     fprintf(stderr, "got trim.\n");
@@ -439,9 +448,9 @@ bool __check_request(struct bufferevent* bev, struct evbuffer* in,
                                   FALLOC_FL_KEEP_SIZE,
                                   be64toh(req.offset),
                                   be32toh(req.length)))
-                        __send_response(out, errno, handle, NULL, 0);
+                        __send_response(bev, errno, handle, NULL, 0);
                     else
-                        __send_response(out, 0, handle, NULL, 0);
+                        __send_response(bev, 0, handle, NULL, 0);
                     return false;
                 default:
                     test = evbuffer_pullup(in, sizeof(struct nbd_req_header) +
@@ -462,23 +471,25 @@ static void nbd_client_handler(struct bufferevent* bev, void* client)
 {
     struct evbuffer* in  = bufferevent_get_input(bev);
     struct evbuffer* out = bufferevent_get_output(bev);
-    int counter = 3;
 
-    while (evbuffer_get_length(in) && counter-- > 0)
+    while (evbuffer_get_length(in))
     {
         switch (((struct nbd_client*) client)->state)
         {
             case NBD_HANDSHAKE_SENT:
                if (__check_zero_handshake(in, client))
-                   break;
+                   return;
+               break;
             case NBD_ZERO_RECEIVED:
                if (__check_opt_header(bev, in, out, client))
-                  break; 
+                   return;
+               break; 
             case NBD_DATA_PUSHING:
                if (__check_request(bev, in, out, client))
                    return;
                break;
             case NBD_DISCONNECTED:
+               fprintf(stderr, "DISCONNECTED STATE.\n");
                nbd_ev_handler(bev, BEV_EVENT_EOF, client);
             default:
                return;
