@@ -29,6 +29,8 @@
 #include "color.h"
 #include "nbd.h"
 
+#define USAGE "%s <backing file> <export name>\n"
+
 struct nbd_handle
 {
     int fd;
@@ -41,15 +43,28 @@ struct nbd_handle
 
 int main(int argc, char* argv[])
 {
-    struct nbd_handle* handle = nbd_init_file("test", "test",
-                                              "127.0.0.1", "10809");
+    struct nbd_handle* handle;
+   
+    if (argc < 3)
+    {
+        fprintf_light_red(stderr, USAGE, argv[0]);
+        exit(EXIT_FAILURE);
+    }
+
+    fprintf_blue(stdout, "nbd-test program by: Wolfgang Richter "
+                         "<wolf@cs.cmu.edu>\n");
+    fprintf_white(stdout, "backing file: %s\n", argv[1]);
+    fprintf_white(stdout, "export name: %s\n", argv[2]);
+
+    handle = nbd_init_file(argv[2], argv[1],
+                           "0.0.0.0", "10809");
 
     assert(handle != NULL);
     assert(handle->fd != 0);
-    assert(strncmp("test", handle->export_name, strlen("test")) == 0);
+    assert(strncmp(argv[2], handle->export_name, strlen(argv[2])) == 0);
     assert(handle->eb != NULL);
     assert(handle->conn != NULL);
-    assert(handle->fsize == 10*1024*1024*1024LL);
+    assert(handle->fsize != 0);
     
     nbd_run_loop(handle);
     nbd_shutdown(handle);
