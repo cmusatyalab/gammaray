@@ -114,7 +114,7 @@ int hexdump(uint8_t* buf, uint64_t len)
     if (buf == NULL)
         return EXIT_FAILURE;
 
-    uint64_t i, j;
+    uint64_t i, j = 0;
 
     for (i = 0; i < len; i++)
     {
