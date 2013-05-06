@@ -40,6 +40,7 @@
 #include <errno.h>
 #include <netdb.h>
 #include <linux/falloc.h>
+#include <signal.h>
 #include <unistd.h>
 
 #include <event2/buffer.h>
@@ -187,6 +188,16 @@ static void nbd_ev_handler(struct bufferevent* bev, short events, void* client)
             free(((struct nbd_client*) client)->buf);
         free(client);
     }
+}
+
+static void nbd_signal_handler(evutil_socket_t sig, short events, void *handle)
+{
+    struct event_base *eb = ((struct nbd_handle*) handle)->eb;
+    struct timeval delay = { 2, 0 };
+
+    fprintf(stderr, "Caught interrupt.  Exiting in 2 seconds.\n");
+
+    event_base_loopexit(eb, &delay);
 }
 
 bool __check_zero_handshake(struct evbuffer* in,
@@ -546,6 +557,7 @@ struct nbd_handle* nbd_init_file(char* export_name, char* fname,
     struct addrinfo* server = NULL;
     struct event_base* eb = NULL;
     struct nbd_handle* ret = NULL;
+    struct event* evsignal = NULL;
     struct evconnlistener* conn = NULL;
 
     /* sanity check */
@@ -560,6 +572,7 @@ struct nbd_handle* nbd_init_file(char* export_name, char* fname,
 
     if ((fd = open(fname, O_RDWR)) == -1)
         return NULL;
+
 
     /* setup network socket */
     memset(&hints, 0, sizeof(struct addrinfo));
@@ -584,6 +597,16 @@ struct nbd_handle* nbd_init_file(char* export_name, char* fname,
 
     /* initialize this NBD module */
     if ((ret = (struct nbd_handle*) malloc(sizeof(struct nbd_handle))) == NULL)
+    {
+        freeaddrinfo(server);
+        close(fd);
+        event_base_free(eb);
+        return NULL;
+    }
+
+    evsignal = evsignal_new(eb, SIGINT, nbd_signal_handler, (void *)ret);
+
+    if (!evsignal || event_add(evsignal, NULL) < 0)
     {
         freeaddrinfo(server);
         close(fd);
