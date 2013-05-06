@@ -699,7 +699,7 @@ int __diff_superblock_ntfs(uint8_t* write, struct kv_store* store,
 {
     uint64_t fs = 0, superblock_offset = 0;
     size_t len = sizeof(struct ntfs_boot_file);
-    struct ntfs_boot_file* new, oldd, *old = &oldd;
+    struct ntfs_boot_file oldd, *old = &oldd;
     fprintf_light_white(stdout, "__diff_superblock_ntfs()\n");
 
     fprintf_light_white(stdout, "working on: %s\n", pointer);
@@ -730,17 +730,7 @@ int __diff_superblock_ntfs(uint8_t* write, struct kv_store* store,
     fprintf_light_white(stdout, "superblock_offset: %"PRIu64"\n",
                                 superblock_offset);
 
-    new = (struct ntfs_boot_file *) &(write[superblock_offset]);
-
     len = sizeof(struct ntfs_boot_file);
-    /* TODO */
-    //if (redis_hash_field_set(store, REDIS_SUPERBLOCK_SECTOR_INSERT, fs,
-    //                         "superblock", (uint8_t*) new, len))
-    //{
-    //    fprintf_light_red(stderr, "Error writing new superblock back: %"
-    //                              PRIu64"\n", fs);
-    //    return EXIT_FAILURE;
-    //}
 
     return EXIT_SUCCESS;
 }

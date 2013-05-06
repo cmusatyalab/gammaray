@@ -582,8 +582,8 @@ uint64_t ext4_sector_extent_block(FILE* disk, int64_t partition_offset,
 {
     int i;
     struct ext4_extent_header* hdr; 
-    struct ext4_extent_idx idx;
-    struct ext4_extent_idx idx2; /* lookahead when searching for block_num */
+    struct ext4_extent_idx idx = {};
+    struct ext4_extent_idx idx2 = {}; /* lookahead when searching for block_num */
     struct ext4_extent* extent;
     uint8_t buf[ext4_block_size(superblock)];
 

@@ -301,7 +301,7 @@ int mbr_serialize_partition(uint32_t pte_num, struct partition_table_entry pte,
     ret = bson_writef(serialized, serializef);
     bson_cleanup(serialized);
      
-    return 0;
+    return ret;
 }
 
 int mbr_get_partition_table_entry(struct disk_mbr mbr, int pte_num,

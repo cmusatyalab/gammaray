@@ -23,10 +23,12 @@
  *   limitations under the License.                                          *
  *****************************************************************************/
 #include <stdlib.h>
+#include <string.h>
 
 #include "qemu_common.h"
 
 #include "bson.h"
+#include "color.h"
 
 int qemu_load_md_filter(FILE* index, struct bitarray** bits)
 {
