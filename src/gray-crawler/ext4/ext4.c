@@ -648,8 +648,8 @@ int ext4_read_extent_block(FILE* disk, int64_t partition_offset,
 {
     int i;
     struct ext4_extent_header hdr; 
-    struct ext4_extent_idx idx;
-    struct ext4_extent_idx idx2; /* lookahead when searching for block_num */
+    struct ext4_extent_idx idx = {};
+    struct ext4_extent_idx idx2 = {}; /* lookahead when searching block_num */
     struct ext4_extent extent;
 
     memcpy(buf, inode.i_block, (size_t) 60);
@@ -1565,8 +1565,8 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
 {
     int i;
     struct ext4_extent_header* hdr; 
-    struct ext4_extent_idx idx;
-    struct ext4_extent_idx idx2; /* lookahead when searching for block_num */
+    struct ext4_extent_idx idx = {};
+    struct ext4_extent_idx idx2 = {}; /* lookahead when searching block_num */
     struct ext4_extent extent;
     uint64_t block_size = ext4_block_size(superblock);
     uint8_t buf[block_size];
