@@ -12,6 +12,7 @@ host, although they should be similar for most distributions of Linux.
 The following libraries are needed to build and execute gammaray:
 
 1. hiredis [BSD 3-clause] - the Redis client-side library
+
    ```bash
    sudo apt-get install libhiredis-dev libhiredis0.10
    ```
