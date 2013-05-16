@@ -61,15 +61,11 @@ into the pre-existing partition.
 
 1. Use dd or another suitable command to preallocate the raw disk image
 
-```bash
-dd of=disk.raw seek=$((1024*1024*1024*5)) count=0 bs=1
-```
+    dd of=disk.raw seek=$((1024*1024*1024*5)) count=0 bs=1
 
 2. Create a partition table
 
-```bash
-parted -s disk.raw mklabel msdos
-```
+    parted -s disk.raw mklabel msdos
 
 3. Create a single primary partition taking up the entire image
 
