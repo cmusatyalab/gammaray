@@ -61,11 +61,15 @@ into the pre-existing partition.
 
 1. Use dd or another suitable command to preallocate the raw disk image
 
-    dd of=disk.raw seek=$((1024*1024*1024*5)) count=0 bs=1
+   ```bash
+   dd of=disk.raw seek=$((1024*1024*1024*5)) count=0 bs=1
+   ```
 
 2. Create a partition table
 
-    parted -s disk.raw mklabel msdos
+   ```bash
+   parted -s disk.raw mklabel msdos
+   ```    
 
 3. Create a single primary partition taking up the entire image
 
@@ -75,30 +79,30 @@ into the pre-existing partition.
 
 4. Make the partition visible to your host as a block device
 
-```bash
-sudo kpartx -av disk.raw
-```
+   ```bash
+   sudo kpartx -av disk.raw
+   ```
 
 5. Format the partition as ext4 [replace loop0 with output from kpartx command]
 
-```bash
-sudo mkfs.ext4 /dev/mapper/loop0p1
-```
+   ```bash
+   sudo mkfs.ext4 /dev/mapper/loop0p1
+   ```
 
 6. Remove the visible partition and block device from your host
 
-```bash
-sudo kpartx -dv disk.raw
-```
+   ```bash
+   sudo kpartx -dv disk.raw
+   ```
 
 7. Boot the instance with install media and the new drive attached
 
-```bash
-qemu-system-x86_64 disk.raw -cpu kvm64 -cdrom ubuntu-12.04.2-server-amd64.iso
-```
+   ```bash
+  qemu-system-x86_64 disk.raw -cpu kvm64 -cdrom ubuntu-12.04.2-server-amd64.iso
+   ```
 
 8. Using `Manual Partitioning` at the disk setup phase, select the first
-   partition to be used as ext4 and mount point '/'
+   partition to be used as `ext4` and `mount point '/'`
 
 9. Then just finish partitioning and continue with the installation procedure
 
