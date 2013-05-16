@@ -95,16 +95,16 @@ sudo mkfs.ext4 /dev/mapper/loop0p1
 sudo kpartx -dv disk.raw
 ```
 
-6. Boot the instance with install media and the new drive attached
+7. Boot the instance with install media and the new drive attached
 
 ```bash
 qemu-system-x86_64 disk.raw -cpu kvm64 -cdrom ubuntu-12.04.2-server-amd64.iso
 ```
 
-7. Using `Manual Partitioning` at the disk setup phase, select the first
+8. Using `Manual Partitioning` at the disk setup phase, select the first
    partition to be used as ext4 and mount point '/'
 
-8. Then just finish partitioning and continue with the installation procedure
+9. Then just finish partitioning and continue with the installation procedure
 
 ## Current Limitations
 
