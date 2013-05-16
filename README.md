@@ -17,6 +17,7 @@ developers can skip the Python libraries):
    ```bash
    sudo apt-get install libhiredis-dev libhiredis0.10
    ```
+
 2. bson [Optional, BSD 3-clause] - Python BSON library
 3. redis-py [Optional, MIT] - Python hiredis wrapper
 
@@ -27,9 +28,52 @@ In addition to `libhiredis`, gammaray requires a slightly modified version of
 QEMU.  Clone the QEMU repository, apply a patch for gammaray support, and then
 compile a gammaray-friendly QEMU.
 
-1. git clone...
-2. git apply...
-3. enjoy!
+1. Get the official QEMU source tree
+ 
+   ```bash
+   git clone git://git.qemu-project.org/qemu.git
+   ```
+
+2. Checkout a specific tagged commit to apply our patch cleanly
+   
+   ```bash
+   git checkout v1.4.0
+   ```
+
+3. Get our patch
+
+   ```bash
+   git clone https://gist.github.com/5ceeccdf6107222b256a.git
+   ```  
+
+4. Apply the patch to your checked out QEMU tree
+
+   ```bash
+   git apply binary_tracing_block_qemu_1-4-0.patch
+   ```
+
+5. Configure QEMU, remember to change the prefix as needed
+
+   ```bash
+   ./configure \
+    --enable-system \
+    --disable-user \
+    --enable-kvm \
+    --enable-trace-backend=stderr \
+    --target-list='i386-softmmu i386-linux-user x86_64-linux-user x86_64-softmmu' \
+    --prefix=/home/wolf/qemu_bin \
+    --static
+   ```
+   
+6. Make, and make install QEMU.
+
+   ```bash
+   make
+   make install
+   ```
+
+7. QEMU binaries with the patch compiled in should within the `prefix`
+   folder, specifically inside the `bin` subfolder.
 
 ## Installation Procedure
 
