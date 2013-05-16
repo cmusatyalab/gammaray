@@ -1,7 +1,5 @@
 # gammaray
 
-## Introduction
-
 gammaray is a system implementing disk-based introspection for virtual
 machines.  It thus far works with VMs that have disks virtualized via QEMU;
 however, this limitation is only due to the scarcity of developer time.
