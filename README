@@ -1,11 +1,72 @@
-Notes:
-    (1) Disk creation
-            qemu-img create -f raw tinycore.raw 12M
-    (2) OS Installation -- Used virt-manager GUI
-            sudo virt-manager
-    (3) Run disk_analyzer
-    (4) Run inference_engine with VM
+# gammaray
 
-Requirements:
+## Introduction
 
-    (1) libhiredis for Redis communication 
+gammaray is a system implementing disk-based introspection for virtual
+machines.  It thus far works with VMs that have disks virtualized via QEMU;
+however, this limitation is only due to the scarcity of developer time.
+Conceptually, and practically, Gamma-Ray can perform introspection with any
+source of raw disk writes.
+
+## Dependencies
+
+## Installation Procedure
+
+1. Ensure all dependencies are installed already
+2. git clone gammaray's source tree
+3. Bootstrap your source tree
+4. Run configure
+5. Run make
+6. [Optional] Run make install (if you want)
+
+All binaries will now be built and placed in the bin folder at the top-level
+directory of the project.
+
+## Description of Components
+
+Gamma-Ray is organized as a set of tools, described below:
+
+1. gray-crawler - used to index a disk in preparation for introspection
+    * This tool is usually used offline, although it can be used online as well
+
+2. gray-ndb-queuer -used to asynchronously queue writes for analysis
+    * This tool interfaces with a stream of writes, soon-to-be an NBD endpoint
+
+3. gray-inferencer - used to analyze queued writes and perform introspection
+    * This tool loads and maintains metadata in-sync with a live disk
+
+4. gray-fs - used to produce a FUSE file system view of the in-sync metadata
+    * This tool provides a read-only FS without mounting the real guest FS
+
+## High-Level Operation
+
+The exact steps are enumerated below, but at a high level you must crawl the
+disk you wish to introspect, load metadata from that crawl for run-time
+introspection, and attach a copy of the write stream to that disk at run-time
+to the inferencing backend.  Currently, this is coordinated via a named pipe
+and Redis.  In the future, the named pipe is being replaced by NBD.
+
+1. Crawl the disk that you wish to introspect using gray-crawler
+2. Setup a named pipe to receive raw disk writes to the gray-ndb-queuer
+3. Run the gray-ndb-queuer and let it read from the named pipe
+4. Run gray-inferencer and wait for it to load metadata from gray-crawler
+5. Run QEMU with this disk redirecting stderr output to the named pipe 
+
+
+## Current Limitations
+
+1. Supported File Systems
+    * ext4
+    * NTFS
+
+2. Supported VMMs
+    * KVM/QEMU
+
+3. Supported Number of Disks
+    * Single attached disk
+
+4. Supported Number of File Systems
+    * Single introspected file system
+
+5. Supported Disk Formats
+    * raw
