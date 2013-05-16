@@ -4,9 +4,30 @@ gammaray is a system implementing disk-based introspection for virtual
 machines.  It thus far works with VMs that have disks virtualized via QEMU;
 however, this limitation is only due to the scarcity of developer time.
 Conceptually, and practically, gammaray can perform introspection with any
-source of raw disk writes.
+source of raw disk writes.  The instructions below assume an Ubuntu 12.04 LTS
+host, although they should be similar for most distributions of Linux.
 
 ## Dependencies
+
+The following libraries are needed to build and execute gammaray:
+
+1. hiredis [BSD 3-clause] - the Redis client-side library
+   ```bash
+   sudo apt-get install libhiredis-dev libhiredis0.10
+   ```
+2. bson [Optional, BSD 3-clause] - Python BSON library
+3. redis-py [Optional, MIT] - Python hiredis wrapper
+
+The Python libraries are optional if you want to write or execute Python
+monitors consuming gammaray's publish-subscribe stream of file-level updates.
+
+In addition to `libhiredis`, gammaray requires a slightly modified version of
+QEMU.  Clone the QEMU repository, apply a patch for gammaray support, and then
+compile a gammaray-friendly QEMU.
+
+1. git clone...
+2. git apply...
+3. enjoy!
 
 ## Installation Procedure
 
