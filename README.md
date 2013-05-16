@@ -69,9 +69,9 @@ into the pre-existing partition.
 
 3. Create a single primary partition taking up the entire image
 
-```bash
-parted -s disk.raw mkpart primary ext4 1 $((1024*5))
-```
+   ```bash
+   parted -s disk.raw mkpart primary ext4 1 $((1024*5))
+   ```
 
 4. Make the partition visible to your host as a block device
 
