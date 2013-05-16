@@ -5,7 +5,7 @@
 gammaray is a system implementing disk-based introspection for virtual
 machines.  It thus far works with VMs that have disks virtualized via QEMU;
 however, this limitation is only due to the scarcity of developer time.
-Conceptually, and practically, Gamma-Ray can perform introspection with any
+Conceptually, and practically, gammaray can perform introspection with any
 source of raw disk writes.
 
 ## Dependencies
@@ -24,18 +24,18 @@ directory of the project.
 
 ## Description of Components
 
-Gamma-Ray is organized as a set of tools, described below:
+gammaray is organized as a set of tools, described below:
 
-1. gray-crawler - used to index a disk in preparation for introspection
+1. `gray-crawler` - used to index a disk in preparation for introspection
     * This tool is usually used offline, although it can be used online as well
 
-2. gray-ndb-queuer -used to asynchronously queue writes for analysis
+2. `gray-ndb-queuer` - used to asynchronously queue writes for analysis
     * This tool interfaces with a stream of writes, soon-to-be an NBD endpoint
 
-3. gray-inferencer - used to analyze queued writes and perform introspection
+3. `gray-inferencer` - used to analyze queued writes and perform introspection
     * This tool loads and maintains metadata in-sync with a live disk
 
-4. gray-fs - used to produce a FUSE file system view of the in-sync metadata
+4. `gray-fs` - used to produce a FUSE file system view of the in-sync metadata
     * This tool provides a read-only FS without mounting the real guest FS
 
 ## High-Level Operation
@@ -46,12 +46,65 @@ introspection, and attach a copy of the write stream to that disk at run-time
 to the inferencing backend.  Currently, this is coordinated via a named pipe
 and Redis.  In the future, the named pipe is being replaced by NBD.
 
-1. Crawl the disk that you wish to introspect using gray-crawler
-2. Setup a named pipe to receive raw disk writes to the gray-ndb-queuer
-3. Run the gray-ndb-queuer and let it read from the named pipe
-4. Run gray-inferencer and wait for it to load metadata from gray-crawler
+1. Crawl the disk that you wish to introspect using `gray-crawler`
+2. Setup a named pipe to receive raw disk writes to the `gray-ndb-queuer`
+3. Run the `gray-ndb-queuer` and let it read from the named pipe
+4. Run `gray-inferencer` and wait for it to load metadata from `gray-crawler`
 5. Run QEMU with this disk redirecting stderr output to the named pipe 
 
+## Example Creation of gammaray-Supported Disk Layout
+
+If you're sufficiently confident with the installer of your OS of choice, feel
+free to skip the steps below.  Otherwise, it might be easier to setup a known
+good partition configuration with a host system and then install the guest OS
+into the pre-existing partition.
+
+1. Use dd or another suitable command to preallocate the raw disk image
+
+```bash
+dd of=disk.raw seek=$((1024*1024*1024*5)) count=0 bs=1
+```
+
+2. Create a partition table
+
+```bash
+parted -s disk.raw mklabel msdos
+```
+
+3. Create a single primary partition taking up the entire image
+
+```bash
+parted -s disk.raw mkpart primary ext4 1 $((1024*5))
+```
+
+4. Make the partition visible to your host as a block device
+
+```bash
+sudo kpartx -av disk.raw
+```
+
+5. Format the partition as ext4 [replace loop0 with output from kpartx command]
+
+```bash
+sudo mkfs.ext4 /dev/mapper/loop0p1
+```
+
+6. Remove the visible partition and block device from your host
+
+```bash
+sudo kpartx -dv disk.raw
+```
+
+6. Boot the instance with install media and the new drive attached
+
+```bash
+qemu-system-x86_64 disk.raw -cpu kvm64 -cdrom ubuntu-12.04.2-server-amd64.iso
+```
+
+7. Using `Manual Partitioning` at the disk setup phase, select the first
+   partition to be used as ext4 and mount point '/'
+
+8. Then just finish partitioning and continue with the installation procedure
 
 ## Current Limitations
 
