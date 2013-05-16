@@ -9,7 +9,8 @@ host, although they should be similar for most distributions of Linux.
 
 ## Dependencies
 
-The following libraries are needed to build and execute gammaray:
+The following libraries are needed to build and execute gammaray (most
+developers can skip the Python libraries):
 
 1. hiredis [BSD 3-clause] - the Redis client-side library
 
