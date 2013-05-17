@@ -206,7 +206,7 @@ the tools auto-daemonize as of this writing.
    Remember to use the specially built QEMU when installing dependencies (ie
    replace the path in the above command).  Also, ensure you have an `events`
    file that turns on tracing for the event of interest: `bdrv_write`.  The
-   `events` file's contents should have at only that event name on a single
+   `events` file's contents should have only that event name on a single
    line by itself (tracing multiple events will mangle the binary tracing
    needed for disk introspection).
 
@@ -259,7 +259,7 @@ into the pre-existing partition.
   qemu-system-x86_64 disk.raw -cpu kvm64 -cdrom ubuntu-12.04.2-server-amd64.iso
    ```
 
-8. Using `Manual Partitioning` at the disk setup phase, select the first
+8. Using `Manual Partitioning` at the disk setup stage, select the first
    partition to be used as `ext4` and `mount point '/'`
 
 9. Then just finish partitioning and continue with the installation procedure
