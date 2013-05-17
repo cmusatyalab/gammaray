@@ -156,14 +156,14 @@ compile a gammaray-friendly QEMU.
    make
    ```
 
+   All binaries will now be built and placed in the bin folder at the top-level
+   directory of the project.
+
 6. [Optional] Run make install (if you want)
 
    ```bash
-   make install
+   sudo make install
    ```
-
-All binaries will now be built and placed in the bin folder at the top-level
-directory of the project.
 
 ## Description of Components
 
@@ -205,7 +205,7 @@ the tools auto-daemonize as of this writing.
 3. Run the `gray-ndb-queuer` and let it read from the named pipe
 
    ```bash
-   gray-ndb-queuer disk.fifo 4 1>queuer.log 2>queuer.error.log &
+   gray-ndb-queuer disk.bson disk.fifo 4 1>queuer.log 2>queuer.error.log &
    ```
 
 4. Run `gray-inferencer` and wait for it to load metadata from `gray-crawler`
