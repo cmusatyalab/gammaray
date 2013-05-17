@@ -16,9 +16,9 @@ although they should be similar for most distributions of Linux.
 2. Follow the [example](#example-creation-of-gammaray-supported-disk-layout)
    virtul disk creation instructions
 
-3. Follow the [installation procedure](#installation-procedure) for gammaray
+3. Follow the [installation procedure](#installing-gammaray) for gammaray
 
-4. Follow the [instructions](#high-level-overview) for running the gammaray
+4. Follow the [instructions](#gammaray-pipeline) for running the gammaray
    pipeline
 
 ## License
@@ -104,7 +104,7 @@ compile a gammaray-friendly QEMU.
 7. QEMU binaries with the patch compiled in should be within the `prefix`
    folder, specifically inside the `bin` subfolder.
 
-## Installation Procedure
+## Installing gammaray
 
 1. Ensure all dependencies are installed already
 2. git clone gammaray's source tree
@@ -156,7 +156,7 @@ gammaray is organized as a set of tools, described below:
 4. `gray-fs` - used to produce a FUSE file system view of the in-sync metadata
     * This tool provides a read-only FS without mounting the real guest FS
 
-## High-Level Operation
+## gammaray Pipeline 
 
 The exact steps are enumerated below, but at a high level you must crawl the
 disk you wish to introspect, load metadata from that crawl for run-time
@@ -203,7 +203,7 @@ the tools auto-daemonize as of this writing.
     -redir tcp:2222::22 2> disk.fifo &
    ```
 
-   Remember to use the QEMU built specially when installing dependencies (ie
+   Remember to use the specially built QEMU when installing dependencies (ie
    replace the path in the above command).  Also, ensure you have an `events`
    file that turns on tracing for the event of interest: `bdrv_write`.  The
    `events` file's contents should have at only that event name on a single
