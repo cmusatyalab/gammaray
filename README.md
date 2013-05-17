@@ -1,25 +1,53 @@
 # gammaray
 
-gammaray is a system implementing disk-based introspection for virtual
-machines.  It thus far works with VMs that have disks virtualized via QEMU;
-however, this limitation is only due to the scarcity of developer time.
-Conceptually, and practically, gammaray can perform introspection with any
-source of raw disk writes.  The instructions below assume an Ubuntu 12.04 LTS
-host, although they should be similar for most distributions of Linux.
+gammaray is a system implementing disk-based
+[introspection](http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.11.8367)
+for virtual machines.  It thus far works with VMs that have disks virtualized
+via [QEMU](http://www.qemu.org); however, this limitation is only due to the
+scarcity of developer time.  Conceptually, and practically, gammaray can
+perform introspection with any source of raw disk writes.  The instructions
+below assume an [Ubuntu 12.04 LTS](http://releases.ubuntu.com/precise/) host,
+although they should be similar for most distributions of Linux.
+
+## Quickstart
+
+1. Follow the non-optional [Dependencies](#Dependencies) instructions
+
+2. Follow the [example](#) virtual disk creation instructions
+
+3. Follow the [installation procedure](#Installation Procedure) for gammaray
+
+4. Follow the [instructions](#High Level Overview) for running the gammaray
+   pipeline
+
+## License
+
+All source code, documentation, and related artifacts associated with the
+gammaray open source project are licensed under the [Apache License, Version
+2.0](http://www.apache.org/licenses/LICENSE-2.0.html).
+
+A copy of this license is reproduced in the [LICENSE](LICENSE) file, and the
+licenses of dependencies and included code are enumerated in the
+[NOTICE](NOTICE) file.
+
 
 ## Dependencies
 
 The following libraries are needed to build and execute gammaray (most
 developers can skip the Python libraries):
 
-1. hiredis [BSD 3-clause] - the Redis client-side library
+1. [hiredis](https://github.com/redis/hiredis) [BSD 3-clause] - the Redis
+   client-side library
 
    ```bash
    sudo apt-get install libhiredis-dev libhiredis0.10
    ```
 
-2. bson [Optional, BSD 3-clause] - Python BSON library
-3. redis-py [Optional, MIT] - Python hiredis wrapper
+2. [bson](https://pypi.python.org/pypi/bson/0.3.2) [Optional, BSD 3-clause] -
+   Python BSON library
+
+3. [redis-py](https://github.com/andymccurdy/redis-py) [Optional, MIT] - Python
+   hiredis wrapper
 
 The Python libraries are optional if you want to write or execute Python
 monitors consuming gammaray's publish-subscribe stream of file-level updates.
@@ -72,17 +100,41 @@ compile a gammaray-friendly QEMU.
    make install
    ```
 
-7. QEMU binaries with the patch compiled in should within the `prefix`
+7. QEMU binaries with the patch compiled in should be within the `prefix`
    folder, specifically inside the `bin` subfolder.
 
 ## Installation Procedure
 
 1. Ensure all dependencies are installed already
 2. git clone gammaray's source tree
+
+   ```bash
+   git clone https://github.com/cmusatyalab/gammaray.git
+   ```
+
 3. Bootstrap your source tree
+
+   ```bash
+   ./bootstrap.sh
+   ```
+
 4. Run configure
+
+   ```bash
+   ./configure
+   ```
+
 5. Run make
+
+   ```bash
+   make
+   ```
+
 6. [Optional] Run make install (if you want)
+
+   ```bash
+   make install
+   ```
 
 All binaries will now be built and placed in the bin folder at the top-level
 directory of the project.
@@ -109,13 +161,53 @@ The exact steps are enumerated below, but at a high level you must crawl the
 disk you wish to introspect, load metadata from that crawl for run-time
 introspection, and attach a copy of the write stream to that disk at run-time
 to the inferencing backend.  Currently, this is coordinated via a named pipe
-and Redis.  In the future, the named pipe is being replaced by NBD.
+and Redis.  In the future, the named pipe is being replaced by NBD.  None of
+the tools auto-daemonize as of this writing.
 
 1. Crawl the disk that you wish to introspect using `gray-crawler`
+
+   ```bash
+   gray-crawler disk.raw disk.bson
+   ```
+
 2. Setup a named pipe to receive raw disk writes to the `gray-ndb-queuer`
+
+   ```bash
+   mkfifo disk.fifo
+   ```
+
 3. Run the `gray-ndb-queuer` and let it read from the named pipe
+
+   ```bash
+   gray-ndb-queuer disk.fifo 4 1>queuer.log 2>queuer.error.log &
+   ```
+
 4. Run `gray-inferencer` and wait for it to load metadata from `gray-crawler`
+
+   ```bash
+   gray-inferencer disk.bson 4 disk_test_instance &
+   ```
+ 
 5. Run QEMU with this disk redirecting stderr output to the named pipe 
+
+   ```bash
+   /path/to/custom/qemu-system-x86_64 \
+    -enable-kvm \
+    -cpu kvm64 \
+    -smp cores=1,threads=1,sockets=1 \
+    -drive file=disk.raw,if=virtio,aio=native \
+    -m 1024 \
+    -display vnc=127.0.0.1:1 \
+    -trace events=events \
+    -redir tcp:2222::22 2> disk.fifo &
+   ```
+
+   Remember to use the QEMU built specially when installing dependencies (ie
+   replace the path in the above command).  Also, ensure you have an `events`
+   file that turns on tracing for the event of interest: `bdrv_write`.  The
+   `events` file's contents should have at only that event name on a single
+   line by itself (tracing multiple events will mangle the binary tracing
+   needed for disk introspection).
 
 ## Example Creation of gammaray-Supported Disk Layout
 
