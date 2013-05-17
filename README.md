@@ -21,6 +21,19 @@ although they should be similar for most distributions of Linux.
 4. Follow the [instructions](#gammaray-pipeline) for running the gammaray
    pipeline
 
+5. Check that things are working by using `gray-fs` and `tail` from outside
+   the guest on a known text file.  Add lines within the guest and ensure that
+   they eventually become visible via the `gray-fs` mounted file system.
+
+   ```bash
+   gray-fs disk.raw /mnt/disk -s -d
+   ```
+
+   Replace `/mnt/disk` with whatever folder you'd like to use as the read-only
+   view into the real-time guest file system.  `gray-fs` doesn't properly parse
+   command line options yet, so type the command almost exactly as it appears
+   above (`-s -d` force single-threaded, debug mode).
+
 ## License
 
 All source code, documentation, and related artifacts associated with the
