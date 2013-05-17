@@ -11,13 +11,14 @@ although they should be similar for most distributions of Linux.
 
 ## Quickstart
 
-1. Follow the non-optional [Dependencies](#Dependencies) instructions
+1. Follow the non-optional [dependencies](#dependencies) instructions
 
-2. Follow the [example](#) virtual disk creation instructions
+2. Follow the [example](#example-creation-of-gammaray-supported-disk-layout)
+   virtul disk creation instructions
 
-3. Follow the [installation procedure](#Installation Procedure) for gammaray
+3. Follow the [installation procedure](#installation-procedure) for gammaray
 
-4. Follow the [instructions](#High Level Overview) for running the gammaray
+4. Follow the [instructions](#high-level-overview) for running the gammaray
    pipeline
 
 ## License
