@@ -34,6 +34,18 @@ although they should be similar for most distributions of Linux.
    command line options yet, so type the command almost exactly as it appears
    above (`-s -d` force single-threaded, debug mode).
 
+   * Example check command outside the VM guest
+
+      ```bash
+      tail /mnt/disk/home/wolf/test.txt
+      ```
+
+   * Example check command within the VM guest
+
+      ```bash
+      while 1; do echo 'test' >> test.txt; sleep 3; done 
+      ```
+
 ## License
 
 All source code, documentation, and related artifacts associated with the
