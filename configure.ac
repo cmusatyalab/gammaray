@@ -40,8 +40,10 @@ AC_PROG_MAKE_SET
 AM_PROG_CC_C_O
 
 # Checks for libraries.
-AC_CHECK_LIB([hiredis], [redisConnect])
-AC_CHECK_LIB([event], [event_base_new])
+AC_CHECK_LIB([hiredis], [redisConnect],,
+             AC_MSG_FAILURE(could not find libhiredis))
+AC_CHECK_LIB([event], [event_base_new],,
+             AC_MSG_FAILURE(could not find libevent))
 
 # Initialize libtool
 LT_INIT([disable-shared])
