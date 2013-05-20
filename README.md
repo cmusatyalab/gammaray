@@ -69,6 +69,13 @@ developers can skip the Python libraries):
    sudo apt-get install libhiredis-dev libhiredis0.10
    ```
 
+2. [event](http://libevent.org/) [BSD 3-clause] - the libevent event-driven
+   networking library
+
+    ```bash
+    sudo apt-get install libevent-dev libevent-2.0.5 
+    ```
+
 2. [bson](https://pypi.python.org/pypi/bson/0.3.2) [Optional, BSD 3-clause] -
    Python BSON library
 
@@ -78,9 +85,9 @@ developers can skip the Python libraries):
 The Python libraries are optional if you want to write or execute Python
 monitors consuming gammaray's publish-subscribe stream of file-level updates.
 
-In addition to `libhiredis`, gammaray requires a slightly modified version of
-QEMU.  Clone the QEMU repository, apply a patch for gammaray support, and then
-compile a gammaray-friendly QEMU.
+In addition to `libhiredis` and `libevent`, gammaray requires a slightly
+modified version of QEMU.  Clone the QEMU repository, apply a patch for
+gammaray support, and then compile a gammaray-friendly QEMU.
 
 1. Get the official QEMU source tree
  

@@ -41,6 +41,7 @@ AM_PROG_CC_C_O
 
 # Checks for libraries.
 AC_CHECK_LIB([hiredis], [redisConnect])
+AC_CHECK_LIB([event], [event_base_new])
 
 # Initialize libtool
 LT_INIT([disable-shared])
