@@ -76,10 +76,10 @@ developers can skip the Python libraries):
     sudo apt-get install libevent-dev libevent-2.0.5 
     ```
 
-2. [bson](https://pypi.python.org/pypi/bson/0.3.2) [Optional, BSD 3-clause] -
+3. [bson](https://pypi.python.org/pypi/bson/0.3.2) [Optional, BSD 3-clause] -
    Python BSON library
 
-3. [redis-py](https://github.com/andymccurdy/redis-py) [Optional, MIT] - Python
+4. [redis-py](https://github.com/andymccurdy/redis-py) [Optional, MIT] - Python
    hiredis wrapper
 
 The Python libraries are optional if you want to write or execute Python
