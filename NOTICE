@@ -33,3 +33,8 @@
    held by him.  redis-py is licensed under the MIT License.  redis-py is
    available from:
       https://github.com/andymccurdy/redis-py
+
+   QEMU disk writes are provided by the patch within src/patches, which is open
+   source software, written by Carnegie Mellon University, and copyright is
+   held by them.  The included patch is licensed under the GPLv2, as is the
+   QEMU project.

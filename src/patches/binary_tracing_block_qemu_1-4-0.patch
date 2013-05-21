@@ -1,0 +1,149 @@
+This patch is provided under the terms of the GNU GPLv2.  You may read the
+entire license here: http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+Copyright (C) 2013 Carnegie Mellon University
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+diff --git a/block.c b/block.c
+index 50dab8e..a9d3a79 100644
+--- a/block.c
++++ b/block.c
+@@ -2399,6 +2399,8 @@ int coroutine_fn bdrv_co_writev(BlockDriverState *bs, int64_t sector_num,
+     int nb_sectors, QEMUIOVector *qiov)
+ {
+     trace_bdrv_co_writev(bs, sector_num, nb_sectors);
++
++    trace_bdrv_write(sector_num, nb_sectors, qiov);
+ 
+     return bdrv_co_do_writev(bs, sector_num, nb_sectors, qiov, 0);
+ }
+diff --git a/block/iscsi.c b/block/iscsi.c
+index deb3b68..43a0d6c 100644
+--- a/block/iscsi.c
++++ b/block/iscsi.c
+@@ -238,6 +238,8 @@ iscsi_aio_writev(BlockDriverState *bs, int64_t sector_num,
+     struct iscsi_data data;
+ #endif
+     int ret;
++
++    trace_bdrv_write(sector_num, nb_sectors, qiov);
+ 
+     acb = qemu_aio_get(&iscsi_aiocb_info, bs, cb, opaque);
+     trace_iscsi_aio_writev(iscsi, sector_num, nb_sectors, opaque, acb);
+diff --git a/include/qemu-common.h b/include/qemu-common.h
+index 80016ad..c57beb8 100644
+--- a/include/qemu-common.h
++++ b/include/qemu-common.h
+@@ -343,6 +343,7 @@ void qemu_iovec_concat_iov(QEMUIOVector *dst,
+                            size_t soffset, size_t sbytes);
+ void qemu_iovec_destroy(QEMUIOVector *qiov);
+ void qemu_iovec_reset(QEMUIOVector *qiov);
++void qemu_iovec_to_fd(int fd, QEMUIOVector *qiov);
+ size_t qemu_iovec_to_buf(QEMUIOVector *qiov, size_t offset,
+                          void *buf, size_t bytes);
+ size_t qemu_iovec_from_buf(QEMUIOVector *qiov, size_t offset,
+diff --git a/include/qemu/iov.h b/include/qemu/iov.h
+index 68d25f2..f0f378a 100644
+--- a/include/qemu/iov.h
++++ b/include/qemu/iov.h
+@@ -43,6 +43,7 @@ size_t iov_from_buf(const struct iovec *iov, unsigned int iov_cnt,
+                     size_t offset, const void *buf, size_t bytes);
+ size_t iov_to_buf(const struct iovec *iov, const unsigned int iov_cnt,
+                   size_t offset, void *buf, size_t bytes);
++void iov_to_fd(int fd, const struct iovec *iov, unsigned int iov_cnt);
+ 
+ /**
+  * Set data bytes pointed out by iovec `iov' of size `iov_cnt' elements,
+diff --git a/scripts/tracetool/backend/stderr.py b/scripts/tracetool/backend/stderr.py
+index 917fde7..f82aa48 100644
+--- a/scripts/tracetool/backend/stderr.py
++++ b/scripts/tracetool/backend/stderr.py
+@@ -35,11 +35,28 @@ def h(events):
+         'extern TraceEvent trace_list[];')
+ 
+     for num, e in enumerate(events):
++
+         argnames = ", ".join(e.args.names())
+         if len(e.args) > 0:
+             argnames = ", " + argnames
+ 
+-        out('static inline void trace_%(name)s(%(args)s)',
++        if e.fmt == '"raw"':
++            out('static inline void trace_%(name)s(%(args)s)',
++            '{',
++            '    if (trace_list[%(event_num)s].state != 0) {',
++            '       fwrite(&sector_num, 1, sizeof(sector_num), stderr);',
++            '       fwrite(&nb_sectors, 1, sizeof(nb_sectors), stderr);',
++            '       qemu_iovec_to_fd(STDERR_FILENO, qiov);',
++            '   }',
++            '}',
++            name = e.name,
++            args = e.args,
++            event_num = num,
++            fmt = e.fmt,
++            argnames = argnames,
++            )
++        else:
++            out('static inline void trace_%(name)s(%(args)s)',
+             '{',
+             '    if (trace_list[%(event_num)s].state != 0) {',
+             '        fprintf(stderr, "%(name)s " %(fmt)s "\\n" %(argnames)s);',
+diff --git a/trace-events b/trace-events
+index 1011f27..4946d61 100644
+--- a/trace-events
++++ b/trace-events
+@@ -70,6 +70,7 @@ bdrv_co_writev(void *bs, int64_t sector_num, int nb_sector) "bs %p sector_num %"
+ bdrv_co_write_zeroes(void *bs, int64_t sector_num, int nb_sector) "bs %p sector_num %"PRId64" nb_sectors %d"
+ bdrv_co_io_em(void *bs, int64_t sector_num, int nb_sectors, int is_write, void *acb) "bs %p sector_num %"PRId64" nb_sectors %d is_write %d acb %p"
+ bdrv_co_do_copy_on_readv(void *bs, int64_t sector_num, int nb_sectors, int64_t cluster_sector_num, int cluster_nb_sectors) "bs %p sector_num %"PRId64" nb_sectors %d cluster_sector_num %"PRId64" cluster_nb_sectors %d"
++bdrv_write(int64_t sector_num, int nb_sectors, QEMUIOVector* qiov) "raw"
+ 
+ # block/stream.c
+ stream_one_iteration(void *s, int64_t sector_num, int nb_sectors, int is_allocated) "s %p sector_num %"PRId64" nb_sectors %d is_allocated %d"
+diff --git a/util/cutils.c b/util/cutils.c
+index 1439da4..796b48f 100644
+--- a/util/cutils.c
++++ b/util/cutils.c
+@@ -422,3 +422,9 @@ int uleb128_decode_small(const uint8_t *in, uint32_t *n)
+         return 2;
+     }
+ }
++
++
++void qemu_iovec_to_fd(int fd, QEMUIOVector *qiov)
++{
++    iov_to_fd(fd, qiov->iov, qiov->niov);
++}
+diff --git a/util/iov.c b/util/iov.c
+index fbe675d..c31cd91 100644
+--- a/util/iov.c
++++ b/util/iov.c
+@@ -64,6 +64,16 @@ size_t iov_to_buf(const struct iovec *iov, const unsigned int iov_cnt,
+     return done;
+ }
+ 
++void iov_to_fd(int fd, const struct iovec *iov, const unsigned int iov_cnt)
++{
++    unsigned int i;
++    for (i = 0; i < iov_cnt; i++)
++    {
++        assert(qemu_write_full(fd, iov[i].iov_base, iov[i].iov_len) ==
++               iov[i].iov_len);
++    }
++}
++
+ size_t iov_memset(const struct iovec *iov, const unsigned int iov_cnt,
+                   size_t offset, int fillc, size_t bytes)
+ {
