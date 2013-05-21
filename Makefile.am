@@ -31,14 +31,10 @@ EXTRA_DIST = LICENSE NOTICE README src/include/*.h
 
 # define build variables
 noinst_LTLIBRARIES = 
-bin_test_PROGRAMS = 
-bin_tools_PROGRAMS = 
+check_PROGRAMS = 
 bin_PROGRAMS = 
 
 libdir	 	 = $(srcdir)/lib
-bindir   	 = $(srcdir)/bin
-bin_testdir  = $(bindir)/test
-bin_toolsdir = $(bindir)/tools
 
 # subprojects
 include $(srcdir)/src/bson/build.mk

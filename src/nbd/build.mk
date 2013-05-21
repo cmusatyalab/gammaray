@@ -1,5 +1,5 @@
-bin_test_PROGRAMS  += bin/test/nbd-test
-noinst_LTLIBRARIES += lib/libnbd.la
+check_PROGRAMS 		+= bin/test/nbd-test
+noinst_LTLIBRARIES 	+= lib/libnbd.la
 
 lib_libnbd_la_SOURCES = src/nbd/nbd.c
 lib_libnbd_la_LIBADD  = $(libdir)/libcolor.la \
