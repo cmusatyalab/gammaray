@@ -296,20 +296,20 @@ into the pre-existing partition.
 
 9. Then just finish partitioning and continue with the installation procedure
 
-## Current Limitations
+## Currently Supported 
 
-1. Supported File Systems
+1. File Systems
     * ext4
     * NTFS
 
-2. Supported VMMs
+2. VMMs
     * KVM/QEMU
 
-3. Supported Number of Disks
+3. Number of Disks
     * Single attached disk
 
-4. Supported Number of File Systems
+4. Number of File Systems
     * Single introspected file system
 
-5. Supported Disk Formats
+5. Disk Formats
     * raw
