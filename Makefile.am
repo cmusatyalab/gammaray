@@ -34,7 +34,7 @@ noinst_LTLIBRARIES =
 check_PROGRAMS = 
 bin_PROGRAMS = 
 
-libdir	 	 = $(srcdir)/lib
+libdir	 	 = lib
 
 # subprojects
 include $(srcdir)/src/bson/build.mk
