@@ -101,19 +101,13 @@ gammaray support, and then compile a gammaray-friendly QEMU.
    git checkout v1.4.0
    ```
 
-3. Get our patch
-
-   ```bash
-   git clone https://gist.github.com/5ceeccdf6107222b256a.git
-   ```  
-
-4. Apply the patch to your checked out QEMU tree
+3. Apply the patch (located in `src/patches`) to your checked out QEMU tree
 
    ```bash
    git apply binary_tracing_block_qemu_1-4-0.patch
    ```
 
-5. Configure QEMU, remember to change the prefix as needed
+4. Configure QEMU, remember to change the prefix as needed
 
    ```bash
    ./configure \
@@ -126,14 +120,14 @@ gammaray support, and then compile a gammaray-friendly QEMU.
     --static
    ```
    
-6. Make, and make install QEMU.
+5. Make, and make install QEMU.
 
    ```bash
    make
    make install
    ```
 
-7. QEMU binaries with the patch compiled in should be within the `prefix`
+6. QEMU binaries with the patch compiled in should be within the `prefix`
    folder, specifically inside the `bin` subfolder.
 
 ## Installing gammaray
