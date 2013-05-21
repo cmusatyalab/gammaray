@@ -30,11 +30,10 @@ AM_CFLAGS = -Wall -Werror -I$(srcdir)/src/include
 EXTRA_DIST = LICENSE NOTICE README.md src/include
 
 # define build variables
-noinst_LTLIBRARIES = 
-check_PROGRAMS = 
-bin_PROGRAMS = 
-
-libdir	 	 = lib
+noinst_LTLIBRARIES =
+check_PROGRAMS     =
+bin_PROGRAMS       =
+libdir             = lib
 
 # subprojects
 include $(srcdir)/src/bson/build.mk
