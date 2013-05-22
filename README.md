@@ -125,7 +125,7 @@ gammaray support, and then compile a gammaray-friendly QEMU.
 5. Make, and make install QEMU.
 
    ```bash
-   make
+   make -j2
    make install
    ```
 
@@ -156,7 +156,7 @@ gammaray support, and then compile a gammaray-friendly QEMU.
 5. Run make
 
    ```bash
-   make
+   make -j 2
    ```
 
    All binaries will now be built and placed in the bin folder at the top-level
