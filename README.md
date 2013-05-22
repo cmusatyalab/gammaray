@@ -103,7 +103,7 @@ gammaray support, and then compile a gammaray-friendly QEMU.
 
 3. Apply the patch (located in `src/patches`) to your checked out QEMU tree.
    This patch is in the gammaray source tree
-   (https://github.com/cmusatyalab/gammaray/blob/master/src/patches/binary_tracing_block_qemu_1-4-0.patch[binary_tracing_block_qemu_1-4-0.patch])
+   [binary_tracing_block_qemu_1-4-0.patch](https://github.com/cmusatyalab/gammaray/blob/master/src/patches/binary_tracing_block_qemu_1-4-0.patch)
 
    ```bash
    git apply binary_tracing_block_qemu_1-4-0.patch
