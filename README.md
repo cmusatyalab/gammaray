@@ -281,7 +281,8 @@ into the pre-existing partition.
    sudo kpartx -dv disk.raw
    ```
 
-7. Boot the instance with install media and the new drive attached
+7. Boot the instance with install media (example:
+   [ubuntu-12.04.2-server-amd64.iso](http://releases.ubuntu.com/precise/ubuntu-12.04.2-server-amd64.iso)) and the new drive attached
 
    ```bash
   qemu-system-x86_64 disk.raw -cpu kvm64 -cdrom ubuntu-12.04.2-server-amd64.iso
