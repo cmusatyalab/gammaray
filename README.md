@@ -9,8 +9,8 @@ perform introspection with any source of raw disk writes.  The instructions
 below assume an [Ubuntu 12.04 LTS](http://releases.ubuntu.com/precise/) host,
 although they should be similar for most distributions of Linux.
 
-## Quickstart
-
+## Installation Procedure 
+ 
 1. Follow the non-optional [dependencies](#dependencies) instructions
 
 2. Follow the [example](#example-creation-of-gammaray-supported-disk-layout)
@@ -101,7 +101,9 @@ gammaray support, and then compile a gammaray-friendly QEMU.
    git checkout v1.4.0
    ```
 
-3. Apply the patch (located in `src/patches`) to your checked out QEMU tree
+3. Apply the patch (located in `src/patches`) to your checked out QEMU tree.
+   This patch is in the gammaray source tree
+   (https://github.com/cmusatyalab/gammaray/blob/master/src/patches/binary_tracing_block_qemu_1-4-0.patch[binary_tracing_block_qemu_1-4-0.patch])
 
    ```bash
    git apply binary_tracing_block_qemu_1-4-0.patch
