@@ -69,6 +69,12 @@ developers can skip the Python libraries):
    sudo apt-get install libhiredis-dev libhiredis0.10
    ```
 
+   and install a Redis server if you don't have one already:
+
+   ```bash
+   sudo apt-get install redis-server
+   ```
+
 2. [event](http://libevent.org/) [BSD 3-clause] - the libevent event-driven
    networking library
 
