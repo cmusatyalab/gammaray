@@ -124,8 +124,7 @@ gammaray support, and then compile a gammaray-friendly QEMU.
     --enable-kvm \
     --enable-trace-backend=stderr \
     --target-list='i386-softmmu i386-linux-user x86_64-linux-user x86_64-softmmu' \
-    --prefix=/home/wolf/qemu_bin \
-    --static
+    --prefix=/home/wolf/qemu_bin
    ```
    
 5. Make, and make install QEMU.
