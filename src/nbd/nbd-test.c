@@ -29,7 +29,8 @@
 #include "color.h"
 #include "nbd.h"
 
-#define USAGE "%s <backing file> <export name>\n"
+#define USAGE "%s <export name> <Redis IP> <Redis port> <Redis DB> " \
+"<Export Size> <NBD Bind IP> <NBD Port> <Old Handshake y|n>\n"
 
 struct nbd_handle
 {
@@ -45,7 +46,7 @@ int main(int argc, char* argv[])
 {
     struct nbd_handle* handle;
    
-    if (argc < 3)
+    if (argc < 9)
     {
         fprintf_light_red(stderr, USAGE, argv[0]);
         exit(EXIT_FAILURE);
@@ -53,11 +54,10 @@ int main(int argc, char* argv[])
 
     fprintf_blue(stdout, "nbd-test program by: Wolfgang Richter "
                          "<wolf@cs.cmu.edu>\n");
-    fprintf_white(stdout, "backing file: %s\n", argv[1]);
-    fprintf_white(stdout, "export name: %s\n", argv[2]);
 
-    handle = nbd_init_file(argv[2], argv[1],
-                           "0.0.0.0", "10809", true);
+    handle = nbd_init_redis(argv[1], argv[2], atoi(argv[3]), atoi(argv[4]),
+                            atoll(argv[5]), argv[6], argv[7],
+                            strcmp(argv[8], "y") || strcmp(argv[8], "y"));
 
     assert(handle != NULL);
     assert(handle->fd != 0);
