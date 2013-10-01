@@ -57,7 +57,8 @@ int main(int argc, char* argv[])
 
     handle = nbd_init_redis(argv[1], argv[2], atoi(argv[3]), atoi(argv[4]),
                             atoll(argv[5]), argv[6], argv[7],
-                            strncmp(argv[8], "y", 1) || strncmp(argv[8], "y", 1));
+                            (strncmp(argv[8], "y", 1) == 0) ||
+                            (strncmp(argv[8], "y", 1) == 0));
 
     assert(handle != NULL);
     assert(handle->fd != 0);
