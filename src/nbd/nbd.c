@@ -111,6 +111,15 @@ enum NBD_CLIENT_STATE
     NBD_DISCONNECTED
 };
 
+struct nbd_old_handshake
+{
+    uint64_t magic;
+    uint64_t protocol;
+    uint64_t size;
+    uint32_t flags;
+    uint8_t zeros[124];
+} __attribute__((packed));
+
 struct nbd_new_handshake
 {
     uint64_t magic;
@@ -536,6 +545,40 @@ static void nbd_new_conn(struct evconnlistener *conn, evutil_socket_t sock,
     bufferevent_enable(bev, EV_READ|EV_WRITE);
 }
 
+static void nbd_old_conn(struct evconnlistener *conn, evutil_socket_t sock,
+                         struct sockaddr *addr, int len, void * handle)
+{
+    struct event_base* eb = evconnlistener_get_base(conn);
+    struct bufferevent* bev = bufferevent_socket_new(eb, sock,
+                                                     BEV_OPT_CLOSE_ON_FREE);
+    struct evbuffer* out = bufferevent_get_output(bev);
+    struct nbd_old_handshake hdr = { .magic        =
+                                            htobe64(GAMMARAY_NBD_MAGIC),
+                                     .protocol     =
+                                            htobe64(GAMMARAY_NBD_OLD_PROTOCOL),
+                                     .size         =
+                                            htobe64(
+                                          ((struct nbd_handle*) handle)->size),
+                                     .flags        =
+                                            htobe32(NBD_FLAG_HAS_FLAGS |
+                                                    NBD_FLAG_SEND_FLUSH |
+                                                    NBD_FLAG_SEND_FUA |
+                                                    NBD_FLAG_SEND_TRIM),
+                                     .zeros         = {0}
+                                   };
+    struct nbd_client* client = (struct nbd_client*)
+                                    malloc(sizeof(struct nbd_client));
+
+    client->handle = handle;
+    client->state = NBD_DATA_PUSHING;
+    client->socket = sock;
+    client->buf = NULL;
+
+    bufferevent_setcb(bev, &nbd_client_handler, NULL, &nbd_ev_handler, client);
+    evbuffer_add(out, &hdr, sizeof(hdr));
+    bufferevent_enable(bev, EV_READ|EV_WRITE);
+}
+
 static void nbd_event_error(struct evconnlistener* conn, void* ptr)
 {
     struct event_base* eb = evconnlistener_get_base(conn);
@@ -549,7 +592,7 @@ void nbd_run_loop(struct nbd_handle* handle)
 
 /* public library methods */
 struct nbd_handle* nbd_init_file(char* export_name, char* fname,
-                                 char* nodename, char* port)
+                                 char* nodename, char* port, bool old)
 {
     int fd = 0;
     struct stat st_buf;
@@ -615,7 +658,8 @@ struct nbd_handle* nbd_init_file(char* export_name, char* fname,
     }
 
     /* setup network connection */
-    if ((conn = evconnlistener_new_bind(eb, &nbd_new_conn, ret,
+    if ((conn = evconnlistener_new_bind(eb, old ? &nbd_old_conn :
+                                        &nbd_new_conn, ret,
                                         LEV_OPT_CLOSE_ON_FREE |
                                         LEV_OPT_REUSEABLE, -1,
                                         server->ai_addr,

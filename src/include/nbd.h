@@ -25,13 +25,15 @@
 #ifndef __GAMMARAY_NBD_H
 #define __GAMMARAY_NBD_H
 
+#include <stdbool.h>
+
 #define GAMMARAY_NBD_PORT 10809
 
 struct nbd_handle;
 struct nbd_req_header;
 
 struct nbd_handle* nbd_init_file(char* export_name, char* fname,
-                                 char* nodename, char* port);
+                                 char* nodename, char* port, bool old);
 void nbd_shutdown(struct nbd_handle* handle);
 int nbd_handle_read(struct nbd_handle* handle, struct nbd_req_header* hdr);
 int nbd_handle_write(struct nbd_handle* handle, struct nbd_req_header* hdr);

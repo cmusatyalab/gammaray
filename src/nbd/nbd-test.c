@@ -57,14 +57,17 @@ int main(int argc, char* argv[])
     fprintf_white(stdout, "export name: %s\n", argv[2]);
 
     handle = nbd_init_file(argv[2], argv[1],
-                           "0.0.0.0", "10809");
+                           "0.0.0.0", "10809", true);
 
     assert(handle != NULL);
     assert(handle->fd != 0);
     assert(strncmp(argv[2], handle->export_name, strlen(argv[2])) == 0);
     assert(handle->eb != NULL);
     assert(handle->conn != NULL);
-    assert(handle->fsize != 0);
+    assert(handle->fsize >= 0);
+
+    /* special case allow for example /dev/null to appear as a large file */
+    if (handle->fsize == 0) handle->fsize = 1024*1024*1024*1024LL;
     
     nbd_run_loop(handle);
     nbd_shutdown(handle);
