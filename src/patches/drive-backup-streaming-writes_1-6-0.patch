@@ -1,0 +1,151 @@
+diff --git a/block.c b/block.c
+index 01b66d8..159f825 100644
+--- a/block.c
++++ b/block.c
+@@ -1872,12 +1872,14 @@ static void tracked_request_end(BdrvTrackedRequest *req)
+ static void tracked_request_begin(BdrvTrackedRequest *req,
+                                   BlockDriverState *bs,
+                                   int64_t sector_num,
+-                                  int nb_sectors, bool is_write)
++                                  int nb_sectors, bool is_write,
++                                  QEMUIOVector *qiov)
+ {
+     *req = (BdrvTrackedRequest){
+         .bs = bs,
+         .sector_num = sector_num,
+         .nb_sectors = nb_sectors,
++        .qiov = qiov,
+         .is_write = is_write,
+         .co = qemu_coroutine_self(),
+     };
+@@ -2528,7 +2530,7 @@ static int coroutine_fn bdrv_co_do_readv(BlockDriverState *bs,
+         wait_for_overlapping_requests(bs, sector_num, nb_sectors);
+     }
+ 
+-    tracked_request_begin(&req, bs, sector_num, nb_sectors, false);
++    tracked_request_begin(&req, bs, sector_num, nb_sectors, false, NULL);
+ 
+     if (flags & BDRV_REQ_COPY_ON_READ) {
+         int pnum;
+@@ -2634,7 +2636,7 @@ static int coroutine_fn bdrv_co_do_writev(BlockDriverState *bs,
+         wait_for_overlapping_requests(bs, sector_num, nb_sectors);
+     }
+ 
+-    tracked_request_begin(&req, bs, sector_num, nb_sectors, true);
++    tracked_request_begin(&req, bs, sector_num, nb_sectors, true, qiov);
+ 
+     ret = notifier_with_return_list_notify(&bs->before_write_notifiers, &req);
+ 
+diff --git a/block/backup.c b/block/backup.c
+index 6ae8a05..686a53f 100644
+--- a/block/backup.c
++++ b/block/backup.c
+@@ -84,6 +84,37 @@ static void cow_request_end(CowRequest *req)
+     qemu_co_queue_restart_all(&req->wait_queue);
+ }
+ 
++static int coroutine_fn backup_do_stream(BlockDriverState *bs,
++                                         int64_t sector_num, int nb_sectors,
++                                         QEMUIOVector *qiov)
++{
++    BackupBlockJob *job = (BackupBlockJob *)bs->job;
++    CowRequest cow_request;
++    int ret = 0;
++    int64_t start = sector_num, end = sector_num + nb_sectors;
++ 
++    qemu_co_rwlock_rdlock(&job->flush_rwlock);
++ 
++    wait_for_overlapping_requests(job, start, end);
++    cow_request_begin(&cow_request, job, start, end);
++ 
++    ret = bdrv_co_writev(job->target,
++                         sector_num, nb_sectors,
++                         qiov);
++
++    /* Publish progress, guest I/O counts as progress too.  Note that the
++     * offset field is an opaque progress value, it is not a disk offset.
++     */
++    job->sectors_read += sector_num;
++    job->common.offset += sector_num * BDRV_SECTOR_SIZE;
++ 
++    cow_request_end(&cow_request);
++ 
++    qemu_co_rwlock_unlock(&job->flush_rwlock);
++ 
++    return ret;
++}
++
+ static int coroutine_fn backup_do_cow(BlockDriverState *bs,
+                                       int64_t sector_num, int nb_sectors,
+                                       bool *error_is_read)
+@@ -181,7 +212,12 @@ static int coroutine_fn backup_before_write_notify(
+ {
+     BdrvTrackedRequest *req = opaque;
+ 
+-    return backup_do_cow(req->bs, req->sector_num, req->nb_sectors, NULL);
++    if (MIRROR_SYNC_MODE_STREAM) {
++        return backup_do_stream(req->bs, req->sector_num, req->nb_sectors,
++                                req->qiov);
++    } else {
++        return backup_do_cow(req->bs, req->sector_num, req->nb_sectors, NULL);
++    }
+ }
+ 
+ static void backup_set_speed(BlockJob *job, int64_t speed, Error **errp)
+@@ -248,7 +284,8 @@ static void coroutine_fn backup_run(void *opaque)
+ 
+     bdrv_add_before_write_notifier(bs, &before_write);
+ 
+-    if (job->sync_mode == MIRROR_SYNC_MODE_NONE) {
++    if (job->sync_mode == MIRROR_SYNC_MODE_NONE ||
++        job->sync_mode == MIRROR_SYNC_MODE_STREAM) {
+         while (!block_job_is_cancelled(&job->common)) {
+             /* Yield until the job is cancelled.  We just let our before_write
+              * notify callback service CoW requests. */
+diff --git a/include/block/block_int.h b/include/block/block_int.h
+index e45f2a0..13ab769 100644
+--- a/include/block/block_int.h
++++ b/include/block/block_int.h
+@@ -63,6 +63,7 @@ typedef struct BdrvTrackedRequest {
+     BlockDriverState *bs;
+     int64_t sector_num;
+     int nb_sectors;
++    QEMUIOVector *qiov;
+     bool is_write;
+     QLIST_ENTRY(BdrvTrackedRequest) list;
+     Coroutine *co; /* owner, used for deadlock detection */
+diff --git a/qapi-schema.json b/qapi-schema.json
+index a51f7d2..9a3008a 100644
+--- a/qapi-schema.json
++++ b/qapi-schema.json
+@@ -1311,12 +1311,14 @@
+ #
+ # @full: copies data from all images to the destination
+ #
+-# @none: only copy data written from now on
++# @none: only copy on write data written from now on
++#
++# @stream: copy every new write to target
+ #
+ # Since: 1.3
+ ##
+ { 'enum': 'MirrorSyncMode',
+-  'data': ['top', 'full', 'none'] }
++  'data': ['top', 'full', 'none', 'stream'] }
+ 
+ ##
+ # @BlockJobInfo:
+diff --git a/qmp-commands.hx b/qmp-commands.hx
+index cf47e3f..39056bd 100644
+--- a/qmp-commands.hx
++++ b/qmp-commands.hx
+@@ -944,7 +944,8 @@ Arguments:
+             (json-string, optional)
+ - "sync": what parts of the disk image should be copied to the destination;
+   possibilities include "full" for all the disk, "top" for only the sectors
+-  allocated in the topmost image, or "none" to only replicate new I/O
++  allocated in the topmost image, "none" to CoW on new I/O, or "stream"
++  to send every new write to the target
+   (MirrorSyncMode).
+ - "mode": whether and how QEMU should create a new image
+           (NewImageMode, optional, default 'absolute-paths')
