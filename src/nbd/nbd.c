@@ -815,7 +815,4 @@ void nbd_shutdown(struct nbd_handle* handle)
 
     if (handle->eb)
         event_base_free(handle->eb);
-
-    if (handle->redis_c)
-        redisAsyncDisconnect(handle->redis_c);
 }
