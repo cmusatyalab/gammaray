@@ -57,11 +57,11 @@ int main(int argc, char* argv[])
 
     handle = nbd_init_redis(argv[1], argv[2], atoi(argv[3]), atoi(argv[4]),
                             atoll(argv[5]), argv[6], argv[7],
-                            strcmp(argv[8], "y") || strcmp(argv[8], "y"));
+                            strncmp(argv[8], "y", 1) || strncmp(argv[8], "y", 1));
 
     assert(handle != NULL);
     assert(handle->fd != 0);
-    assert(strncmp(argv[2], handle->export_name, strlen(argv[2])) == 0);
+    assert(strncmp(argv[1], handle->export_name, strlen(argv[1])) == 0);
     assert(handle->eb != NULL);
     assert(handle->conn != NULL);
     assert(handle->fsize >= 0);
