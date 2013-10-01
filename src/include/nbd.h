@@ -34,6 +34,9 @@ struct nbd_req_header;
 
 struct nbd_handle* nbd_init_file(char* export_name, char* fname,
                                  char* nodename, char* port, bool old);
+struct nbd_handle* nbd_init_redis(char* export_name, char* redis_server,
+                                  int redis_port, int redis_db, uint64_t fsize,
+                                  char* nodename, char* port, bool old);
 void nbd_shutdown(struct nbd_handle* handle);
 int nbd_handle_read(struct nbd_handle* handle, struct nbd_req_header* hdr);
 int nbd_handle_write(struct nbd_handle* handle, struct nbd_req_header* hdr);
