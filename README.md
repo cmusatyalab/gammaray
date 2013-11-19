@@ -26,7 +26,7 @@ although they should be similar for most distributions of Linux.
    they eventually become visible via the `gray-fs` mounted file system.
 
    ```bash
-   gray-fs disk.raw /mnt/disk -s -d
+   gray-fs /mnt/disk -d -s disk.raw
    ```
 
    Replace `/mnt/disk` with whatever folder you'd like to use as the read-only
@@ -87,6 +87,13 @@ developers can skip the Python libraries):
 
 4. [redis-py](https://github.com/andymccurdy/redis-py) [Optional, MIT] - Python
    hiredis wrapper
+
+5. [libfuse](http://fuse.sourceforge.net/) [GNU LGPL] - the filesystem in
+   userspace library
+
+    ```bash
+    sudo apt-get install libfuse-dev
+    ```
 
 The Python libraries are optional if you want to write or execute Python
 monitors consuming gammaray's publish-subscribe stream of file-level updates.
