@@ -1315,6 +1315,7 @@ int __diff_inodes_ntfs(uint8_t* write, struct kv_store* store,
         }
     }
 
+    redis_free_list(list, len);
     fprintf_light_cyan(stdout, "loaded: %zu elements\n", len);
     return EXIT_SUCCESS;
 }
@@ -1413,7 +1414,6 @@ int __diff_inodes(uint8_t* write, struct kv_store* store,
 
         fprintf_light_white(stdout, "Checking inode for file '%s', offset %"
                                     PRIu64"\n", path, offset);
-        channel = construct_channel_name(vmname, path);
         fprintf_light_cyan(stdout, "channel: %s\n", channel);
 
         SET_FIELD(REDIS_FILE_SECTOR_INSERT, file, is_dir, len2);
@@ -1455,6 +1455,7 @@ int __diff_inodes(uint8_t* write, struct kv_store* store,
         free(channel);
     }
 
+    redis_free_list(list, len);
     fprintf_light_cyan(stdout, "loaded: %zu elements\n", len);
     return EXIT_SUCCESS;
 }
@@ -1576,6 +1577,7 @@ int __load(char* pointer, FILE* metadata, struct kv_store* store)
         fprintf_light_red(stderr, "ERROR: couldn't load document.\n");
     }
 
+    bson_cleanup(bson);
     redis_flush_pipeline(store);
 
     return EXIT_SUCCESS;
