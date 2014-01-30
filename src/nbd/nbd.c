@@ -474,6 +474,7 @@ uint32_t __handle_write(struct nbd_req_header* req, struct nbd_client* client,
 
     client->write_count += 1;
     client->write_bytes += len;
+    fprintf(stderr, "write size: %zd\n", len);
 
     if (fd < 0)
     {
@@ -508,6 +509,7 @@ bool __check_request(struct bufferevent* bev, struct evbuffer* in,
     uint32_t err = 0;
     uint64_t handle = 0;
     void* test = NULL;
+    char bytestr[32];
     peek = (struct nbd_req_header*)
            evbuffer_pullup(in, sizeof(struct nbd_req_header));
 
@@ -534,9 +536,11 @@ bool __check_request(struct bufferevent* bev, struct evbuffer* in,
                     err = __handle_write(peek, client, in);
                     if (err == -1)
                         return true;
+                    pretty_print_bytes(client->write_bytes, bytestr, 32);
                     fprintf(stderr, "\twrite[%"PRIu64"]: %"PRIu64" cumulative "
-                                    "bytes\n", client->write_count,
-                                               client->write_bytes);
+                                    "bytes (%s)\n", client->write_count,
+                                                    client->write_bytes,
+                                                    bytestr);
                     evbuffer_drain(in, be32toh(req.length));
                     __send_response(bev, err, handle, NULL, 0);
                     return false;
