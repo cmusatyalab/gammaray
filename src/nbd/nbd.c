@@ -255,8 +255,8 @@ void redis_disconnect_callback(const redisAsyncContext* c, int status)
                 }
                 else
                 {
-                    fprintf_light_red(stderr, "Error setting disconnect"
-                                              " callback handler for Redis.\n");
+                    fprintf_light_red(stderr, "Error setting disconnect "
+                                              "callback handler for Redis.\n");
                 }
             }
             else
@@ -479,10 +479,11 @@ uint32_t __handle_write(struct nbd_req_header* req, struct nbd_client* client,
     {
         assert(redis_c != NULL);
         offset /= 512;
-        assert(redisAsyncCommand(redis_c, &redis_async_callback, NULL, "LPUSH writequeue %b",
-                                 &offset, sizeof(offset)) == REDIS_OK);
-        assert(redisAsyncCommand(redis_c, &redis_async_callback, NULL, "LPUSH writequeue %b",
-                                 buf, len) == REDIS_OK);
+        assert(redisAsyncCommand(redis_c, &redis_async_callback, NULL,
+                                 "LPUSH writequeue %b", &offset,
+                                 sizeof(offset)) == REDIS_OK);
+        assert(redisAsyncCommand(redis_c, &redis_async_callback, NULL,
+                                 "LPUSH writequeue %b", buf, len) == REDIS_OK);
         return 0;
     }
 
