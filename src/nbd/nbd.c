@@ -215,6 +215,63 @@ void redis_async_callback(redisAsyncContext* c, void* reply, void* data)
     assert(reply != NULL); /* check error status */
 }
 
+void redis_disconnect_callback(const redisAsyncContext* c, int status)
+{
+    struct nbd_handle handle;
+
+    if (c->data)
+    {
+       handle = * ((struct nbd_handle*) c->data);
+    }
+    else
+    {
+        fprintf_light_red(stderr, "FATAL: Handle not passed to disconnect "
+                                  "callback.\n");
+        assert(c->data != NULL);
+        return;
+    }
+
+    if (status != REDIS_OK)
+    {
+        if (c->err == REDIS_ERR_EOF) /* probably standard timeout, reconnect */
+        {
+            fprintf_red(stderr, "Redis server disconnected us.\n");
+            if ((handle.redis_c = redisAsyncConnect(handle.redis_server,
+                 handle.redis_port)) != NULL)
+            {
+                fprintf_blue(stderr, "New Redis context, attaching to "
+                                    "libevent.\n");
+                handle.redis_c->data = c->data;
+                redisLibeventAttach(handle.redis_c, handle.eb);
+                fprintf_blue(stderr, "Setting disconnect callback.\n");
+                if (redisAsyncSetDisconnectCallback(handle.redis_c,
+                    &redis_disconnect_callback) != REDIS_ERR)
+                {
+                    assert(redisAsyncCommand(handle.redis_c,
+                           &redis_async_callback, NULL, "select %d",
+                           handle.redis_db) == REDIS_OK);
+                    fprintf_light_blue(stderr, "Successfully reconnected to "
+                                               "the Redis server.\n");
+                }
+                else
+                {
+                    fprintf_light_red(stderr, "Error setting disconnect"
+                                              " callback handler for Redis.\n");
+                }
+            }
+            else
+            {
+                fprintf_light_red(stderr, "Error trying to reconnect to "
+                                          "Redis.\n");
+            }
+            return;
+        }
+        fprintf_light_red(stderr, "FATAL ERROR DISCONNECTION FROM REDIS\n");
+        fprintf_light_blue(stderr, "Error: %s\n", c->errstr);
+        assert(false);
+    }
+}
+
 static void nbd_signal_handler(evutil_socket_t sig, short events, void *handle)
 {
     struct event_base *eb = ((struct nbd_handle*) handle)->eb;
@@ -780,6 +837,16 @@ struct nbd_handle* nbd_init_redis(char* export_name, char* redis_server,
 
     redisLibeventAttach(redis_c, eb);
 
+    /* set disconnect handler */
+    if (redisAsyncSetDisconnectCallback(redis_c, &redis_disconnect_callback) ==
+        REDIS_ERR)
+    {
+        redisAsyncDisconnect(redis_c);
+        freeaddrinfo(server);
+        event_base_free(eb);
+        return NULL;
+    }
+
     /* initialize this nbd module */
     if ((ret = (struct nbd_handle*) malloc(sizeof(struct nbd_handle))) == NULL)
     {
@@ -788,6 +855,7 @@ struct nbd_handle* nbd_init_redis(char* export_name, char* redis_server,
         return NULL;
     }
 
+    redis_c->data = ret; /* set unused field for disconnect callback */
     evsignal = evsignal_new(eb, SIGINT, nbd_signal_handler, (void *)ret);
 
     if (!evsignal || event_add(evsignal, NULL) < 0)
