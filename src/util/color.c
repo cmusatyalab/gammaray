@@ -78,6 +78,7 @@ int fprintf_light_mode(const char* mode, FILE * stream, const char * format,
     returnv = vfprintf(stream, format, args);
     #ifndef NOCOLOR
     fprintf(stream, "%s%s", CONTROL, RESET);
+    fflush(stream);
     #endif
 
     return returnv;
@@ -94,6 +95,7 @@ int fprintf_mode(const char* mode, FILE * stream, const char * format,
     returnv = vfprintf(stream, format, args);
     #ifndef NOCOLOR
     fprintf(stream, "%s%s", CONTROL, RESET);
+    fflush(stream);
     #endif
 
     return returnv;
