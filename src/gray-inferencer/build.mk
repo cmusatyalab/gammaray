@@ -5,7 +5,8 @@ noinst_LTLIBRARIES += lib/libqemucommon.la\
 
 lib_libredis_la_SOURCES = src/gray-inferencer/redis_queue.c
 lib_libredis_la_LIBADD  = $(libdir)/libbitarray.la \
-						  $(libdir)/libutil.la
+						  $(libdir)/libutil.la \
+						  -lhiredis
 lib_libredis_la_CFLAGS  = $(AM_CFLAGS) \
 						  -I/usr/include/hiredis
 

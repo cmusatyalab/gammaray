@@ -171,7 +171,7 @@ gammaray support, and then compile a gammaray-friendly QEMU.
 
    ```bash
    ./configure LDFLAGS="-static" LIBS='-lrt'
-   make LDFLAGS=-all-static LIBS="-lpthread -lrt -ldl"
+   make LDFLAGS=-all-static
    ```
 
 5. Run make

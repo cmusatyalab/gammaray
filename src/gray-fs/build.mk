@@ -6,5 +6,6 @@ bin_gray_fs_LDADD   = $(libdir)/libbitarray.la \
 					  $(libdir)/libqemucommon.la \
 					  $(libdir)/libredis.la \
 					  $(libdir)/libutil.la \
+					  -lfuse \
 					  -lpthread \
-					  -lfuse
+					  -ldl
