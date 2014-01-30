@@ -165,6 +165,15 @@ gammaray support, and then compile a gammaray-friendly QEMU.
    ./configure
    ```
 
+   If you want to create a statically linked version of everything, use the
+   following `configure` and `make` options
+   (reference: [Re: Building all static](http://lists.gnu.org/archive/html/libtool/2004-11/msg00025.html)):
+
+   ```bash
+   ./configure LDFLAGS="-static" LIBS='-lrt'
+   make LDFLAGS=-all-static LIBS="-lpthread -lrt -ldl"
+   ```
+
 5. Run make
 
    ```bash
