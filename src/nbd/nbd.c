@@ -8,7 +8,7 @@
  *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
  *                                                                           *
  *                                                                           *
- *   Copyright 2013 Carnegie Mellon University                               *
+ *   Copyright 2013-2014 Carnegie Mellon University                          *
  *                                                                           *
  *   Licensed under the Apache License, Version 2.0 (the "License");         *
  *   you may not use this file except in compliance with the License.        *
@@ -38,6 +38,7 @@
 #include <fcntl.h>
 #include <endian.h>
 #include <errno.h>
+#include <inttypes.h>
 #include <netdb.h>
 #include <linux/falloc.h>
 #include <signal.h>
@@ -175,7 +176,10 @@ struct nbd_handle
     uint64_t size;
     uint64_t handle;
     char* export_name;
+    char* redis_server;
     uint32_t name_len;
+    uint16_t redis_port;
+    uint16_t redis_db;
     struct event_base* eb;
     struct evconnlistener* conn;
     struct redisAsyncContext* redis_c;
@@ -187,6 +191,8 @@ struct nbd_client
     struct nbd_handle* handle;
     evutil_socket_t socket;
     uint32_t toread;
+    uint64_t write_count;
+    uint64_t write_bytes;
     uint8_t* buf;
 };
 
@@ -202,6 +208,11 @@ static void nbd_ev_handler(struct bufferevent* bev, short events, void* client)
             free(((struct nbd_client*) client)->buf);
         free(client);
     }
+}
+
+void redis_async_callback(redisAsyncContext* c, void* reply, void* data)
+{
+    assert(reply != NULL); /* check error status */
 }
 
 static void nbd_signal_handler(evutil_socket_t sig, short events, void *handle)
@@ -404,14 +415,17 @@ uint32_t __handle_write(struct nbd_req_header* req, struct nbd_client* client,
     if (evbuffer_copyout(in, buf, len) < len)
         return -1;
 
+    client->write_count += 1;
+    client->write_bytes += len;
+
     if (fd < 0)
     {
         assert(redis_c != NULL);
         offset /= 512;
-        redisAsyncCommand(redis_c, NULL, NULL, "LPUSH writequeue %b",
-                          &offset, sizeof(offset));
-        redisAsyncCommand(redis_c, NULL, NULL, "LPUSH writequeue %b",
-                          buf, len);
+        assert(redisAsyncCommand(redis_c, &redis_async_callback, NULL, "LPUSH writequeue %b",
+                                 &offset, sizeof(offset)) == REDIS_OK);
+        assert(redisAsyncCommand(redis_c, &redis_async_callback, NULL, "LPUSH writequeue %b",
+                                 buf, len) == REDIS_OK);
         return 0;
     }
 
@@ -458,9 +472,13 @@ bool __check_request(struct bufferevent* bev, struct evbuffer* in,
                                     client->buf, be32toh(req.length));
                     return false;
                 case NBD_CMD_WRITE:
+                    fprintf(stderr, "+");
                     err = __handle_write(peek, client, in);
                     if (err == -1)
                         return true;
+                    fprintf(stderr, "\twrite[%"PRIu64"]: %"PRIu64" cumulative "
+                                    "bytes\n", client->write_count,
+                                               client->write_bytes);
                     evbuffer_drain(in, be32toh(req.length));
                     __send_response(bev, err, handle, NULL, 0);
                     return false;
@@ -497,6 +515,12 @@ bool __check_request(struct bufferevent* bev, struct evbuffer* in,
                         evbuffer_drain(in, sizeof(struct nbd_req_header) +
                                        be32toh(req.length));
                     fprintf(stderr, "unknown command!\n");
+                    fprintf(stderr, "-- Hexdumping --\n");
+                    if (test)
+                        hexdump(test, be32toh(req.length));
+                    fprintf(stderr, "disconnecting, protocol error!\n");
+                    client->state = NBD_DISCONNECTED;
+                    nbd_ev_handler(bev, BEV_EVENT_EOF, client);
             };
         }
     }
@@ -556,6 +580,8 @@ static void nbd_new_conn(struct evconnlistener *conn, evutil_socket_t sock,
     client->handle = handle;
     client->state = NBD_HANDSHAKE_SENT;
     client->socket = sock;
+    client->write_count = 0;
+    client->write_bytes = 0;
     client->buf = NULL;
 
     bufferevent_setcb(bev, &nbd_client_handler, NULL, &nbd_ev_handler, client);
@@ -590,6 +616,8 @@ static void nbd_old_conn(struct evconnlistener *conn, evutil_socket_t sock,
     client->handle = handle;
     client->state = NBD_DATA_PUSHING;
     client->socket = sock;
+    client->write_count = 0;
+    client->write_bytes = 0;
     client->buf = NULL;
 
     bufferevent_setcb(bev, &nbd_client_handler, NULL, &nbd_ev_handler, client);
@@ -788,12 +816,16 @@ struct nbd_handle* nbd_init_redis(char* export_name, char* redis_server,
     ret->fd = -1;
     ret->size = fsize;
     ret->export_name = export_name;
+    ret->redis_server = redis_server;
     ret->name_len = strlen(export_name);
+    ret->redis_port = redis_port;
+    ret->redis_db = redis_db;
     ret->eb = eb;
     ret->conn = conn;
     ret->redis_c = redis_c;
 
-    redisAsyncCommand(redis_c, NULL, NULL, "select %d", redis_db);
+    assert(redisAsyncCommand(redis_c, &redis_async_callback, NULL, "select %d",
+                             redis_db) == REDIS_OK);
 
     freeaddrinfo(server);
 
