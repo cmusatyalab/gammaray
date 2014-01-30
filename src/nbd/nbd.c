@@ -217,11 +217,11 @@ void redis_async_callback(redisAsyncContext* c, void* reply, void* data)
 
 void redis_disconnect_callback(const redisAsyncContext* c, int status)
 {
-    struct nbd_handle handle;
+    struct nbd_handle* handle;
 
     if (c->data)
     {
-       handle = * ((struct nbd_handle*) c->data);
+       handle = (struct nbd_handle*) c->data;
     }
     else
     {
@@ -236,20 +236,20 @@ void redis_disconnect_callback(const redisAsyncContext* c, int status)
         if (c->err == REDIS_ERR_EOF) /* probably standard timeout, reconnect */
         {
             fprintf_red(stderr, "Redis server disconnected us.\n");
-            if ((handle.redis_c = redisAsyncConnect(handle.redis_server,
-                 handle.redis_port)) != NULL)
+            if ((handle->redis_c = redisAsyncConnect(handle->redis_server,
+                 handle->redis_port)) != NULL)
             {
                 fprintf_blue(stderr, "New Redis context, attaching to "
                                     "libevent.\n");
-                handle.redis_c->data = c->data;
-                redisLibeventAttach(handle.redis_c, handle.eb);
+                handle->redis_c->data = c->data;
+                redisLibeventAttach(handle->redis_c, handle->eb);
                 fprintf_blue(stderr, "Setting disconnect callback.\n");
-                if (redisAsyncSetDisconnectCallback(handle.redis_c,
+                if (redisAsyncSetDisconnectCallback(handle->redis_c,
                     &redis_disconnect_callback) != REDIS_ERR)
                 {
-                    assert(redisAsyncCommand(handle.redis_c,
+                    assert(redisAsyncCommand(handle->redis_c,
                            &redis_async_callback, NULL, "select %d",
-                           handle.redis_db) == REDIS_OK);
+                           handle->redis_db) == REDIS_OK);
                     fprintf_light_blue(stderr, "Successfully reconnected to "
                                                "the Redis server.\n");
                 }
