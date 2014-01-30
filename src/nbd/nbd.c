@@ -34,6 +34,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <assert.h>
 #include <fcntl.h>
 #include <endian.h>
@@ -453,6 +454,7 @@ uint32_t __handle_write(struct nbd_req_header* req, struct nbd_client* client,
     size_t len, pos = 0;
     int fd;
     struct redisAsyncContext* redis_c;
+    struct timeval curtime;
 
     offset = be64toh(req->offset);
     len = be32toh(req->length);
@@ -474,7 +476,9 @@ uint32_t __handle_write(struct nbd_req_header* req, struct nbd_client* client,
 
     client->write_count += 1;
     client->write_bytes += len;
-    fprintf(stderr, "write size: %zd\n", len);
+    gettimeofday(&curtime, NULL);
+    fprintf(stderr, "\t[%ld] write size: %zd\n", curtime.tv_sec * 1000000 +
+                                                 curtime.tv_usec, len);
 
     if (fd < 0)
     {
