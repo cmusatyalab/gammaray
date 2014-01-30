@@ -174,6 +174,14 @@ gammaray support, and then compile a gammaray-friendly QEMU.
    make LDFLAGS=-all-static
    ```
 
+   If you want to compile with a custom library, and statically link it in for
+   development purposes, the following should work (replace paths):
+
+   ```bash
+   ./configure LDFLAGS='-L/home/wolf/Dropbox/Projects/hiredis -static' LIBS="-lrt" CPPFLAGS="-I/home/wolf/Dropbox/Projects/hiredis"
+   make LDFLAGS="-all-static -L/home/wolf/Dropbox/Projects/hiredis/"
+   ```
+
 5. Run make
 
    ```bash
