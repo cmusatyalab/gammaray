@@ -1908,39 +1908,6 @@ enum SECTOR_TYPE __sector_type(const char* str)
     return SECTOR_UNKNOWN;
 }
 
-enum SECTOR_TYPE qemu_infer_sector_type(struct ext4_superblock* super,
-                                        struct qemu_bdrv_write* write,
-                                        struct kv_store* store)
-{
-    uint64_t i;
-    uint8_t result[1024];
-    size_t len = 1024;
-    uint64_t block_size = ext4_block_size(*super);
-
-    for (i = 0; i < write->header.nb_sectors; i += block_size / SECTOR_SIZE)
-    {
-        if (redis_sector_lookup(store, write->header.sector_num + i,
-            result, &len))
-        {
-            fprintf_light_red(stderr, "Error doing sector lookup.\n");
-            return SECTOR_UNKNOWN;
-        } 
-
-        if (len)
-        {
-            result[len] = 0;
-            return __sector_type((const char*) result);
-        }
-        else
-        {
-            return SECTOR_UNKNOWN;
-        }
-    }
-
-    return SECTOR_UNKNOWN;
-}
-
-
 enum SECTOR_TYPE qemu_infer_ntfs_sector_type(struct ntfs_boot_file* bootf,
                                         struct qemu_bdrv_write* write,
                                         struct kv_store* store)
