@@ -2026,17 +2026,12 @@ int __deserialize_partition(struct bson_info* bson, struct kv_store* store,
 }
 
 int __deserialize_fs(struct bson_info* bson, struct kv_store* store,
-                     uint64_t id, struct ext4_superblock* super)
+                     uint64_t id, struct super_info* super)
 {
     struct bson_kv value1, value2;
 
     while (bson_deserialize(bson, &value1, &value2))
     {
-        if (strcmp(value1.key, "superblock") == 0)
-        { 
-            memcpy(super, value1.data, sizeof(struct ext4_superblock));
-        }
-
         if (strcmp(value1.key, "superblock_sector") == 0)
         { 
             if (redis_reverse_pointer_set(store, REDIS_SUPERBLOCK_INSERT,
@@ -2049,6 +2044,9 @@ int __deserialize_fs(struct bson_info* bson, struct kv_store* store,
                                  (size_t) value1.size))
             return EXIT_FAILURE;
     }
+
+    redis_flush_pipeline(store);
+    qemu_get_superinfo(store, super, id);
 
     return EXIT_SUCCESS;
 }
@@ -2109,7 +2107,7 @@ int __deserialize_bitarray(struct bson_info* bson, struct kv_store* store)
     return EXIT_SUCCESS;
 }
 
-int __deserialize_file_lazy(struct ext4_superblock* superblock,
+int __deserialize_file_lazy(struct super_info* super,
                             struct bson_info* bson, struct kv_store* store,
                             uint64_t id)
 {
@@ -2215,13 +2213,13 @@ int __deserialize_file_lazy(struct ext4_superblock* superblock,
     return EXIT_SUCCESS;
 }
 
-int __deserialize_file(struct ext4_superblock* superblock,
+int __deserialize_file(struct super_info* super,
                        struct bson_info* bson, struct kv_store* store,
                        uint64_t id)
 {
     struct bson_info* bson2;
     struct bson_kv value1, value2;
-    uint64_t block_size = ext4_block_size(*superblock);
+    uint64_t block_size = super->block_size;
 
     uint64_t counter = 0, sector = 0;
 
@@ -2398,7 +2396,7 @@ int qemu_load_document(struct kv_store* store, struct bson_info* bson,
     static uint64_t fs_id = 0;
     static uint64_t bgd_counter = 0;
     static uint64_t file_counter = 0;
-    struct ext4_superblock super;
+    static struct super_info super;
 
     if (bson_deserialize(bson, &value1, &value2) != 1)
         return EXIT_FAILURE;
