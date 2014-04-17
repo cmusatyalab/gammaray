@@ -1557,7 +1557,7 @@ int __load(char* pointer, FILE* metadata, struct kv_store* store)
     sscanf(strtok(NULL, ":"), "%"SCNu64, &offset);
 
     /* lseek */
-    if (fseek(metadata, (long) offset, SEEK_SET))
+    if (fseeko(metadata, (long) offset, SEEK_SET))
     {
         fprintf(stderr, "ERROR: couldn't seek during MD load.\n");
         return EXIT_FAILURE;
