@@ -1548,7 +1548,7 @@ int qemu_load_document(struct kv_store* store, struct bson_info* bson,
 int __load(char* pointer, FILE* metadata, struct kv_store* store)
 {
     struct bson_info* bson = bson_init();
-    uint64_t offset;
+    off_t offset;
 
     fprintf_light_blue(stdout, "-- lazy loading file data --\n");
 
@@ -1557,7 +1557,7 @@ int __load(char* pointer, FILE* metadata, struct kv_store* store)
     sscanf(strtok(NULL, ":"), "%"SCNu64, &offset);
 
     /* lseek */
-    if (fseeko(metadata, (long) offset, SEEK_SET))
+    if (fseeko(metadata, offset, SEEK_SET))
     {
         fprintf(stderr, "ERROR: couldn't seek during MD load.\n");
         return EXIT_FAILURE;
