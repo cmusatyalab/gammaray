@@ -651,11 +651,7 @@ int __emit_file_bytes(uint8_t* write, struct kv_store* store,
         redis_enqueue_pipelined(store, sector, write, write_len);
     }
 
-    if (end >= fsize)
-    {
-        end = fsize;
-    }
-    else
+    if (end < fsize)
     {
         redis_delqueue_pipelined(store, sector); 
     }
