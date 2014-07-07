@@ -8,7 +8,7 @@
  *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
  *                                                                           *
  *                                                                           *
- *   Copyright 2013 Carnegie Mellon University                               *
+ *   Copyright 2013-2014 Carnegie Mellon University                          *
  *                                                                           *
  *   Licensed under the Apache License, Version 2.0 (the "License");         *
  *   you may not use this file except in compliance with the License.        *
@@ -22,74 +22,31 @@
  *   See the License for the specific language governing permissions and     *
  *   limitations under the License.                                          *
  *****************************************************************************/
-#define _FILE_OFFSET_BITS 64
 
-#include <inttypes.h>
-#include <locale.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
 
-#include <sys/stat.h>
-#include <sys/types.h>
-
-#include "bitarray.h"
 #include "color.h"
 #include "ext4.h"
-#include "ntfs.h"
+#include "gray-crawler.h"
 #include "mbr.h"
 
-int gray_crawler_serialize_bitarray(struct bitarray* bits, FILE* serializef)
-{
-    struct bson_info* serialized;
-    struct bson_kv value;
-    uint8_t* array;
-    uint64_t size;
-    int ret;
-
-    serialized = bson_init();
-    size = bitarray_get_array(bits, &array);
-    bitarray_print(bits);
-
-    if (size == 0)
-        return EXIT_FAILURE;
-
-    value.type = BSON_STRING;
-    value.size = strlen("metadata_filter");
-    value.key = "type";
-    value.data = "metadata_filter";
-
-    bson_serialize(serialized, &value);
-
-    value.type = BSON_BINARY;
-    value.size = size;
-    value.key = "bitarray";
-    value.data = array;
-
-    bson_serialize(serialized, &value);
-    bson_finalize(serialized);
-    ret = bson_writef(serialized, serializef);
-    bson_cleanup(serialized);
-    
-    return ret;
-}
+/* supported file system serializers */
+struct gray_fs_crawler crawlers[] = {
+    GRAY_FS(ext4),
+    //GRAY_FS(ntfs), TODO
+    //GRAY_FS(fat32), TODO
+    {NULL, NULL, NULL, NULL} /* guard value */
+};
 
 /* main thread of execution */
 int main(int argc, char* args[])
 {
     FILE* disk, *serializef;
+    struct gray_fs_crawler* crawler;
+    struct fs partition_entry;
     struct disk_mbr mbr;
-    struct ext4_superblock ext4_superblock;
-    struct ntfs_boot_file ntfs_bootf;
-    struct partition_table_entry pte;
-    int64_t partition_offset;
-    int32_t i, active_count = 0;
-    char buf[4096];
-    struct bitarray* bits;
-    struct stat fstats;
-    uint8_t* icache = NULL, *bcache = NULL;
+    int i;
 
     fprintf_blue(stdout, "Raw Disk Crawler -- By: Wolfgang Richter "
                          "<wolf@cs.cmu.edu>\n");
@@ -107,8 +64,6 @@ int main(int argc, char* args[])
     disk = fopen(args[1], "r");
 
     serializef = fopen(args[2], "w");
-    
-    setlocale(LC_ALL, "");
 
     if (disk == NULL)
     {
@@ -125,6 +80,7 @@ int main(int argc, char* args[])
         return EXIT_FAILURE;
     }
 
+    /* pull MBR info */
     if (mbr_parse_mbr(disk, &mbr))
     {
         fclose(disk);
@@ -135,172 +91,43 @@ int main(int argc, char* args[])
 
     mbr_print_mbr(mbr);
 
-    if (fstat(fileno(disk), &fstats))
-    {
-        fclose(disk);
-        fclose(serializef);
-        fprintf_light_red(stderr, "Error getting fstat info on disk image.\n");
-        return EXIT_FAILURE;
-    }
+    for (i = 0; i < 4; i++) {
+        partition_entry = (struct fs) {i, 0, NULL, NULL, NULL};
 
-    bits = bitarray_init(fstats.st_size / 4096);
+        partition_entry.pt_off = mbr_partition_offset(mbr, i);
 
-    if (bits == NULL)
-    {
-        fclose(disk);
-        fclose(serializef);
-        fprintf_light_red(stderr, "Error allocating bitarray.\n");
-        return EXIT_FAILURE;
-    }
-
-    memset(buf, 0, sizeof(buf));
-
-    /* active partitions count */
-    for (i = 0; i < 4; i++)
-    {
-        if ((partition_offset = mbr_partition_offset(mbr, i)) > 0)
+        if (partition_entry.pt_off > 0)
         {
-            if (ext4_probe(disk, partition_offset, &ext4_superblock) &&
-                ntfs_probe(disk, partition_offset, &ntfs_bootf))
-            {
-                continue;
-            }
-            else
-            {
-                active_count++;
+            crawler = crawlers;
+
+            while (crawler->fs_name) {
+
+                fprintf_white(stdout, "\nProbing for %s... ",
+                                      crawler->fs_name);
+                
+                if (crawler->probe(disk, &partition_entry))
+                {
+                    fprintf_white(stdout, "Not found.\n");
+                }
+                else
+                {
+                    fprintf_light_white(stdout, "found %s file system!\n",
+                                                 crawler->fs_name);
+
+                    if (crawler->serialize(disk, &partition_entry, serializef))
+                    {
+                        fprintf_light_red(stderr, "Error serializing "
+                                                  "partition.\n");
+                        return EXIT_FAILURE;
+                    }
+                }
+
+                crawler->cleanup(&partition_entry);
+                
+                crawler++;
             }
         }
     }
-
-    if (mbr_serialize_mbr(mbr, bits, active_count, serializef))
-    {
-        fprintf_light_red(stderr, "Error serializing MBR.\n");
-        return EXIT_FAILURE;
-    }
-
-    for (i = 0; i < 4; i++)
-    {
-        if ((partition_offset = mbr_partition_offset(mbr, i)) > 0)
-        {
-            if (ext4_probe(disk, partition_offset, &ext4_superblock))
-            {
-                fprintf_light_red(stderr, "ext4 probe failed.\n");
-            }
-            else
-            {
-                fprintf(stdout, "\n");
-                fprintf_light_green(stdout, "--- Analyzing ext4 Partition at "
-                                            "Offset 0x%.16"PRIx64" ---\n",
-                                            partition_offset);
-                mbr_get_partition_table_entry(mbr, i, &pte);
-
-                fprintf_light_blue(stdout, "Serializing Partition Data to: "
-                                           "%s\n\n", args[2]);
-
-                if (mbr_serialize_partition(i, pte, serializef))
-                {
-                    fprintf_light_red(stderr, "Error writing serialized "
-                                              "partition table entry.\n");
-                    return EXIT_FAILURE;
-                }
-
-                if (ext4_serialize_fs(&ext4_superblock, partition_offset, i,
-                                      bits,
-                                      ext4_last_mount_point(&ext4_superblock),
-                                      serializef))
-                {
-                    fprintf_light_red(stderr, "Error writing serialized fs "
-                                              "entry.\n");
-                    return EXIT_FAILURE;
-                }
-
-                if (ext4_cache_bgds(disk, partition_offset, &ext4_superblock,
-                                    &bcache))
-                {
-                    fprintf_light_red(stderr, "Error populating bcache.\n");
-                    return EXIT_FAILURE;
-                }
-
-                if (ext4_cache_inodes(disk, partition_offset, &ext4_superblock,
-                                      &icache, bcache))
-                {
-                    fprintf_light_red(stderr, "Error populating icache.\n");
-                    return EXIT_FAILURE;
-                }
-
-                if (ext4_serialize_bgds(disk, partition_offset,
-                                        &ext4_superblock, bits,
-                                        serializef, bcache))
-                {
-                    fprintf_light_red(stderr, "Error writing serialized "
-                                              "BGDs\n");
-                    return EXIT_FAILURE;
-                }
-
-                ext4_serialize_fs_tree(disk, partition_offset, 
-                                       &ext4_superblock,
-                                       bits,
-                                       ext4_last_mount_point(&ext4_superblock),
-                                       serializef,
-                                       icache,
-                                       bcache);
-                ext4_serialize_journal(disk, partition_offset, 
-                                       &ext4_superblock,
-                                       bits,
-                                       "journal",
-                                       serializef,
-                                       icache,
-                                       bcache);
-                gray_crawler_serialize_bitarray(bits, serializef);
-            }
-
-            if (ntfs_probe(disk, partition_offset, &ntfs_bootf))
-            {
-                fprintf_light_red(stderr, "NTFS probe failed.\n");
-            }
-            else
-            {
-                fprintf(stdout, "\n");
-                fprintf_light_green(stdout, "--- Analyzing NTFS Partition at "
-                                            "Offset 0x%.16"PRIx64" ---\n",
-                                            partition_offset);
-                if (i == 0) /* HACK: skip boot partition for now... */
-                    continue;
-
-                mbr_get_partition_table_entry(mbr, i, &pte);
-
-                fprintf_light_blue(stdout, "Serializing Partition Data to: "
-                                          "%s\n\n", args[2]);
-
-                if (mbr_serialize_partition(i, pte, serializef))
-                {
-                    fprintf_light_red(stderr, "Error writing serialized "
-                                              "partition table entry.\n");
-                    return EXIT_FAILURE;
-                }
-
-                if (ntfs_serialize_fs(&ntfs_bootf, bits, partition_offset, i,
-                                      "/", serializef))
-                {
-                    fprintf_light_red(stderr, "Error writing serialized fs "
-                                              "entry.\n");
-                    return EXIT_FAILURE;
-                }
-
-                ntfs_serialize_fs_tree(disk, &ntfs_bootf, bits,
-                                       partition_offset, "/", serializef);
-                gray_crawler_serialize_bitarray(bits, serializef);
-            }
-        }
-    }
-
-    fclose(serializef);
-    fclose(disk);
-
-    if (icache)
-        free(icache);
-    if (bcache)
-        free(bcache);
 
     return EXIT_SUCCESS;
 }

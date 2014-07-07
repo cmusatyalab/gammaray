@@ -25,6 +25,7 @@
 #define _FILE_OFFSET_BITS 64
 
 #include "bson.h"
+#include "gray-crawler.h"
 #include "mbr.h"
 #include "ext4.h"
 #include "util.h"
@@ -1294,22 +1295,31 @@ int print_ext4_superblock(struct ext4_superblock superblock)
     return 0;
 }
 
-int ext4_probe(FILE* disk, int64_t partition_offset,
-               struct ext4_superblock* superblock)
+int ext4_probe(FILE* disk, struct fs* fs)
 {
-    if (partition_offset == 0)
+    struct ext4_superblock* superblock;
+    fs->fs_info = malloc(sizeof(struct ext4_superblock));
+
+    if (fs->fs_info == NULL)
     {
-        fprintf_light_red(stderr, "ext4 probe failed on partition at offset: "
-                                  "0x%.16"PRIx64".\n", partition_offset);
+        fprintf_light_red(stderr, "Error allocating space for "
+                                  "'struct ext4_superblock'.\n");
         return -1;
     }
 
-    partition_offset += EXT4_SUPERBLOCK_OFFSET;
+    superblock = (struct ext4_superblock*) fs->fs_info;
 
-    if (fseeko(disk, partition_offset, 0))
+    if (fs->pt_off == 0)
+    {
+        fprintf_light_red(stderr, "ext4 probe failed on partition at offset: "
+                                  "0x%.16"PRIx64".\n", fs->pt_off);
+        return -1;
+    }
+
+    if (fseeko(disk, fs->pt_off + EXT4_SUPERBLOCK_OFFSET, 0))
     {
         fprintf_light_red(stderr, "Error seeking to position 0x%.16"
-                                  PRIx64".\n", partition_offset);
+                                  PRIx64".\n", fs->pt_off);
         return -1;
     }
 
@@ -1331,6 +1341,21 @@ int ext4_probe(FILE* disk, int64_t partition_offset,
                                   "] mismatch.\n", superblock->s_magic);
         return -1;
     }
+
+    return 0;
+}
+
+int ext4_serialize(FILE* disk, struct fs* fs, FILE* serializef)
+{
+    fprintf_light_green(stdout, "ext4_serialize IS UNIMPLEMENTED\n");
+
+    return 0;
+}
+
+int ext4_cleanup(struct fs* fs)
+{
+    if (fs->fs_info)
+        free(fs->fs_info);
 
     return 0;
 }

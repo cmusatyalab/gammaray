@@ -7,7 +7,7 @@
  *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
  *                                                                           *
  *                                                                           *
- *   Copyright 2013 Carnegie Mellon University                               *
+ *   Copyright 2013-2014 Carnegie Mellon University                          *
  *                                                                           *
  *   Licensed under the Apache License, Version 2.0 (the "License");         *
  *   you may not use this file except in compliance with the License.        *
@@ -24,24 +24,23 @@
 #ifndef __GAMMARAY_GRAY_CRAWLER_H
 #define __GAMMARAY_GRAY_CRAWLER_H
 
+#define GRAY_FS(NAME) { #NAME, NAME ## _probe, NAME ## _serialize, NAME ## _cleanup}
+
 struct fs
 {
     uint64_t pte;
-    uint64_t pt_off;
+    int64_t pt_off;
     void* cache;
-    void* fs_info;
+    void* fs_info; /* usable by underlying fs crawling code */
     struct bitarray* bits;
 };
 
-struct fs_crawler
+struct gray_fs_crawler
 {
-   int (*probe) (FILE* disk, int pte, uint64_t pt_offset, struct fs* fs_super);
-   int (*serialize_fs_bootstrap) (struct fs* fs_super, FILE* serializef);
-   int (*serialize_fs_metadata) (FILE* disk, struct fs* fs_super,
-                                 FILE* serializef);
-   int (*serialize_fs_tree) (FILE* disk, struct fs* fs_super,
-                             FILE* serializef);
-   int (*serialize_metadata_bitarray) (struct fs* fs_super, FILE* serializef);
+    char* fs_name;
+    int (*probe) (FILE* disk, struct fs* fs);
+    int (*serialize) (FILE* disk, struct fs* fs, FILE* serializef);
+    int (*cleanup) (struct fs* fs);
 };
 
 #endif
