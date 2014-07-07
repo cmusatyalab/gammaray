@@ -8,7 +8,7 @@
  *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
  *                                                                           *
  *                                                                           *
- *   Copyright 2013 Carnegie Mellon University                               *
+ *   Copyright 2013-2014 Carnegie Mellon University                          *
  *                                                                           *
  *   Licensed under the Apache License, Version 2.0 (the "License");         *
  *   you may not use this file except in compliance with the License.        *
@@ -582,6 +582,7 @@ uint64_t ext4_sector_extent_block(FILE* disk, int64_t partition_offset,
 {
     int i;
     struct ext4_extent_header* hdr; 
+    struct ext4_extent_idx* idx_ptr;
     struct ext4_extent_idx idx = {};
     struct ext4_extent_idx idx2 = {}; /* lookahead when searching for block_num */
     struct ext4_extent* extent;
@@ -596,9 +597,11 @@ uint64_t ext4_sector_extent_block(FILE* disk, int64_t partition_offset,
         if (hdr->eh_depth)
         {
             /* TODO */
-            idx2 =  * ((struct ext4_extent_idx*)
-                            &(buf[sizeof(struct ext4_extent_header) +
-                                  sizeof(struct ext4_extent_idx)*i])); 
+            idx_ptr =  ((struct ext4_extent_idx*)
+                        &(buf[sizeof(struct ext4_extent_header) +
+                              sizeof(struct ext4_extent_idx)*i]));
+            idx2 = *idx_ptr;
+
             if (hdr->eh_entries == 1)
             {
                 ext4_read_block(disk, partition_offset, superblock,
@@ -1565,8 +1568,10 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
 {
     int i;
     struct ext4_extent_header* hdr; 
+    struct ext4_extent_idx* idx_ptr;
     struct ext4_extent_idx idx = {};
     struct ext4_extent_idx idx2 = {}; /* lookahead when searching block_num */
+    struct ext4_extent* extent_ptr;
     struct ext4_extent extent;
     uint64_t block_size = ext4_block_size(superblock);
     uint8_t buf[block_size];
@@ -1601,9 +1606,11 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
     {
         if (hdr->eh_depth)
         {
-            idx2 =  * ((struct ext4_extent_idx*)
-                            &(buf[sizeof(struct ext4_extent_header) +
-                                  sizeof(struct ext4_extent_idx)*i])); 
+            idx_ptr =  ((struct ext4_extent_idx*)
+                         &(buf[sizeof(struct ext4_extent_header) +
+                               sizeof(struct ext4_extent_idx)*i])); 
+            idx2 = *idx_ptr;
+
             if (hdr->eh_entries == 1)
             {
                 ext4_read_block(disk, partition_offset, superblock,
@@ -1652,9 +1659,10 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
         }
         else
         {
-            extent = * ((struct ext4_extent*)
-                            &(buf[sizeof(struct ext4_extent_header) +
-                                  sizeof(struct ext4_extent)*i])); 
+            extent_ptr = ((struct ext4_extent*)
+                           &(buf[sizeof(struct ext4_extent_header) +
+                                 sizeof(struct ext4_extent)*i])); 
+            extent = *extent_ptr;
             if (extent.ee_block <= block_num &&
                 block_num < extent.ee_block + extent.ee_len)
             {

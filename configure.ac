@@ -7,7 +7,7 @@
 #   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                               #
 #                                                                             #
 #                                                                             #
-#   Copyright 2013 Carnegie Mellon University                                 #
+#   Copyright 2013-2014 Carnegie Mellon University                            #
 #                                                                             #
 #   Licensed under the Apache License, Version 2.0 (the "License");           #
 #   you may not use this file except in compliance with the License.          #
@@ -38,6 +38,7 @@ AC_PROG_CC
 AC_PROG_INSTALL
 AC_PROG_MAKE_SET
 AM_PROG_CC_C_O
+AM_PROG_AR
 
 # Checks for libraries.
 AC_CHECK_LIB([hiredis], [redisConnect],,
