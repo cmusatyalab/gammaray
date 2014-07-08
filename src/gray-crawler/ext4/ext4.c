@@ -8,7 +8,7 @@
  *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
  *                                                                           *
  *                                                                           *
- *   Copyright 2013 Carnegie Mellon University                               *
+ *   Copyright 2013-2014 Carnegie Mellon University                          *
  *                                                                           *
  *   Licensed under the Apache License, Version 2.0 (the "License");         *
  *   you may not use this file except in compliance with the License.        *
@@ -25,6 +25,7 @@
 #define _FILE_OFFSET_BITS 64
 
 #include "bson.h"
+#include "gray-crawler.h"
 #include "mbr.h"
 #include "ext4.h"
 #include "util.h"
@@ -582,6 +583,7 @@ uint64_t ext4_sector_extent_block(FILE* disk, int64_t partition_offset,
 {
     int i;
     struct ext4_extent_header* hdr; 
+    struct ext4_extent_idx* idx_ptr;
     struct ext4_extent_idx idx = {};
     struct ext4_extent_idx idx2 = {}; /* lookahead when searching for block_num */
     struct ext4_extent* extent;
@@ -596,9 +598,11 @@ uint64_t ext4_sector_extent_block(FILE* disk, int64_t partition_offset,
         if (hdr->eh_depth)
         {
             /* TODO */
-            idx2 =  * ((struct ext4_extent_idx*)
-                            &(buf[sizeof(struct ext4_extent_header) +
-                                  sizeof(struct ext4_extent_idx)*i])); 
+            idx_ptr =  ((struct ext4_extent_idx*)
+                        &(buf[sizeof(struct ext4_extent_header) +
+                              sizeof(struct ext4_extent_idx)*i]));
+            idx2 = *idx_ptr;
+
             if (hdr->eh_entries == 1)
             {
                 ext4_read_block(disk, partition_offset, superblock,
@@ -1291,22 +1295,31 @@ int print_ext4_superblock(struct ext4_superblock superblock)
     return 0;
 }
 
-int ext4_probe(FILE* disk, int64_t partition_offset,
-               struct ext4_superblock* superblock)
+int ext4_probe(FILE* disk, struct fs* fs)
 {
-    if (partition_offset == 0)
+    struct ext4_superblock* superblock;
+    fs->fs_info = malloc(sizeof(struct ext4_superblock));
+
+    if (fs->fs_info == NULL)
     {
-        fprintf_light_red(stderr, "ext4 probe failed on partition at offset: "
-                                  "0x%.16"PRIx64".\n", partition_offset);
+        fprintf_light_red(stderr, "Error allocating space for "
+                                  "'struct ext4_superblock'.\n");
         return -1;
     }
 
-    partition_offset += EXT4_SUPERBLOCK_OFFSET;
+    superblock = (struct ext4_superblock*) fs->fs_info;
 
-    if (fseeko(disk, partition_offset, 0))
+    if (fs->pt_off == 0)
+    {
+        fprintf_light_red(stderr, "ext4 probe failed on partition at offset: "
+                                  "0x%.16"PRIx64".\n", fs->pt_off);
+        return -1;
+    }
+
+    if (fseeko(disk, fs->pt_off + EXT4_SUPERBLOCK_OFFSET, 0))
     {
         fprintf_light_red(stderr, "Error seeking to position 0x%.16"
-                                  PRIx64".\n", partition_offset);
+                                  PRIx64".\n", fs->pt_off);
         return -1;
     }
 
@@ -1328,6 +1341,63 @@ int ext4_probe(FILE* disk, int64_t partition_offset,
                                   "] mismatch.\n", superblock->s_magic);
         return -1;
     }
+
+    return 0;
+}
+
+int ext4_serialize(FILE* disk, struct fs* fs, FILE* serializef)
+{
+    struct ext4_superblock* ext4_superblock = (struct ext4_superblock*)
+                                              fs->fs_info;
+    uint8_t* icache = NULL, *bcache = NULL;
+
+    if (ext4_serialize_fs(ext4_superblock, fs->pt_off, fs->pte, fs->bits,
+                          ext4_last_mount_point(ext4_superblock), serializef))
+    {
+        fprintf_light_red(stderr, "Error writing serialized fs "
+                                  "entry.\n");
+        return -1;
+    }
+
+    if (ext4_cache_bgds(disk, fs->pt_off, ext4_superblock, &bcache))
+    {
+        fprintf_light_red(stderr, "Error populating bcache.\n");
+        return -1;
+    }
+
+    if (ext4_cache_inodes(disk, fs->pt_off, ext4_superblock, &icache, bcache))
+    {
+        fprintf_light_red(stderr, "Error populating icache.\n");
+        return -1;
+    }
+
+    if (ext4_serialize_bgds(disk, fs->pt_off,
+                            ext4_superblock, fs->bits,
+                            serializef, bcache))
+    {
+        fprintf_light_red(stderr, "Error writing serialized "
+                                  "BGDs\n");
+        return EXIT_FAILURE;
+    }
+
+    ext4_serialize_fs_tree(disk, fs->pt_off, ext4_superblock, fs->bits,
+                           ext4_last_mount_point(ext4_superblock), serializef,
+                           icache, bcache);
+    ext4_serialize_journal(disk, fs->pt_off, ext4_superblock, fs->bits,
+                           "journal", serializef, icache, bcache);
+    return 0;
+}
+
+int ext4_cleanup(struct fs* fs)
+{
+    if (fs->bcache)
+        free(fs->bcache);
+
+    if (fs->icache)
+        free(fs->icache);
+
+    if (fs->fs_info)
+        free(fs->fs_info);
 
     return 0;
 }
@@ -1565,8 +1635,10 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
 {
     int i;
     struct ext4_extent_header* hdr; 
+    struct ext4_extent_idx* idx_ptr;
     struct ext4_extent_idx idx = {};
     struct ext4_extent_idx idx2 = {}; /* lookahead when searching block_num */
+    struct ext4_extent* extent_ptr;
     struct ext4_extent extent;
     uint64_t block_size = ext4_block_size(superblock);
     uint8_t buf[block_size];
@@ -1601,9 +1673,11 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
     {
         if (hdr->eh_depth)
         {
-            idx2 =  * ((struct ext4_extent_idx*)
-                            &(buf[sizeof(struct ext4_extent_header) +
-                                  sizeof(struct ext4_extent_idx)*i])); 
+            idx_ptr =  ((struct ext4_extent_idx*)
+                         &(buf[sizeof(struct ext4_extent_header) +
+                               sizeof(struct ext4_extent_idx)*i])); 
+            idx2 = *idx_ptr;
+
             if (hdr->eh_entries == 1)
             {
                 ext4_read_block(disk, partition_offset, superblock,
@@ -1652,9 +1726,10 @@ int ext4_serialize_file_extent_sectors(FILE* disk, int64_t partition_offset,
         }
         else
         {
-            extent = * ((struct ext4_extent*)
-                            &(buf[sizeof(struct ext4_extent_header) +
-                                  sizeof(struct ext4_extent)*i])); 
+            extent_ptr = ((struct ext4_extent*)
+                           &(buf[sizeof(struct ext4_extent_header) +
+                                 sizeof(struct ext4_extent)*i])); 
+            extent = *extent_ptr;
             if (extent.ee_block <= block_num &&
                 block_num < extent.ee_block + extent.ee_len)
             {

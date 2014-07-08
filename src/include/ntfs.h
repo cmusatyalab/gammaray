@@ -9,7 +9,7 @@
  *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
  *                                                                           *
  *                                                                           *
- *   Copyright 2013 Carnegie Mellon University                               *
+ *   Copyright 2013-2014 Carnegie Mellon University                          *
  *                                                                           *
  *   Licensed under the Apache License, Version 2.0 (the "License");         *
  *   you may not use this file except in compliance with the License.        *
@@ -268,8 +268,9 @@ struct ntfs_index_record_entry
 
 uint64_t ntfs_file_record_size(struct ntfs_boot_file* bootf);
 uint64_t ntfs_cluster_size(struct ntfs_boot_file* bootf);
-int ntfs_probe(FILE* disk, int64_t partition_offset,
-               struct ntfs_boot_file* bootf);
+int ntfs_probe(FILE* disk, struct fs* fs);
+int ntfs_serialize(FILE* disk, struct fs* fs, FILE* serializef);
+int ntfs_cleanup(struct fs* fs);
 int ntfs_print_boot_file(struct ntfs_boot_file* bootf,
                          int64_t partition_offset);
 int ntfs_walk_mft(FILE* disk, struct ntfs_boot_file* bootf, struct bitarray* bits,

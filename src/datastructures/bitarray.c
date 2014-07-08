@@ -8,7 +8,7 @@
  *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
  *                                                                           *
  *                                                                           *
- *   Copyright 2013 Carnegie Mellon University                               *
+ *   Copyright 2013-2014 Carnegie Mellon University                          *
  *                                                                           *
  *   Licensed under the Apache License, Version 2.0 (the "License");         *
  *   you may not use this file except in compliance with the License.        *
@@ -29,6 +29,7 @@
 
 #include "color.h"
 #include "bitarray.h"
+#include "bson.h"
 #include "util.h"
 
 struct bitarray
@@ -129,4 +130,39 @@ uint64_t bitarray_get_array(struct bitarray* bits, uint8_t** array)
 {
     *array = bits->array;
     return bits->len / 8;
+}
+
+int bitarray_serialize(struct bitarray* bits, FILE* serializef)
+{
+    struct bson_info* serialized;
+    struct bson_kv value;
+    uint8_t* array;
+    uint64_t size;
+    int ret;
+
+    if (bits->len == 0)
+        return EXIT_FAILURE;
+
+    array = bits->array;
+    size = bits->len / 8;
+    serialized = bson_init();
+
+    value.type = BSON_STRING;
+    value.size = strlen("metadata_filter");
+    value.key = "type";
+    value.data = "metadata_filter";
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_BINARY;
+    value.size = size;
+    value.key = "bitarray";
+    value.data = array;
+
+    bson_serialize(serialized, &value);
+    bson_finalize(serialized);
+    ret = bson_writef(serialized, serializef);
+    bson_cleanup(serialized);
+
+    return ret;
 }

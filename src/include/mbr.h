@@ -9,7 +9,7 @@
  *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
  *                                                                           *
  *                                                                           *
- *   Copyright 2013 Carnegie Mellon University                               *
+ *   Copyright 2013-2014 Carnegie Mellon University                          *
  *                                                                           *
  *   Licensed under the Apache License, Version 2.0 (the "License");         *
  *   you may not use this file except in compliance with the License.        *
@@ -60,7 +60,7 @@ int64_t mbr_partition_offset(struct disk_mbr mbr, int pte);
 int mbr_get_partition_table_entry(struct disk_mbr mbr, int pte_num,
                                   struct partition_table_entry* pte);
 int mbr_serialize_mbr(struct disk_mbr mbr, struct bitarray* bits,
-                      uint32_t active, FILE* serializef);
-int mbr_serialize_partition(uint32_t pte_num, struct partition_table_entry pte,
+                      FILE* serializef);
+int mbr_serialize_partition(uint32_t pte_num, struct disk_mbr mbr,
                             FILE* serializef);
 #endif

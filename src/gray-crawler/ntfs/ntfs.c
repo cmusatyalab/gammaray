@@ -9,7 +9,7 @@
  *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
  *                                                                           *
  *                                                                           *
- *   Copyright 2013 Carnegie Mellon University                               *
+ *   Copyright 2013-2014 Carnegie Mellon University                          *
  *                                                                           *
  *   Licensed under the Apache License, Version 2.0 (the "License");         *
  *   you may not use this file except in compliance with the License.        *
@@ -33,6 +33,7 @@
 #include <wchar.h>
 #include <sys/stat.h>
 
+#include "gray-crawler.h"
 #include "color.h"
 #include "ntfs.h"
 #include "util.h"
@@ -304,29 +305,37 @@ int ntfs_print_index_entry(struct ntfs_index_entry* entry, uint8_t* data)
 }
 
 /* read boot record/probe for valid NTFS partition */
-int ntfs_probe(FILE* disk, int64_t partition_offset,
-               struct ntfs_boot_file* bootf)
+int ntfs_probe(FILE* disk, struct fs* fs)
 {
     uint32_t bits;
     uint8_t* bytes;
+    struct ntfs_boot_file* bootf = NULL;
 
-    if (fseeko(disk, partition_offset, SEEK_SET))
+    bootf = fs->fs_info = malloc(sizeof(struct ntfs_boot_file));
+
+    if (bootf == NULL)
+    {
+        fprintf_light_red(stderr, "Error allocating ntfs_boot_file.\n");
+        return -1;
+    }
+
+    if (fseeko(disk, fs->pt_off, SEEK_SET))
     {
         fprintf_light_red(stderr, "Error seeking to partition offset "
                                   "position while NTFS probing.\n");
-        return EXIT_FAILURE;
+        return -1;
     }
 
     if (fread(bootf, 1, sizeof(*bootf), disk) != sizeof(*bootf))
     {
         fprintf_light_red(stderr, "Error reading BOOT record.\n");
-        return EXIT_FAILURE;
+        return -1;
     }
 
     if (strncmp((char*) bootf->sys_id, "NTFS", 4) != 0)
     {
         fprintf_light_red(stderr, "NTFS probe failed.\n");
-        return EXIT_FAILURE;
+        return -1;
     }
 
     bytes = (uint8_t*) &bootf->clusters_per_mft_record;
@@ -337,7 +346,6 @@ int ntfs_probe(FILE* disk, int64_t partition_offset,
             sign_extend(bootf->clusters_per_mft_record, bits);
     }
 
-
     bytes = (uint8_t*) &bootf->clusters_per_index_record;
     if (top_bit_set(bytes[0]))
     {
@@ -346,7 +354,32 @@ int ntfs_probe(FILE* disk, int64_t partition_offset,
             sign_extend(bootf->clusters_per_index_record, bits);
     }
 
-    return EXIT_SUCCESS;
+    return 0;
+}
+
+int ntfs_serialize(FILE* disk, struct fs* fs, FILE* serializef)
+{
+    struct ntfs_boot_file* ntfs_bootf = (struct ntfs_boot_file*) fs->fs_info;
+
+    if (ntfs_serialize_fs(ntfs_bootf, fs->bits, fs->pt_off, fs->pte, "/",
+                          serializef))
+    {
+        fprintf_light_red(stderr, "Error writing serialized fs "
+                                  "entry.\n");
+        return -1;
+    }
+
+    ntfs_serialize_fs_tree(disk, ntfs_bootf, fs->bits, fs->pt_off, "/",
+                           serializef);
+    return 0;
+}
+
+int ntfs_cleanup(struct fs* fs)
+{
+    if (fs->fs_info)
+        free(fs->fs_info);
+
+    return 0;
 }
 
 uint64_t ntfs_file_record_size(struct ntfs_boot_file* bootf)

@@ -8,7 +8,7 @@
  *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
  *                                                                           *
  *                                                                           *
- *   Copyright 2013 Carnegie Mellon University                               *
+ *   Copyright 2013-2014 Carnegie Mellon University                          *
  *                                                                           *
  *   Licensed under the Apache License, Version 2.0 (the "License");         *
  *   you may not use this file except in compliance with the License.        *
@@ -32,6 +32,7 @@
 #include <stdio.h>
 
 #include "bitarray.h"
+#include "gray-crawler.h"
 
 #define SECTOR_SIZE 512
 #define EXT4_SUPERBLOCK_OFFSET 1024
@@ -228,8 +229,9 @@ int ext4_print_inode(struct ext4_inode);
 int ext4_print_dir_entries(uint8_t* bytes, uint32_t len);
 int simple_find(uint32_t inode_table_location,
                 FILE* disk, uint32_t inode, char* path_prefix);
-int ext4_probe(FILE* disk, int64_t partition_offset,
-               struct ext4_superblock* superblock);
+int ext4_probe(FILE* disk, struct fs* fs);
+int ext4_serialize(FILE* disk, struct fs* fs, FILE* serializef);
+int ext4_cleanup(struct fs* fs);
 int ext4_read_block(FILE* disk, int64_t partition_offset, 
                     struct ext4_superblock superblock, uint64_t block_num, 
                     uint8_t* buf);
