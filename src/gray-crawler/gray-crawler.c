@@ -137,6 +137,7 @@ int main(int argc, char* args[])
         fsdata = (struct fs) {i, 0, NULL, NULL, NULL};
 
         fsdata.pt_off = mbr_partition_offset(mbr, i);
+        fsdata.bits = bits;
 
         if (fsdata.pt_off > 0)
         {

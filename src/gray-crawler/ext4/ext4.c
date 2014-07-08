@@ -1347,13 +1347,55 @@ int ext4_probe(FILE* disk, struct fs* fs)
 
 int ext4_serialize(FILE* disk, struct fs* fs, FILE* serializef)
 {
-    fprintf_light_green(stdout, "ext4_serialize IS UNIMPLEMENTED\n");
+    struct ext4_superblock* ext4_superblock = (struct ext4_superblock*)
+                                              fs->fs_info;
+    uint8_t* icache = NULL, *bcache = NULL;
 
+    if (ext4_serialize_fs(ext4_superblock, fs->pt_off, fs->pte, fs->bits,
+                          ext4_last_mount_point(ext4_superblock), serializef))
+    {
+        fprintf_light_red(stderr, "Error writing serialized fs "
+                                  "entry.\n");
+        return -1;
+    }
+
+    if (ext4_cache_bgds(disk, fs->pt_off, ext4_superblock, &bcache))
+    {
+        fprintf_light_red(stderr, "Error populating bcache.\n");
+        return -1;
+    }
+
+    if (ext4_cache_inodes(disk, fs->pt_off, ext4_superblock, &icache, bcache))
+    {
+        fprintf_light_red(stderr, "Error populating icache.\n");
+        return -1;
+    }
+
+    if (ext4_serialize_bgds(disk, fs->pt_off,
+                            ext4_superblock, fs->bits,
+                            serializef, bcache))
+    {
+        fprintf_light_red(stderr, "Error writing serialized "
+                                  "BGDs\n");
+        return EXIT_FAILURE;
+    }
+
+    ext4_serialize_fs_tree(disk, fs->pt_off, ext4_superblock, fs->bits,
+                           ext4_last_mount_point(ext4_superblock), serializef,
+                           icache, bcache);
+    ext4_serialize_journal(disk, fs->pt_off, ext4_superblock, fs->bits,
+                           "journal", serializef, icache, bcache);
     return 0;
 }
 
 int ext4_cleanup(struct fs* fs)
 {
+    if (fs->bcache)
+        free(fs->bcache);
+
+    if (fs->icache)
+        free(fs->icache);
+
     if (fs->fs_info)
         free(fs->fs_info);
 

@@ -30,8 +30,9 @@ struct fs
 {
     uint64_t pte;
     int64_t pt_off;
-    void* cache;
-    void* fs_info; /* usable by underlying fs crawling code */
+    uint8_t* icache;
+    uint8_t* bcache;
+    void* fs_info;
     struct bitarray* bits;
 };
 
