@@ -89,6 +89,12 @@ int64_t mbr_partition_offset(struct disk_mbr mbr, int pte)
         return SECTOR_SIZE*mbr.pt[pte].first_sector_lba;
     }
 
+    /* FAT32 partition match */
+    if (mbr.pt[pte].partition_type == 0x0b)
+    {
+        return SECTOR_SIZE*mbr.pt[pte].first_sector_lba;
+    }
+
     /* LVM partition match */
     if (mbr.pt[pte].partition_type == 0x8e)
     {
