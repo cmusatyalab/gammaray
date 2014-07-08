@@ -26,6 +26,10 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
 #include "color.h"
 #include "ext4.h"
 #include "gray-crawler.h"
@@ -39,13 +43,28 @@ struct gray_fs_crawler crawlers[] = {
     {NULL, NULL, NULL, NULL} /* guard value */
 };
 
+/* utility function */
+void cleanup(FILE* disk, FILE* serializef, struct bitarray* bits)
+{
+    if (disk)
+        fclose(disk);
+
+    if (serializef)
+        fclose(serializef); 
+
+    if (bits)
+        bitarray_destroy(bits);
+}
+
 /* main thread of execution */
 int main(int argc, char* args[])
 {
-    FILE* disk, *serializef;
+    FILE* disk = NULL, *serializef = NULL;
     struct gray_fs_crawler* crawler;
-    struct fs partition_entry;
+    struct bitarray* bits = NULL;
+    struct stat fstats;
     struct disk_mbr mbr;
+    struct fs fsdata;
     int i;
 
     fprintf_blue(stdout, "Raw Disk Crawler -- By: Wolfgang Richter "
@@ -74,7 +93,7 @@ int main(int argc, char* args[])
 
     if (serializef == NULL)
     {
-        fclose(disk);
+        cleanup(disk, serializef, bits);
         fprintf_light_red(stderr, "Error opening serialization file '%s'. "
                                   "Does it exist?\n", args[2]);
         return EXIT_FAILURE;
@@ -83,20 +102,35 @@ int main(int argc, char* args[])
     /* pull MBR info */
     if (mbr_parse_mbr(disk, &mbr))
     {
-        fclose(disk);
-        fclose(serializef);
+        cleanup(disk, serializef, bits);
         fprintf_light_red(stderr, "Error reading MBR from disk. Aborting\n");
         return EXIT_FAILURE;
     }
 
     mbr_print_mbr(mbr);
 
+    if (fstat(fileno(disk), &fstats))
+    {
+        cleanup(disk, serializef, bits);
+        fprintf_light_red(stderr, "Error getting fstat info on disk image.\n");
+        return EXIT_FAILURE;
+    }
+
+    bits = bitarray_init(fstats.st_size / 4096);
+
+    if (bits == NULL)
+    {
+        cleanup(disk, serializef, bits);
+        fprintf_light_red(stderr, "Error allocating bitarray.\n");
+        return EXIT_FAILURE;
+    }
+
     for (i = 0; i < 4; i++) {
-        partition_entry = (struct fs) {i, 0, NULL, NULL, NULL};
+        fsdata = (struct fs) {i, 0, NULL, NULL, NULL};
 
-        partition_entry.pt_off = mbr_partition_offset(mbr, i);
+        fsdata.pt_off = mbr_partition_offset(mbr, i);
 
-        if (partition_entry.pt_off > 0)
+        if (fsdata.pt_off > 0)
         {
             crawler = crawlers;
 
@@ -105,9 +139,9 @@ int main(int argc, char* args[])
                 fprintf_white(stdout, "\nProbing for %s... ",
                                       crawler->fs_name);
                 
-                if (crawler->probe(disk, &partition_entry))
+                if (crawler->probe(disk, &fsdata))
                 {
-                    fprintf_white(stdout, "Not found.\n");
+                    fprintf_white(stdout, "not found.\n");
                 }
                 else
                 {
@@ -115,19 +149,24 @@ int main(int argc, char* args[])
                                                  crawler->fs_name);
 
                     if (crawler->serialize(disk, &partition_entry, serializef))
+                    if (crawler->serialize(disk, &fsdata, serializef))
                     {
+                        crawler->cleanup(&fsdata);
+                        cleanup(disk, serializef, bits);
                         fprintf_light_red(stderr, "Error serializing "
-                                                  "partition.\n");
+                                                  "file system.\n");
                         return EXIT_FAILURE;
                     }
                 }
 
-                crawler->cleanup(&partition_entry);
+                crawler->cleanup(&fsdata);
                 
                 crawler++;
             }
         }
     }
 
+    bitarray_serialize(bits, serializef);
+    cleanup(disk, serializef, bits);
     return EXIT_SUCCESS;
 }
