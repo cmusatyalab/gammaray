@@ -34,11 +34,12 @@
 #include "ext4.h"
 #include "gray-crawler.h"
 #include "mbr.h"
+#include "ntfs.h"
 
 /* supported file system serializers */
 struct gray_fs_crawler crawlers[] = {
     GRAY_FS(ext4),
-    //GRAY_FS(ntfs), TODO
+    GRAY_FS(ntfs),
     //GRAY_FS(fat32), TODO
     {NULL, NULL, NULL, NULL} /* guard value */
 };
