@@ -65,6 +65,7 @@ int main(int argc, char* args[])
     struct stat fstats;
     struct disk_mbr mbr;
     struct fs fsdata;
+    bool present;
     int i;
 
     fprintf_blue(stdout, "Raw Disk Crawler -- By: Wolfgang Richter "
@@ -133,8 +134,9 @@ int main(int argc, char* args[])
         if (fsdata.pt_off > 0)
         {
             crawler = crawlers;
+            present = false;
 
-            while (crawler->fs_name) {
+            while (crawler->fs_name && !present) {
 
                 fprintf_white(stdout, "\nProbing for %s... ",
                                       crawler->fs_name);
@@ -148,7 +150,7 @@ int main(int argc, char* args[])
                     fprintf_light_white(stdout, "found %s file system!\n",
                                                  crawler->fs_name);
 
-                    if (crawler->serialize(disk, &partition_entry, serializef))
+                    present = true;
                     if (crawler->serialize(disk, &fsdata, serializef))
                     {
                         crawler->cleanup(&fsdata);
