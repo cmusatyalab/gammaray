@@ -126,6 +126,13 @@ int main(int argc, char* args[])
         return EXIT_FAILURE;
     }
 
+    if (mbr_serialize_mbr(mbr, bits, serializef))
+    {
+        cleanup(disk, serializef, bits);
+        fprintf_light_red(stderr, "Error serializing MBR.\n");
+        return EXIT_FAILURE;
+    }
+
     for (i = 0; i < 4; i++) {
         fsdata = (struct fs) {i, 0, NULL, NULL, NULL};
 
@@ -151,6 +158,16 @@ int main(int argc, char* args[])
                                                  crawler->fs_name);
 
                     present = true;
+
+                    if (mbr_serialize_partition(i, mbr, serializef))
+                    {
+                        crawler->cleanup(&fsdata);
+                        cleanup(disk, serializef, bits);
+                        fprintf_light_red(stderr, "Error serializing "
+                                                  "partition entry.\n");
+                        return EXIT_FAILURE;
+                    }
+                    
                     if (crawler->serialize(disk, &fsdata, serializef))
                     {
                         crawler->cleanup(&fsdata);

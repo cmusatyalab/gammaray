@@ -9,7 +9,7 @@
  *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
  *                                                                           *
  *                                                                           *
- *   Copyright 2013 Carnegie Mellon University                               *
+ *   Copyright 2013-2014 Carnegie Mellon University                          *
  *                                                                           *
  *   Licensed under the Apache License, Version 2.0 (the "License");         *
  *   you may not use this file except in compliance with the License.        *
@@ -209,7 +209,7 @@ int mbr_parse_mbr(FILE* disk, struct disk_mbr* mbr)
 }
 
 int mbr_serialize_mbr(struct disk_mbr mbr, struct bitarray* bits,
-                      uint32_t active, FILE* serializef)
+                      FILE* serializef)
 {
     struct bson_info* serialized;
     struct bson_kv value;
@@ -242,12 +242,6 @@ int mbr_serialize_mbr(struct disk_mbr mbr, struct bitarray* bits,
 
     bson_serialize(serialized, &value);
 
-    value.type = BSON_INT32;
-    value.key = "active_partitions";
-    value.data = &active;
-
-    bson_serialize(serialized, &value);
-
     bson_finalize(serialized);
     ret = bson_writef(serialized, serializef);
     bson_cleanup(serialized);
@@ -255,14 +249,19 @@ int mbr_serialize_mbr(struct disk_mbr mbr, struct bitarray* bits,
     return ret;
 }
 
-int mbr_serialize_partition(uint32_t pte_num, struct partition_table_entry pte,
+int mbr_serialize_partition(uint32_t pte_num, struct disk_mbr mbr,
                             FILE* serializef)
 {
     struct bson_info* serialized;
     struct bson_kv value;
-    int32_t partition_type = pte.partition_type;
-    int32_t final_sector = pte.first_sector_lba + pte.sector_count;
+    struct partition_table_entry pte;
+    int32_t partition_type;
+    int32_t final_sector;
     int ret;
+
+    mbr_get_partition_table_entry(mbr, pte_num, &pte);
+    partition_type = pte.partition_type;
+    final_sector = pte.first_sector_lba + pte.sector_count;
 
     serialized = bson_init();
 
