@@ -40,6 +40,9 @@ AC_PROG_MAKE_SET
 AM_PROG_CC_C_O
 AM_PROG_AR
 
+# Ensure 64 bit file offsets
+AC_SYS_LARGEFILE
+
 # Checks for libraries.
 AC_CHECK_LIB([hiredis], [redisConnect],,
              AC_MSG_FAILURE([could not find libhiredis]))
