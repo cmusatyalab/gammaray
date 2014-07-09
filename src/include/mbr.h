@@ -31,9 +31,6 @@
 #include <stdio.h>
 
 #include "bitarray.h"
-#include "color.h"
-
-#define SECTOR_SIZE 512
 
 struct partition_table_entry
 {
@@ -57,8 +54,6 @@ struct disk_mbr
 int mbr_print_mbr(struct disk_mbr mbr);
 int mbr_parse_mbr(FILE* disk, struct disk_mbr* mbr);
 int64_t mbr_partition_offset(struct disk_mbr mbr, int pte);
-int mbr_get_partition_table_entry(struct disk_mbr mbr, int pte_num,
-                                  struct partition_table_entry* pte);
 int mbr_serialize_mbr(struct disk_mbr mbr, struct bitarray* bits,
                       FILE* serializef);
 int mbr_serialize_partition(uint32_t pte_num, struct disk_mbr mbr,

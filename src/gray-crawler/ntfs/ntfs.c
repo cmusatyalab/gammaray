@@ -23,86 +23,193 @@
  *   See the License for the specific language governing permissions and     *
  *   limitations under the License.                                          *
  *****************************************************************************/
+
 #include <assert.h>
 #include <errno.h>
 #include <iconv.h>
-#include <inttypes.h>
-#include <stdbool.h>
+#include <malloc.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <wchar.h>
+
 #include <sys/stat.h>
 
-#include "gray-crawler.h"
 #include "color.h"
+#include "gray-crawler.h"
 #include "ntfs.h"
 #include "util.h"
-#include "bson.h"
 
+#define SECTOR_SIZE 512
 #define NTFS_FILETIME_TO_UNIX  ((uint64_t)(369 * 365 + 89) * 24 * 3600 * \
                                  10000000)
+#define UPPER_NIBBLE(u) ((u & 0x0f0) >> 4) 
+#define LOWER_NIBBLE(u) ((u & 0x0f))
 
-char* namespaces[] = { "POSIX",
-                       "Win32",
-                       "DOS",
-                       "Win32&DOS"
-                     };  
+enum NTFS_FILE_FLAGS
+{
+    NTFS_F_READ_ONLY               = 0x0001,
+    NTFS_F_HIDDEN                  = 0x0002,
+    NTFS_F_SYSTEM                  = 0x0004,
+    NTFS_F_ARCHIVE                 = 0x0020,
+    NTFS_F_DEVICE                  = 0x0040,
+    NTFS_F_NORMAL                  = 0x0080,
+    NTFS_F_TEMPORARY               = 0x0100,
+    NTFS_F_SPARSE_FILE             = 0x0200,
+    NTFS_F_REPARSE_POINT           = 0x0400,
+    NTFS_F_COMPRESSED              = 0x0800,
+    NTFS_F_OFFLINE                 = 0x1000,
+    NTFS_F_NOT_CONTENT_INDEXED     = 0x2000,
+    NTFS_F_ENCRYPTED               = 0x4000,
+    NTFS_F_DIRECTORY               = 0x10000000,
+    NTFS_F_INDEX_VIEW              = 0x20000000
+};
 
-wchar_t* ignore_files[] = { L"$MFT",
-                            L"$MFTMirr",
-                            L"$LogFile",
-                            L"$Volume",
-                            L"$AttrDef",
-                            L"$Bitmap",
-                            L"$Boot",
-                            L"$BadClus",
-                            L"$Quota",
-                            L"$Secure",
-                            L"$UpCase",
-                            L"$Extend",
-                            L"$ObjId",
-                            L"$Reparse",
-                            L"$UsnJrnl",
-                            L"$Repair",
-                            L"$Tops",
-                            L"$Config",
-                            L"$Delete",
-                            L"$ObjId",
-                            L"$Quota",
-                            L"$Repair.log",
-                            L"$RmMetadata",
-                            L"$Txf",
-                            L"$TxfLog.blf",
-                            L"$TXFLO~1",
-                            L"$TXFLO~2",
-                            L"$TxfLogContainer00000000000000000001",
-                            L"$TxfLogContainer00000000000000000002",
-                            NULL 
-                          };
+/* MFT parsing; full FILE RECORD header */
+struct ntfs_file_record
+{
+    uint32_t magic; /* ASCII FILE or BAAD */
+    uint16_t offset_update_seq;
+    uint16_t size_usn;
+    uint64_t lsn;
+    uint16_t seq_num;
+    uint16_t hard_link_count;
+    uint16_t offset_first_attribute;
+    uint16_t flags;
+    uint32_t real_size;
+    uint32_t allocated_size;
+    uint64_t file_ref_base;
+    uint16_t next_attr_id;
+    uint16_t align;
+    uint32_t rec_num;
+    uint16_t usn_num;
+} __attribute__((packed));
 
+struct ntfs_full_file_record
+{
+    struct ntfs_file_record header;
+    uint64_t len;
+    uint8_t* data;
+};
 
+/* -- special attributes -- */
+struct ntfs_standard_information
+{
+    uint64_t c_time;
+    uint64_t a_time;
+    uint64_t m_time;
+    uint64_t r_time;
+    uint32_t dos_permissions;
+    uint32_t max_num_versions;
+    uint32_t version_num;
+    uint32_t class_id;
+    uint32_t owner_id;
+    uint32_t security_id;
+    uint64_t quota_charged;
+    uint64_t update_squence_num;
+} __attribute__((packed));
 
+struct ntfs_file_name
+{
+    uint64_t parent_ref;
+    uint64_t c_time;
+    uint64_t a_time;
+    uint64_t m_time;
+    uint64_t r_time;
+    uint64_t allocated_size;
+    uint64_t real_size;
+    uint32_t flags;
+    uint32_t reparse;
+    uint8_t name_len;
+    uint8_t fnamespace;
+} __attribute__((packed));
+
+struct ntfs_data_run_header
+{
+    uint8_t packed_sizes;
+} __attribute__((packed));
+
+struct ntfs_update_sequence
+{
+    uint16_t usn_num;
+    uint16_t usn_size;
+    uint8_t* data;
+} __attribute__((packed));
+
+struct ntfs_file_reference
+{
+    uint8_t record_number[6];
+    uint16_t seq_num;
+} __attribute__((packed));
+
+struct ntfs_index_root
+{
+    uint32_t attribute_type;
+    uint32_t collation_rule;
+    uint32_t index_alloc_entry_size;
+    uint8_t clusters_per_index_record;
+    uint8_t padding[3];
+} __attribute__((packed));
+
+struct ntfs_index_header
+{
+    uint32_t first_entry_offset;
+    uint32_t total_size;
+    uint32_t allocated_size;
+    uint32_t flags;
+} __attribute__((packed));
+
+struct ntfs_index_entry
+{
+    struct ntfs_file_reference ref;
+    uint16_t length;
+    uint16_t stream_length;
+    uint8_t flags;
+    uint8_t padding[3];
+} __attribute__((packed));
+
+struct ntfs_index_record_header
+{
+    uint8_t magic[4];
+    uint16_t update_seq_offset;
+    uint16_t size_usn; /* in words */
+    uint64_t log_seq_num;
+    uint64_t index_vcn;
+    uint32_t offset_to_index_entries; /* - 0x18 */
+    uint32_t size_of_index_entries;
+    uint32_t allocated_size_of_index_entries;
+    uint8_t is_leaf;
+    uint8_t padding[3];
+    uint16_t usn_num;
+} __attribute__((packed));
+
+struct ntfs_index_record_entry
+{
+    struct ntfs_file_reference ref;
+    uint16_t size;
+    uint16_t file_name_offset;
+    uint16_t flags;
+    uint16_t padding;
+    struct ntfs_file_reference parent;
+    uint64_t c_time;
+    uint64_t m_time;
+    uint64_t a_time;
+    uint64_t r_time;
+    uint64_t file_allocated_size;
+    uint64_t file_real_size;
+    uint32_t file_flags;
+    uint32_t ea_reparse;
+    uint8_t filename_length;
+    uint8_t filename_namespace;
+    /* then filename, padding, VCN if not leaf */
+} __attribute__((packed));
+
+int ntfs_serialize_file_record(FILE* disk, struct ntfs_boot_file* bootf,
+                               struct bitarray* bits,
+                               int64_t partition_offset, char* prefix,
+                               uint8_t** mft, FILE* serializedf, uint8_t* data,
+                               struct bson_info* bson);
 
 /* helpers */
-bool ntfs_ignore_file(wchar_t* fname)
-{
-    int i = 0;
-    while (ignore_files[i])
-    {
-        if (wcscmp(ignore_files[i++], fname) == 0)
-            return true;
-    }
-    return false;
-}
-
-char* ntfs_namespace(uint8_t namespace)
-{
-    if (namespace > 3)
-        return "unknown";
-
-    return namespaces[namespace]; 
-}
-
 uint64_t ntfs_lcn_to_offset(struct ntfs_boot_file* bootf,
                             int64_t partition_offset, uint64_t lcn)
 {
@@ -111,16 +218,78 @@ uint64_t ntfs_lcn_to_offset(struct ntfs_boot_file* bootf,
     return (lcn*bytes_per_cluster) + partition_offset;
 }
 
-uint64_t ntfs_lcn_len(struct ntfs_boot_file* bootf,
-                      uint64_t count)
+uint64_t ntfs_get_reference_int(struct ntfs_file_reference* ref)
 {
-    uint64_t bytes_per_cluster = bootf->bytes_per_sector *
-                                 bootf->sectors_per_cluster;
-    return count*bytes_per_cluster;
+    uint64_t ret = 0;
+    memcpy(&ret, ref->record_number, 6);
+    return ret;
 }
 
+uint64_t ntfs_cluster_size(struct ntfs_boot_file *bootf)
+{
+    return bootf->bytes_per_sector * bootf->sectors_per_cluster;
+}
 
-/* printers for all structs */
+int ntfs_utf16_to_char(char* utf16_fname, size_t inlen, char* char_fname,
+                       size_t outlen)
+{
+    iconv_t cd = iconv_open("US-ASCII", "UTF-16");
+    char* utf16_fnamep = utf16_fname;
+    char** utf16_fnamepp = &utf16_fnamep;
+    char* char_fnamep = char_fname;
+    char** char_fnamepp = &char_fnamep;
+    
+    if (cd < 0)
+    {
+        fprintf_light_red(stderr, "Error creating conversion struct.\n");
+        return -1;
+    } 
+
+    if (iconv(cd, utf16_fnamepp, &inlen, char_fnamepp, &outlen) == (size_t) -1)
+    {
+        fprintf_light_red(stderr, "bytes: %x %x %x %x %x %x %x %x\n",
+                                  utf16_fname[0],
+                                  utf16_fname[1],
+                                  utf16_fname[2],
+                                  utf16_fname[3],
+                                  utf16_fname[4],
+                                  utf16_fname[5],
+                                  utf16_fname[6],
+                                  utf16_fname[7]
+                                  );
+
+        fprintf_light_red(stderr, "Error converting to wchar_t.\n");
+
+        switch (errno)
+        {
+            case E2BIG:
+                fprintf_light_red(stderr, "There is not sufficient room at"
+                                          " *outbuf\n");
+                break;
+            case EILSEQ:
+                fprintf_light_red(stderr, "An invalid multibyte sequence "
+                                          "has been encountered in the "
+                                          "input.\n");
+                break;
+            case EINVAL:
+                fprintf_light_red(stderr, "An incomplete multibyte "
+                                          "sequence has been encountered "
+                                          "in the input.\n");
+                break;
+            default:
+                fprintf_light_red(stderr, "An unknown iconv error was "
+                                          "encountered.\n");
+        };
+
+        return -1;
+    }
+
+    iconv_close(cd);
+
+    return EXIT_SUCCESS;
+}
+
+/* printers for some structs */
 int ntfs_print_index_record_header(struct ntfs_index_record_header* irh)
 {
     fprintf_light_blue(stdout, "irh->magic: %.4s\n", irh->magic);
@@ -139,7 +308,6 @@ int ntfs_print_index_record_header(struct ntfs_index_record_header* irh)
     fprintf_yellow(stdout, "irh->usn: [0x%"PRIx16"]\n", irh->usn_num);
     return EXIT_SUCCESS;
 }
-
 
 int ntfs_print_index_record_entry(struct ntfs_index_record_entry* ire)
 {
@@ -167,27 +335,6 @@ int ntfs_print_index_record_entry(struct ntfs_index_record_entry* ire)
     return EXIT_SUCCESS;
 }
 
-int ntfs_print_standard_attribute_header(
-        struct ntfs_standard_attribute_header* sah)
-{
-    fprintf_yellow(stdout, "sah.attribute_type: 0x%"PRIx32"\n",
-                           sah->attribute_type);
-    fprintf_yellow(stdout, "sah.length: %"PRIu32"\n", sah->length);
-    fprintf_yellow(stdout, "sah.non_resident_flag: 0x%"PRIx8"\n",
-                           sah->non_resident_flag);
-    fprintf_yellow(stdout, "sah.name_length: %"PRIu8"\n", sah->name_length);
-    fprintf_yellow(stdout, "sah.name_offset: %"PRIu16"\n", sah->name_offset);
-    fprintf_yellow(stdout, "sah.flags: 0x%"PRIx16"\n", sah->flags);
-    fprintf_yellow(stdout, "sah.attribute_id: %"PRIu16"\n", sah->attribute_id);
-    fprintf_yellow(stdout, "sah.length_of_attribute: %"PRIu32"\n",
-                           sah->length_of_attribute);
-    fprintf_yellow(stdout, "sah.offset_of_attribute: %"PRIu16"\n",
-                           sah->offset_of_attribute);
-    fprintf_yellow(stdout, "sah.indexed_flag: 0x%"PRIx8"\n",
-                           sah->indexed_flag);
-    return EXIT_SUCCESS;
-}
-
 int ntfs_print_non_resident_header(struct ntfs_non_resident_header* header)
 {
     fprintf_yellow(stdout, "non_resident.last_vcn: %"PRIu64"\n",
@@ -205,33 +352,6 @@ int ntfs_print_non_resident_header(struct ntfs_non_resident_header* header)
     return EXIT_SUCCESS;
 }
 
-int ntfs_print_standard_information(struct ntfs_standard_information* si)
-{
-    fprintf_yellow(stdout, "c_time: %"PRIu64"\n", si->c_time);
-    fprintf_yellow(stdout, "a_time: %"PRIu64"\n", si->a_time);
-    fprintf_yellow(stdout, "m_time: %"PRIu64"\n", si->m_time);
-    fprintf_yellow(stdout, "r_time: %"PRIu64"\n", si->r_time);
-    fprintf_yellow(stdout, "Class ID: %"PRIu32"\n", si->class_id);
-    fprintf_yellow(stdout, "Owner ID: %"PRIu32"\n", si->owner_id);
-    fprintf_yellow(stdout, "Security ID: %"PRIu32"\n", si->security_id);
-    fprintf_yellow(stdout, "Permissions: %"PRIo32"\n", si->dos_permissions);
-    return EXIT_SUCCESS;
-}
-
-int ntfs_print_file_name(struct ntfs_file_name* rec)
-{
-    fprintf_yellow(stdout, "rec->c_time: %"PRIu64"\n", rec->c_time);
-    fprintf_yellow(stdout, "rec->a_time: %"PRIu64"\n", rec->a_time);
-    fprintf_yellow(stdout, "rec->m_time: %"PRIu64"\n", rec->m_time);
-    fprintf_yellow(stdout, "rec->r_time: %"PRIu64"\n", rec->r_time);
-    fprintf_yellow(stdout, "rec->allocated_size: %"PRIu64"\n",
-                           rec->allocated_size);
-    fprintf_yellow(stdout, "rec->real_size: %"PRIu64"\n", rec->real_size);
-    fprintf_yellow(stdout, "rec->flags: %"PRIx32"\n", rec->flags);
-    fprintf_yellow(stdout, "rec->name_len: %"PRIu8"\n", rec->name_len);
-    return EXIT_SUCCESS;
-}
-
 int ntfs_print_data_run_header(struct ntfs_data_run_header* header)
 {
     fprintf_light_yellow(stdout, "data_run.raw: %x\n", header->packed_sizes);
@@ -239,68 +359,6 @@ int ntfs_print_data_run_header(struct ntfs_data_run_header* header)
                            UPPER_NIBBLE(header->packed_sizes));
     fprintf_yellow(stdout, "data_run.length_size: %u\n",
                            LOWER_NIBBLE(header->packed_sizes));
-    return EXIT_SUCCESS;
-}
-
-
-int ntfs_print_update_sequence(struct ntfs_update_sequence* seq)
-{
-    int i;
-    fprintf_yellow(stdout, "seq.usn_num: %0.4"PRIx16"\n", seq->usn_num);
-    fprintf_yellow(stdout, "seq.usn_size: %"PRIu16"\n", seq->usn_size);
-    fprintf_yellow(stdout, "seq.data: ");
-    for (i = 0; i < seq->usn_size; i++)
-    {
-        fprintf_light_yellow(stdout, " %0.2"PRIx8" ", seq->data[i]);
-    }
-    fprintf(stdout, "\n");
-    return EXIT_SUCCESS;
-}
-
-int ntfs_print_index_root(struct ntfs_index_root* root)
-{
-    fprintf_yellow(stdout, "root.attribute_type: 0x%"PRIx32"\n",
-                                                   root->attribute_type);
-    fprintf_yellow(stdout, "root.collation_rule: %"PRIu32"\n",
-                                                   root->collation_rule);
-    fprintf_yellow(stdout, "root.index_alloc_entry_size: %"PRIu32"\n",
-                                                 root->index_alloc_entry_size);
-    fprintf_yellow(stdout, "root.clusters_per_index_record: %"PRIu8"\n",
-                                              root->clusters_per_index_record);
-    return EXIT_SUCCESS;
-}
-
-int ntfs_print_index_header(struct ntfs_index_header* hdr)
-{
-    fprintf_yellow(stdout, "hdr.first_entry_offset: %"PRIu32"\n",
-                                                   hdr->first_entry_offset);
-    fprintf_yellow(stdout, "hdr.total_size: %"PRIu32"\n",
-                                                   hdr->total_size);
-    fprintf_yellow(stdout, "hdr.allocated_size: %"PRIu32"\n",
-                                                   hdr->allocated_size);
-    fprintf_yellow(stdout, "hdr.flags: %"PRIu8"\n",
-                                                   hdr->flags);
-    return EXIT_SUCCESS;
-}
-
-int ntfs_print_index_entry(struct ntfs_index_entry* entry, uint8_t* data)
-{
-    uint64_t ref;
-
-    memcpy(&ref, entry->ref.record_number, 6);
-    //ref = ref >> 16;
-    hexdump((uint8_t*)&(entry->ref.record_number), 6);
-    fprintf_yellow(stdout, "entry.file_reference: 0x%"PRIx64"\n",
-                                                   ref);
-    fprintf_yellow(stdout, "entry.length: %"PRIu16"\n",
-                                                   entry->length);
-    fprintf_yellow(stdout, "entry.stream_length: %"PRIu16"\n",
-                                                   entry->stream_length);
-    fprintf_yellow(stdout, "entry.flags: %"PRIu16"\n",
-                                                   entry->flags);
-    if (entry->flags & 0x1)
-        fprintf_yellow(stdout, "entry.vcn: %"PRIu64"\n",
-                               *((uint64_t*) &(data[entry->length - 8])));
     return EXIT_SUCCESS;
 }
 
@@ -357,31 +415,6 @@ int ntfs_probe(FILE* disk, struct fs* fs)
     return 0;
 }
 
-int ntfs_serialize(FILE* disk, struct fs* fs, FILE* serializef)
-{
-    struct ntfs_boot_file* ntfs_bootf = (struct ntfs_boot_file*) fs->fs_info;
-
-    if (ntfs_serialize_fs(ntfs_bootf, fs->bits, fs->pt_off, fs->pte, "/",
-                          serializef))
-    {
-        fprintf_light_red(stderr, "Error writing serialized fs "
-                                  "entry.\n");
-        return -1;
-    }
-
-    ntfs_serialize_fs_tree(disk, ntfs_bootf, fs->bits, fs->pt_off, "/",
-                           serializef);
-    return 0;
-}
-
-int ntfs_cleanup(struct fs* fs)
-{
-    if (fs->fs_info)
-        free(fs->fs_info);
-
-    return 0;
-}
-
 uint64_t ntfs_file_record_size(struct ntfs_boot_file* bootf)
 {
     return bootf->clusters_per_mft_record > 0 ?
@@ -391,103 +424,107 @@ uint64_t ntfs_file_record_size(struct ntfs_boot_file* bootf)
            2 << -1 * (bootf->clusters_per_mft_record + 1);
 }
 
-int ntfs_read_file_data(FILE* disk, uint8_t* data,
-                        struct ntfs_boot_file* bootf,
-                        int64_t partition_offset,
-                        uint8_t** buf, char* name);
-
-/* read FILE record */
-int ntfs_read_file_record(FILE* disk, uint64_t record_num,
-                          int64_t partition_offset, 
-                          struct ntfs_boot_file* bootf,
-                          uint8_t** mft,
-                          struct bitarray* bits,
-                          uint8_t* buf, struct bson_info* bson)
+int ntfs_serialize_fs(struct ntfs_boot_file* bootf, struct bitarray* bits,
+                      int64_t partition_offset, uint32_t pte_num,
+                      char* mount_point, FILE* serializedf)
 {
-    uint64_t record_size = ntfs_file_record_size(bootf); 
-    int64_t offset = ntfs_lcn_to_offset(bootf, partition_offset,
-                                        bootf->lcn_mft) +
-                     record_num * record_size;
-    int64_t sector = offset / 512;
-    int32_t inode_num = record_num;
-    struct bson_kv val;
+    int32_t num_block_groups = 0;
+    int32_t num_files = -1;
+    struct bson_info* serialized;
+    struct bson_info* sectors;
+    struct bson_kv value;
+    uint64_t block_size = bootf->bytes_per_sector;
+    uint64_t blocks_per_group = bootf->sectors_per_cluster;
+    uint64_t inode_size = ntfs_file_record_size(bootf);
+    uint64_t inodes_per_group = (blocks_per_group * block_size) / inode_size; 
 
-    val.type = BSON_STRING;
-    val.size = strlen("file");
-    val.key = "type";
-    val.data = "file";
+    serialized = bson_init();
+    sectors = bson_init();
 
-    bson_serialize(bson, &val);
+    value.type = BSON_STRING;
+    value.size = strlen("fs");
+    value.key = "type";
+    value.data = "fs";
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT32;
+    value.key = "pte_num";
+    value.data = &(pte_num);
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_STRING;
+    value.size = strlen("ntfs");
+    value.key = "fs";
+    value.data = "ntfs";
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_STRING;
+    value.key = "mount_point";
+    value.size = strlen(mount_point);
+    value.data = mount_point;
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT32;
+    value.key = "num_block_groups";
+    value.data = &(num_block_groups);
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT32;
+    value.key = "num_files";
+    value.data = &(num_files);
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT64;
+    value.key = "superblock_sector";
+    partition_offset /= SECTOR_SIZE;
+    value.data = &(partition_offset);
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT64;
+    value.key = "superblock_offset";
+    partition_offset %= SECTOR_SIZE;
+    value.data = &(partition_offset);
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT64;
+    value.key = "block_size";
+    value.data = &(block_size);
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT64;
+    value.key = "blocks_per_group";
+    value.data = &(blocks_per_group);
+
+    bson_serialize(serialized, &value);
     
-    val.type = BSON_INT64;
-    val.key = "inode_sector";
-    val.data = &sector;
+    value.type = BSON_INT64;
+    value.key = "inodes_per_group";
+    value.data = &(inodes_per_group);
 
-    bson_serialize(bson, &val);
+    bson_serialize(serialized, &value);
+    
+    value.type = BSON_INT64;
+    value.key = "inode_size";
+    value.data = &(inode_size);
 
-    sector = offset % (bootf->bytes_per_sector * bootf->sectors_per_cluster);
-    val.type = BSON_INT64;
-    val.key = "inode_offset";
-    val.data = &sector;
+    bson_serialize(serialized, &value);
 
-    bson_serialize(bson, &val);
+    bson_finalize(serialized);
+    bson_writef(serialized, serializedf);
+    bson_cleanup(sectors);
+    bson_cleanup(serialized);
 
-    val.type = BSON_INT32;
-    val.key = "inode_num";
-    val.data = &inode_num;
-
-    bson_serialize(bson, &val);
-
-    if (buf == NULL)
-    {
-        fprintf_light_red(stderr, "Error malloc()ing to read file record.\n");
-        return 0;
-    }
-
-    if (record_num < 16)
-    {
-        if (fseeko(disk, offset, SEEK_SET))
-        {
-            fprintf_light_red(stderr, "Error seeking to FILE record.\n");
-            return 0;
-        }
-
-        if (fread(buf, 1, record_size, disk) != record_size)
-        {
-            fprintf_light_red(stderr, "Error reading FILE record data.\n");
-            return 0;
-        }
-
-        if (record_num == 0 && mft)
-        {
-            fprintf_light_green(stdout, "Reading file data for file 0.\n");
-            if (ntfs_read_file_data(disk, buf, bootf, partition_offset, mft,
-                "$MFT"))
-                return 0;
-        }
-    }
-    else
-    {
-        memcpy(buf, &((*mft)[record_num * record_size]), record_size);
-    }
-
-    if (strncmp((char*) buf, "FILE", 4) != 0)
-    {
-        fprintf_light_cyan(stderr, "FILE magic bytes mismatch.\n");
-        fprintf_light_cyan(stderr, "offset was: %"PRId64"\n", offset);
-        fprintf_light_cyan(stderr, "partition_offset was: %"PRId64"\n",
-                                    partition_offset);
-        fprintf_light_cyan(stderr, "lcn_mft was: %"PRIu64"\n", bootf->lcn_mft);
-        fprintf_light_cyan(stderr, "record_number was: %"PRIu64"\n",
-                                   record_num);
-        fprintf_light_cyan(stderr, "record_size was: %"PRIu64"\n",
-                                   record_size);
-        return 0;
-    }
-
-    return record_size;
+    return EXIT_SUCCESS;
 }
-
 
 /* read FILE record header */
 int ntfs_read_file_record_header(uint8_t* data, uint64_t* offset,
@@ -497,7 +534,6 @@ int ntfs_read_file_record_header(uint8_t* data, uint64_t* offset,
     *offset += sizeof(*rec);
     return EXIT_SUCCESS;
 }
-
 
 /* read update sequence array */
 int ntfs_read_update_sequence(uint8_t* data, uint64_t* offset,
@@ -512,6 +548,20 @@ int ntfs_read_update_sequence(uint8_t* data, uint64_t* offset,
     seq->usn_size = 2*(size_usn) - 2;
     seq->data = buf;
 
+    return EXIT_SUCCESS;
+}
+
+int ntfs_print_update_sequence(struct ntfs_update_sequence* seq)
+{
+    int i;
+    fprintf_yellow(stdout, "seq.usn_num: %0.4"PRIx16"\n", seq->usn_num);
+    fprintf_yellow(stdout, "seq.usn_size: %"PRIu16"\n", seq->usn_size);
+    fprintf_yellow(stdout, "seq.data: ");
+    for (i = 0; i < seq->usn_size; i++)
+    {
+        fprintf_light_yellow(stdout, " %0.2"PRIx8" ", seq->data[i]);
+    }
+    fprintf(stdout, "\n");
     return EXIT_SUCCESS;
 }
 
@@ -549,17 +599,6 @@ int ntfs_fixup_data(uint8_t* data, uint64_t data_len,
     return EXIT_SUCCESS;
 }
 
-
-/* read attribute */
-int ntfs_read_attribute_header(uint8_t* data, uint64_t* offset,
-                               struct ntfs_standard_attribute_header* sah)
-{
-    memcpy(sah, &(data[*offset]), sizeof(*sah));
-    *offset += sizeof(*sah);
-
-    return EXIT_SUCCESS; 
-}
-
 /* read attribute */
 int ntfs_read_non_resident_attribute_header(uint8_t* data, uint64_t* offset,
                                           struct ntfs_non_resident_header* nrh)
@@ -568,67 +607,6 @@ int ntfs_read_non_resident_attribute_header(uint8_t* data, uint64_t* offset,
     *offset += sizeof(*nrh);
 
     return EXIT_SUCCESS; 
-}
-
-int ntfs_read_attribute_data(uint8_t* data, uint64_t* offset,
-                             uint8_t* buf, uint64_t buf_len,
-                             struct ntfs_standard_attribute_header* sah)
-{
-    *offset += sah->offset_of_attribute - sizeof(*sah);
-
-    if (sah->length_of_attribute > buf_len)
-    {
-        fprintf_light_red(stderr, "Resident attribute over %"PRIu64" bytes.\n",
-                                  buf_len);
-        return EXIT_FAILURE;
-    }
-
-    memcpy(buf, &(data[*offset]), sah->length_of_attribute);
-    *offset += sah->length_of_attribute;
-    return EXIT_SUCCESS;
-}
-
-/* handler for resident */
-int ntfs_handle_resident_data_attribute(uint8_t* data, uint64_t* offset,
-                                    uint8_t* buf, uint64_t buf_len,
-                                    char* name,
-                                    struct ntfs_standard_attribute_header* sah,
-                                    bool extension,
-                                    bool dir,
-                                    struct bson_info* bson,
-                                    bool save_sectors)
-{
-    struct bson_kv value, value1;
-    struct bson_info* sectors = bson_init();
-    char count[11];
-    int32_t value1data = -1;
-    
-    fprintf_yellow(stdout, "\tData is resident.\n");
-    fprintf_white(stdout, "\tsah->offset_of_attribute: %x\tsizeof(sah) %x\n",
-                          sah->offset_of_attribute, sizeof(*sah));
-    fprintf_green(stdout, "\tSeeking to %d\n",
-                          sah->offset_of_attribute - sizeof(*sah));
-
-    ntfs_read_attribute_data(data, offset, buf, buf_len, sah);
-  
-    if (bson && save_sectors)
-    {
-        value.type = BSON_ARRAY;
-        value.key = "sectors";
-
-        value1.type = BSON_INT32;
-        value1.key = count;
-        snprintf(count, 11, "%"PRIu32, 0);
-        value1.data = &value1data;
-
-        bson_serialize(sectors, &value1);
-        bson_finalize(sectors);
-        value.data = sectors;
-        bson_serialize(bson, &value);
-        bson_cleanup(sectors);
-    }
-
-    return EXIT_SUCCESS;
 }
 
 int ntfs_parse_data_run(uint8_t* data, uint64_t* offset,
@@ -661,11 +639,6 @@ int ntfs_parse_data_run(uint8_t* data, uint64_t* offset,
     }
     
     return 0;
-}
-
-uint64_t ntfs_cluster_size(struct ntfs_boot_file *bootf)
-{
-    return bootf->bytes_per_sector * bootf->sectors_per_cluster;
 }
 
 /* handler for non-resident */
@@ -849,321 +822,62 @@ int ntfs_handle_non_resident_data_attribute(uint8_t* data, uint64_t* offset,
     return EXIT_SUCCESS;
 }
 
-int ntfs_utf16_to_char(char* utf16_fname, size_t inlen, char* char_fname,
-                       size_t outlen)
+int ntfs_read_attribute_data(uint8_t* data, uint64_t* offset,
+                             uint8_t* buf, uint64_t buf_len,
+                             struct ntfs_standard_attribute_header* sah)
 {
-    iconv_t cd = iconv_open("US-ASCII", "UTF-16");
-    char* utf16_fnamep = utf16_fname;
-    char** utf16_fnamepp = &utf16_fnamep;
-    char* char_fnamep = char_fname;
-    char** char_fnamepp = &char_fnamep;
-    
-    if (cd < 0)
+    *offset += sah->offset_of_attribute - sizeof(*sah);
+
+    if (sah->length_of_attribute > buf_len)
     {
-        fprintf_light_red(stderr, "Error creating conversion struct.\n");
-        return -1;
-    } 
-
-    if (iconv(cd, utf16_fnamepp, &inlen, char_fnamepp, &outlen) == (size_t) -1)
-    {
-        fprintf_light_red(stderr, "bytes: %x %x %x %x %x %x %x %x\n",
-                                  utf16_fname[0],
-                                  utf16_fname[1],
-                                  utf16_fname[2],
-                                  utf16_fname[3],
-                                  utf16_fname[4],
-                                  utf16_fname[5],
-                                  utf16_fname[6],
-                                  utf16_fname[7]
-                                  );
-
-        fprintf_light_red(stderr, "Error converting to wchar_t.\n");
-
-        switch (errno)
-        {
-            case E2BIG:
-                fprintf_light_red(stderr, "There is not sufficient room at"
-                                          " *outbuf\n");
-                break;
-            case EILSEQ:
-                fprintf_light_red(stderr, "An invalid multibyte sequence "
-                                          "has been encountered in the "
-                                          "input.\n");
-                break;
-            case EINVAL:
-                fprintf_light_red(stderr, "An incomplete multibyte "
-                                          "sequence has been encountered "
-                                          "in the input.\n");
-                break;
-            default:
-                fprintf_light_red(stderr, "An unknown iconv error was "
-                                          "encountered.\n");
-        };
-
-        return -1;
-    }
-
-    iconv_close(cd);
-
-    return EXIT_SUCCESS;
-}
-
-int ntfs_utf16_to_wchar(char* utf16_fname, size_t inlen, char* wchar_fname,
-                        size_t outlen)
-{
-    iconv_t cd = iconv_open("WCHAR_T", "UTF-16");
-    char* utf16_fnamep = utf16_fname;
-    char** utf16_fnamepp = &utf16_fnamep;
-    char* wchar_fnamep = wchar_fname;
-    char** wchar_fnamepp = &wchar_fnamep;
-    
-    if (cd < 0)
-    {
-        fprintf_light_red(stderr, "Error creating conversion struct.\n");
-        return -1;
-    } 
-
-    if (iconv(cd, utf16_fnamepp, &inlen, wchar_fnamepp, &outlen) ==
-        (size_t) -1)
-    {
-        fprintf_light_red(stderr, "bytes: %x %x %x %x %x %x %x %x\n",
-                                  utf16_fname[0],
-                                  utf16_fname[1],
-                                  utf16_fname[2],
-                                  utf16_fname[3],
-                                  utf16_fname[4],
-                                  utf16_fname[5],
-                                  utf16_fname[6],
-                                  utf16_fname[7]
-                                  );
-
-        fprintf_light_red(stderr, "Error converting to wchar_t.\n");
-
-        switch (errno)
-        {
-            case E2BIG:
-                fprintf_light_red(stderr, "There is not sufficient room at"
-                                          " *outbuf\n");
-                break;
-            case EILSEQ:
-                fprintf_light_red(stderr, "An invalid multibyte sequence "
-                                          "has been encountered in the "
-                                          "input.\n");
-                break;
-            case EINVAL:
-                fprintf_light_red(stderr, "An incomplete multibyte "
-                                          "sequence has been encountered "
-                                          "in the input.\n");
-                break;
-            default:
-                fprintf_light_red(stderr, "An unknown iconv error was "
-                                          "encountered.\n");
-        };
-
-        return -1;
-    }
-
-    iconv_close(cd);
-
-    return EXIT_SUCCESS;
-}
-
-/* dispatch handler for file name */
-int ntfs_dispatch_file_name_attribute(uint8_t* data, uint64_t* offset,
-                                  char** name,
-                                  struct ntfs_standard_attribute_header* sah)
-{
-    struct ntfs_file_name fname;
-    char* file_name = malloc(512);
-    char* file_namep = file_name;
-    char** file_namepp = &file_namep;
-    char file_name_encoded[512];
-    char* file_name_encodedp = file_name_encoded;
-    char** file_name_encodedpp = &file_name_encodedp;
-    iconv_t cd = iconv_open("US-ASCII", "UTF-16");
-    size_t outbytes = 512;
-    size_t inbytes; 
-
-    memset(file_name, 0, 512);
-    memset(file_name_encoded, 0, 512);
-    
-    if (cd < 0)
-    {
-        fprintf_light_red(stderr, "Error creating conversion struct.\n");
-        return -1;
-    } 
-
-    if (sah->attribute_type == 0x30) /* file name */
-    {
-        /* TODO: refactor */
-        *offset += sah->offset_of_attribute - sizeof(*sah);
-        fname = *((struct ntfs_file_name*) &(data[*offset]));
-        *offset += sizeof(struct ntfs_file_name);
-
-        //ntfs_print_file_name(&fname);
-
-        memcpy(file_name_encoded, &(data[*offset]), 2*fname.name_len);
-        *offset += 2*fname.name_len;
-
-        file_name_encodedp = file_name_encoded;
-        file_name_encodedpp = &file_name_encodedp;
-        inbytes = 2*fname.name_len;
-
-        hexdump((uint8_t*)*file_name_encodedpp, 24);
-        if (iconv(cd, (char**) file_name_encodedpp, &inbytes, (char**)
-                  file_namepp, &outbytes) == (size_t) -1)
-        {
-            fprintf_light_red(stderr, "bytes: %x %x %x %x %x %x %x %x\n",
-                                      file_name_encodedp[0],
-                                      file_name_encodedp[1],
-                                      file_name_encodedp[2],
-                                      file_name_encodedp[3],
-                                      file_name_encodedp[4],
-                                      file_name_encodedp[5],
-                                      file_name_encodedp[6],
-                                      file_name_encodedp[7]
-                                      );
-
-            fprintf_light_red(stderr, "Error converting to wchar_t.\n");
-            switch (errno)
-            {
-                case E2BIG:
-                    fprintf_light_red(stderr, "There is not sufficient room at"
-                                              " *outbuf\n");
-                    break;
-                case EILSEQ:
-                    fprintf_light_red(stderr, "An invalid multibyte sequence "
-                                              "has been encountered in the "
-                                              "input.\n");
-                    break;
-                case EINVAL:
-                    fprintf_light_red(stderr, "An incomplete multibyte "
-                                              "sequence has been encountered "
-                                              "in the input.\n");
-                    break;
-                default:
-                    fprintf_light_red(stderr, "An unknown iconv error was "
-                                              "encountered.\n");
-            };
-
-            return -1;
-        }
-        else
-        {
-            if (*name)
-                free(*name);
-            *name = file_name;
-        }
-    }
-
-    fprintf(stdout, "inbytes = %zu outbytes = %zu\n", inbytes, outbytes);
-    iconv_close(cd);
-
-    return EXIT_SUCCESS;
-}
-
-int ntfs_read_index_entry(struct ntfs_index_entry* entry, uint8_t* data,
-                          uint64_t* offset)
-{
-    memcpy(entry, &(data[*offset]), sizeof(*entry));
-    if (entry->length == 0)
+        fprintf_light_red(stderr, "Resident attribute over %"PRIu64" bytes.\n",
+                                  buf_len);
         return EXIT_FAILURE;
-    return 0;
-}
-
-int ntfs_read_index_entries(uint8_t* data, uint64_t* offset)
-{
-    struct ntfs_index_entry entry;
-
-    while (!ntfs_read_index_entry(&entry, data, offset))
-    {
-        ntfs_print_index_entry(&entry, &(data[*offset]));
-        *offset += entry.length;
-        if (entry.flags & 0x02)
-            break;
     }
 
-    return 0;
+    memcpy(buf, &(data[*offset]), sah->length_of_attribute);
+    *offset += sah->length_of_attribute;
+    return EXIT_SUCCESS;
 }
 
-/* good */
-int ntfs_read_index_header(uint8_t* data, uint64_t* offset,
-                           char* name,
-                           struct ntfs_standard_attribute_header* sah,
-                           struct ntfs_boot_file* bootf,
-                           int64_t partition_offset,
-                           FILE* disk,
-                           struct bson_info* bson, FILE* serializedf)
-{
-    struct ntfs_index_header hdr;
-
-    memcpy(&hdr, &(data[*offset]), sizeof(hdr));
-
-    ntfs_print_index_header(&hdr);
-
-    *offset += hdr.first_entry_offset;
-
-    return 0;
-}
-
-int ntfs_dispatch_index_root_attribute(uint8_t* data, uint64_t* offset,
+/* handler for resident */
+int ntfs_handle_resident_data_attribute(uint8_t* data, uint64_t* offset,
+                                    uint8_t* buf, uint64_t buf_len,
                                     char* name,
                                     struct ntfs_standard_attribute_header* sah,
-                                    struct ntfs_boot_file* bootf,
-                                    struct bitarray* bits,
-                                    int64_t partition_offset,
-                                    FILE* disk,
-                                    struct bson_info* bson, FILE* serializedf)
+                                    bool extension,
+                                    bool dir,
+                                    struct bson_info* bson,
+                                    bool save_sectors)
 {
-    struct ntfs_index_root root;
+    struct bson_kv value, value1;
+    struct bson_info* sectors = bson_init();
+    char count[11];
+    int32_t value1data = -1;
+    
+    fprintf_yellow(stdout, "\tData is resident.\n");
+    fprintf_white(stdout, "\tsah->offset_of_attribute: %x\tsizeof(sah) %x\n",
+                          sah->offset_of_attribute, sizeof(*sah));
+    fprintf_green(stdout, "\tSeeking to %d\n",
+                          sah->offset_of_attribute - sizeof(*sah));
 
-    if (sah->attribute_type != 0x90)
+    ntfs_read_attribute_data(data, offset, buf, buf_len, sah);
+  
+    if (bson && save_sectors)
     {
-        fprintf_light_red(stderr, "Index Root handler, bad attribute!\n");
-        return EXIT_FAILURE;
-    }
+        value.type = BSON_ARRAY;
+        value.key = "sectors";
 
-    *offset += sah->offset_of_attribute - sizeof(*sah);
-    root = *((struct ntfs_index_root*) &(data[*offset]));
-    ntfs_print_index_root(&root);
+        value1.type = BSON_INT32;
+        value1.key = count;
+        snprintf(count, 11, "%"PRIu32, 0);
+        value1.data = &value1data;
 
-    *offset += sizeof(root);
-
-    ntfs_read_index_header(data, offset, name, sah, bootf, partition_offset,
-                           disk, bson, serializedf);
-    /* good */
-
-    ntfs_read_index_entries(data, offset);
-    return 0;
-}
-
-int ntfs_dispatch_standard_information_attribute(uint8_t* data,
-                                    uint64_t* offset,
-                                    char* fname,
-                                    struct ntfs_standard_attribute_header* sah)
-{
-    struct ntfs_standard_information nsi;
-    *offset += sah->offset_of_attribute - sizeof(*sah);
-    nsi = *((struct ntfs_standard_information*) &(data[*offset]));
-
-    ntfs_print_standard_information(&nsi);
-
-    return 0;
-}
-
-int ntfs_get_size(uint8_t* data, struct ntfs_standard_attribute_header* sah,
-                  uint64_t* data_offset, uint64_t* fsize)
-{
-    struct ntfs_non_resident_header nrh;
-
-    if (sah->non_resident_flag)
-    {
-        ntfs_read_non_resident_attribute_header(data, data_offset, &nrh);
-        *fsize = nrh.real_size; 
-    }
-    else
-    {
-        *fsize = sah->length_of_attribute;
+        bson_serialize(sectors, &value1);
+        bson_finalize(sectors);
+        value.data = sectors;
+        bson_serialize(bson, &value);
+        bson_cleanup(sectors);
     }
 
     return EXIT_SUCCESS;
@@ -1242,6 +956,143 @@ int ntfs_dispatch_data_attribute(uint8_t* data, uint64_t* offset,
     return EXIT_SUCCESS;
 }
 
+int ntfs_print_index_root(struct ntfs_index_root* root)
+{
+    fprintf_yellow(stdout, "root.attribute_type: 0x%"PRIx32"\n",
+                                                   root->attribute_type);
+    fprintf_yellow(stdout, "root.collation_rule: %"PRIu32"\n",
+                                                   root->collation_rule);
+    fprintf_yellow(stdout, "root.index_alloc_entry_size: %"PRIu32"\n",
+                                                 root->index_alloc_entry_size);
+    fprintf_yellow(stdout, "root.clusters_per_index_record: %"PRIu8"\n",
+                                              root->clusters_per_index_record);
+    return EXIT_SUCCESS;
+}
+
+int ntfs_print_index_header(struct ntfs_index_header* hdr)
+{
+    fprintf_yellow(stdout, "hdr.first_entry_offset: %"PRIu32"\n",
+                                                   hdr->first_entry_offset);
+    fprintf_yellow(stdout, "hdr.total_size: %"PRIu32"\n",
+                                                   hdr->total_size);
+    fprintf_yellow(stdout, "hdr.allocated_size: %"PRIu32"\n",
+                                                   hdr->allocated_size);
+    fprintf_yellow(stdout, "hdr.flags: %"PRIu8"\n",
+                                                   hdr->flags);
+    return EXIT_SUCCESS;
+}
+
+int ntfs_read_index_header(uint8_t* data, uint64_t* offset,
+                           char* name,
+                           struct ntfs_standard_attribute_header* sah,
+                           struct ntfs_boot_file* bootf,
+                           int64_t partition_offset,
+                           FILE* disk,
+                           struct bson_info* bson, FILE* serializedf)
+{
+    struct ntfs_index_header hdr;
+
+    memcpy(&hdr, &(data[*offset]), sizeof(hdr));
+
+    ntfs_print_index_header(&hdr);
+
+    *offset += hdr.first_entry_offset;
+
+    return 0;
+}
+
+int ntfs_read_index_entry(struct ntfs_index_entry* entry, uint8_t* data,
+                          uint64_t* offset)
+{
+    memcpy(entry, &(data[*offset]), sizeof(*entry));
+    if (entry->length == 0)
+        return EXIT_FAILURE;
+    return 0;
+}
+
+int ntfs_print_index_entry(struct ntfs_index_entry* entry, uint8_t* data)
+{
+    uint64_t ref;
+
+    memcpy(&ref, entry->ref.record_number, 6);
+    //ref = ref >> 16;
+    hexdump((uint8_t*)&(entry->ref.record_number), 6);
+    fprintf_yellow(stdout, "entry.file_reference: 0x%"PRIx64"\n",
+                                                   ref);
+    fprintf_yellow(stdout, "entry.length: %"PRIu16"\n",
+                                                   entry->length);
+    fprintf_yellow(stdout, "entry.stream_length: %"PRIu16"\n",
+                                                   entry->stream_length);
+    fprintf_yellow(stdout, "entry.flags: %"PRIu16"\n",
+                                                   entry->flags);
+    if (entry->flags & 0x1)
+        fprintf_yellow(stdout, "entry.vcn: %"PRIu64"\n",
+                               *((uint64_t*) &(data[entry->length - 8])));
+    return EXIT_SUCCESS;
+}
+
+int ntfs_read_index_entries(uint8_t* data, uint64_t* offset)
+{
+    struct ntfs_index_entry entry;
+
+    while (!ntfs_read_index_entry(&entry, data, offset))
+    {
+        ntfs_print_index_entry(&entry, &(data[*offset]));
+        *offset += entry.length;
+        if (entry.flags & 0x02)
+            break;
+    }
+
+    return 0;
+}
+
+int ntfs_dispatch_index_root_attribute(uint8_t* data, uint64_t* offset,
+                                    char* name,
+                                    struct ntfs_standard_attribute_header* sah,
+                                    struct ntfs_boot_file* bootf,
+                                    struct bitarray* bits,
+                                    int64_t partition_offset,
+                                    FILE* disk,
+                                    struct bson_info* bson, FILE* serializedf)
+{
+    struct ntfs_index_root root;
+
+    if (sah->attribute_type != 0x90)
+    {
+        fprintf_light_red(stderr, "Index Root handler, bad attribute!\n");
+        return EXIT_FAILURE;
+    }
+
+    *offset += sah->offset_of_attribute - sizeof(*sah);
+    root = *((struct ntfs_index_root*) &(data[*offset]));
+    ntfs_print_index_root(&root);
+
+    *offset += sizeof(root);
+
+    ntfs_read_index_header(data, offset, name, sah, bootf, partition_offset,
+                           disk, bson, serializedf);
+    ntfs_read_index_entries(data, offset);
+    return 0;
+}
+
+int ntfs_get_size(uint8_t* data, struct ntfs_standard_attribute_header* sah,
+                  uint64_t* data_offset, uint64_t* fsize)
+{
+    struct ntfs_non_resident_header nrh;
+
+    if (sah->non_resident_flag)
+    {
+        ntfs_read_non_resident_attribute_header(data, data_offset, &nrh);
+        *fsize = nrh.real_size; 
+    }
+    else
+    {
+        *fsize = sah->length_of_attribute;
+    }
+
+    return EXIT_SUCCESS;
+}
+
 int ntfs_read_file_data(FILE* disk, uint8_t* data,
                         struct ntfs_boot_file* bootf, int64_t partition_offset,
                         uint8_t** buf, char* name)
@@ -1292,6 +1143,98 @@ int ntfs_read_file_data(FILE* disk, uint8_t* data,
     return EXIT_SUCCESS;
 }
 
+/* read FILE record */
+int ntfs_read_file_record(FILE* disk, uint64_t record_num,
+                          int64_t partition_offset, 
+                          struct ntfs_boot_file* bootf,
+                          uint8_t** mft,
+                          struct bitarray* bits,
+                          uint8_t* buf, struct bson_info* bson)
+{
+    uint64_t record_size = ntfs_file_record_size(bootf); 
+    int64_t offset = ntfs_lcn_to_offset(bootf, partition_offset,
+                                        bootf->lcn_mft) +
+                     record_num * record_size;
+    int64_t sector = offset / 512;
+    int32_t inode_num = record_num;
+    struct bson_kv val;
+
+    val.type = BSON_STRING;
+    val.size = strlen("file");
+    val.key = "type";
+    val.data = "file";
+
+    bson_serialize(bson, &val);
+    
+    val.type = BSON_INT64;
+    val.key = "inode_sector";
+    val.data = &sector;
+
+    bson_serialize(bson, &val);
+
+    sector = offset % (bootf->bytes_per_sector * bootf->sectors_per_cluster);
+    val.type = BSON_INT64;
+    val.key = "inode_offset";
+    val.data = &sector;
+
+    bson_serialize(bson, &val);
+
+    val.type = BSON_INT32;
+    val.key = "inode_num";
+    val.data = &inode_num;
+
+    bson_serialize(bson, &val);
+
+    if (buf == NULL)
+    {
+        fprintf_light_red(stderr, "Error malloc()ing to read file record.\n");
+        return 0;
+    }
+
+    if (record_num < 16)
+    {
+        if (fseeko(disk, offset, SEEK_SET))
+        {
+            fprintf_light_red(stderr, "Error seeking to FILE record.\n");
+            return 0;
+        }
+
+        if (fread(buf, 1, record_size, disk) != record_size)
+        {
+            fprintf_light_red(stderr, "Error reading FILE record data.\n");
+            return 0;
+        }
+
+        if (record_num == 0 && mft)
+        {
+            fprintf_light_green(stdout, "Reading file data for file 0.\n");
+            if (ntfs_read_file_data(disk, buf, bootf, partition_offset, mft,
+                "$MFT"))
+                return 0;
+        }
+    }
+    else
+    {
+        memcpy(buf, &((*mft)[record_num * record_size]), record_size);
+    }
+
+    if (strncmp((char*) buf, "FILE", 4) != 0)
+    {
+        fprintf_light_cyan(stderr, "FILE magic bytes mismatch.\n");
+        fprintf_light_cyan(stderr, "offset was: %"PRId64"\n", offset);
+        fprintf_light_cyan(stderr, "partition_offset was: %"PRId64"\n",
+                                    partition_offset);
+        fprintf_light_cyan(stderr, "lcn_mft was: %"PRIu64"\n", bootf->lcn_mft);
+        fprintf_light_cyan(stderr, "record_number was: %"PRIu64"\n",
+                                   record_num);
+        fprintf_light_cyan(stderr, "record_size was: %"PRIu64"\n",
+                                   record_size);
+        return 0;
+    }
+
+    return record_size;
+}
+
 int ntfs_read_index_record_entry(uint8_t* data, uint64_t* offset,
                                  struct ntfs_index_record_entry* ire)
 {
@@ -1299,13 +1242,6 @@ int ntfs_read_index_record_entry(uint8_t* data, uint64_t* offset,
     *offset += sizeof(struct ntfs_index_record_entry);
 
     return EXIT_SUCCESS;
-}
-
-uint64_t ntfs_get_reference_int(struct ntfs_file_reference* ref)
-{
-    uint64_t ret = 0;
-    memcpy(&ret, ref->record_number, 6);
-    return ret;
 }
 
 int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
@@ -1511,74 +1447,14 @@ int ntfs_dispatch_index_allocation_attribute(uint8_t* data, uint64_t* offset,
     return EXIT_SUCCESS;
 }
 
-/* attribute dispatcher */
-int ntfs_attribute_dispatcher(uint8_t* data, uint64_t* offset, char** fname,
-                              struct ntfs_standard_attribute_header* sah,
-                              struct ntfs_boot_file* bootf,
-                              int64_t partition_offset,
-                              FILE* disk,
-                              bool extension)
+/* read attribute */
+int ntfs_read_attribute_header(uint8_t* data, uint64_t* offset,
+                               struct ntfs_standard_attribute_header* sah)
 {
-    int ret = 1;
-    uint64_t old_offset = *offset;
-    
-    if (*fname)
-        fprintf(stdout, "%s\n", *fname);
+    memcpy(sah, &(data[*offset]), sizeof(*sah));
+    *offset += sizeof(*sah);
 
-    if (sah->attribute_type == 0x30)
-    {
-        fprintf_light_yellow(stdout, "Dispatching file name attribute.\n");
-           ret = -1;
-        fprintf(stdout, "dispatched file name: %s\n", *fname);
-    }
-    else if (sah->attribute_type == 0x80 && *fname)
-    {
-        fprintf_light_yellow(stdout, "Dispatching data attribute.\n");
-        fprintf(stdout, "with fname: %s\n", *fname);
-        //if (ntfs_dispatch_data_attribute(data, offset, *fname, sah, bootf,
-        //                                 partition_offset, disk,
-        //                                 extension, NULL, true, NULL, false))
-        //    ret = -1;
-    }
-    else if (sah->attribute_type == 0x90 && *fname)
-    {
-        fprintf_light_yellow(stdout, "Dispatching index root attribute.\n");
-        /* TODO: fix this function */
-        //if (ntfs_dispatch_index_root_attribute(data, offset, *fname, sah,
-        //                                       bootf, partition_offset, disk,
-        //                                       extension))
-        //    ret = -1;
-    }
-    else if (sah->attribute_type == 0xA0 && *fname)
-    {
-        fprintf_light_yellow(stdout, "Dispatching index allocation "
-                                     "attribute.\n");
-        //if (ntfs_dispatch_index_allocation_attribute(data, offset, *fname,
-        //                                             sah, bootf,
-        //                                             partition_offset, disk,
-        //                                             extension))
-        //    ret = -1;
-    }
-    else if (sah->attribute_type == 0x10)
-    {
-        fprintf_light_yellow(stdout, "Dispatching standard information "
-                                     "attribute.\n");
-        if (ntfs_dispatch_standard_information_attribute(data, offset, *fname,
-                                                         sah))
-            ret = -1;
-    }
-    else
-    {
-        fprintf_light_yellow(stdout, "Dispatching unhandled attribute.\n");
-    }
-
-    *offset = old_offset + sah->length - sizeof(*sah);
-
-    if (*((int32_t*) &(data[*offset])) == -1)
-        ret = 0;
-
-    fprintf_light_red(stdout, "returning %d\n", ret);
-    return ret;
+    return EXIT_SUCCESS; 
 }
 
 int ntfs_get_attribute(uint8_t* data, void* attr, uint64_t* offset,
@@ -1631,108 +1507,6 @@ int ntfs_get_attribute(uint8_t* data, void* attr, uint64_t* offset,
     fprintf_light_red(stdout, "Failed to find attribute %d [%s].\n",
                               type, name);
     return EXIT_FAILURE;
-}
-
-int ntfs_serialize_fs(struct ntfs_boot_file* bootf, struct bitarray* bits,
-                      int64_t partition_offset, uint32_t pte_num,
-                      char* mount_point, FILE* serializedf)
-{
-    int32_t num_block_groups = 0;
-    int32_t num_files = -1;
-    struct bson_info* serialized;
-    struct bson_info* sectors;
-    struct bson_kv value;
-    uint64_t block_size = bootf->bytes_per_sector;
-    uint64_t blocks_per_group = bootf->sectors_per_cluster;
-    uint64_t inode_size = ntfs_file_record_size(bootf);
-    uint64_t inodes_per_group = (blocks_per_group * block_size) / inode_size; 
-
-    serialized = bson_init();
-    sectors = bson_init();
-
-    value.type = BSON_STRING;
-    value.size = strlen("fs");
-    value.key = "type";
-    value.data = "fs";
-
-    bson_serialize(serialized, &value);
-
-    value.type = BSON_INT32;
-    value.key = "pte_num";
-    value.data = &(pte_num);
-
-    bson_serialize(serialized, &value);
-
-    value.type = BSON_STRING;
-    value.size = strlen("ntfs");
-    value.key = "fs";
-    value.data = "ntfs";
-
-    bson_serialize(serialized, &value);
-
-    value.type = BSON_STRING;
-    value.key = "mount_point";
-    value.size = strlen(mount_point);
-    value.data = mount_point;
-
-    bson_serialize(serialized, &value);
-
-    value.type = BSON_INT32;
-    value.key = "num_block_groups";
-    value.data = &(num_block_groups);
-
-    bson_serialize(serialized, &value);
-
-    value.type = BSON_INT32;
-    value.key = "num_files";
-    value.data = &(num_files);
-
-    bson_serialize(serialized, &value);
-
-    value.type = BSON_INT64;
-    value.key = "superblock_sector";
-    partition_offset /= SECTOR_SIZE;
-    value.data = &(partition_offset);
-
-    bson_serialize(serialized, &value);
-
-    value.type = BSON_INT64;
-    value.key = "superblock_offset";
-    partition_offset %= SECTOR_SIZE;
-    value.data = &(partition_offset);
-
-    bson_serialize(serialized, &value);
-
-    value.type = BSON_INT64;
-    value.key = "block_size";
-    value.data = &(block_size);
-
-    bson_serialize(serialized, &value);
-
-    value.type = BSON_INT64;
-    value.key = "blocks_per_group";
-    value.data = &(blocks_per_group);
-
-    bson_serialize(serialized, &value);
-    
-    value.type = BSON_INT64;
-    value.key = "inodes_per_group";
-    value.data = &(inodes_per_group);
-
-    bson_serialize(serialized, &value);
-    
-    value.type = BSON_INT64;
-    value.key = "inode_size";
-    value.data = &(inode_size);
-
-    bson_serialize(serialized, &value);
-
-    bson_finalize(serialized);
-    bson_writef(serialized, serializedf);
-    bson_cleanup(sectors);
-    bson_cleanup(serialized);
-
-    return EXIT_SUCCESS;
 }
 
 int ntfs_serialize_file_record(FILE* disk, struct ntfs_boot_file* bootf,
@@ -1954,4 +1728,29 @@ int ntfs_serialize_fs_tree(FILE* disk, struct ntfs_boot_file* bootf,
         free(mft);
 
     return EXIT_SUCCESS;
+}
+
+int ntfs_serialize(FILE* disk, struct fs* fs, FILE* serializef)
+{
+    struct ntfs_boot_file* ntfs_bootf = (struct ntfs_boot_file*) fs->fs_info;
+
+    if (ntfs_serialize_fs(ntfs_bootf, fs->bits, fs->pt_off, fs->pte, "/",
+                          serializef))
+    {
+        fprintf_light_red(stderr, "Error writing serialized fs "
+                                  "entry.\n");
+        return -1;
+    }
+
+    ntfs_serialize_fs_tree(disk, ntfs_bootf, fs->bits, fs->pt_off, "/",
+                           serializef);
+    return 0;
+}
+
+int ntfs_cleanup(struct fs* fs)
+{
+    if (fs->fs_info)
+        free(fs->fs_info);
+
+    return 0;
 }

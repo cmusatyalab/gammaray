@@ -28,8 +28,11 @@
 #include <string.h>
 
 #include "bson.h"
+#include "color.h"
 #include "mbr.h"
 #include "util.h"
+
+#define SECTOR_SIZE 512
 
 char* MBR_PT_LUT[] = { "Empty","","","","","Extended","","HPFS/NTFS","","","","W95 FAT32","","","","", /* 0x00 - 0x0f */
                        "","","","","","","","","","","","","","","","", /* 0x10 - 0x1f */
@@ -255,6 +258,13 @@ int mbr_serialize_mbr(struct disk_mbr mbr, struct bitarray* bits,
     return ret;
 }
 
+int mbr_get_partition_table_entry(struct disk_mbr mbr, int pte_num,
+                                  struct partition_table_entry* pte)
+{
+    memcpy(pte, &mbr.pt[pte_num], sizeof(struct partition_table_entry));
+    return 0;
+}
+
 int mbr_serialize_partition(uint32_t pte_num, struct disk_mbr mbr,
                             FILE* serializef)
 {
@@ -307,11 +317,4 @@ int mbr_serialize_partition(uint32_t pte_num, struct disk_mbr mbr,
     bson_cleanup(serialized);
      
     return ret;
-}
-
-int mbr_get_partition_table_entry(struct disk_mbr mbr, int pte_num,
-                                  struct partition_table_entry* pte)
-{
-    memcpy(pte, &mbr.pt[pte_num], sizeof(struct partition_table_entry));
-    return 0;
 }

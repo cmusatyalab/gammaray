@@ -25,18 +25,9 @@
 #ifndef __GAMMARAY_DISK_CRAWLER_EXT4_H
 #define __GAMMARAY_DISK_CRAWLER_EXT4_H
 
-/* Some struct definitions from Linux Kernel Source: http://goo.gl/dyM8I */
-
-#include <inttypes.h>
-#include <stdint.h>
-#include <stdio.h>
-
-#include "bitarray.h"
 #include "gray-crawler.h"
 
-#define SECTOR_SIZE 512
-#define EXT4_SUPERBLOCK_OFFSET 1024
-
+/* Some struct definitions from Linux Kernel Source: http://goo.gl/dyM8I */
 struct ext4_superblock
 {
     uint32_t s_inodes_count;
@@ -184,15 +175,6 @@ struct ext4_inode
     uint32_t i_version_hi;
 } __attribute__((packed));
 
-struct ext4_dir_entry
-{
-    uint32_t inode;     /* 4 bytes */
-    uint16_t rec_len;   /* 6 bytes */
-    uint8_t name_len;   /* 7 bytes */
-    uint8_t file_type;  /* 8 bytes */
-    uint8_t name[255];  /* 263 bytes */
-} __attribute__((packed));
-
 struct ext4_extent_header
 {
     uint16_t eh_magic;
@@ -202,14 +184,6 @@ struct ext4_extent_header
     uint32_t eh_generation;
 } __attribute__((packed));
 
-struct ext4_extent_idx
-{
-    uint32_t ei_block;
-    uint32_t ei_leaf_lo;
-    uint16_t ei_leaf_hi;
-    uint16_t ei_unused;
-};
-
 struct ext4_extent
 {
     uint32_t ee_block;
@@ -218,55 +192,23 @@ struct ext4_extent
     uint32_t ee_start_lo;
 };
 
-uint64_t ext4_extent_start(struct ext4_extent extent);
-uint64_t ext4_extent_index_leaf(struct ext4_extent_idx idx);
-uint64_t ext4_file_size(struct ext4_inode inode);
+struct ext4_extent_idx
+{
+    uint32_t ei_block;
+    uint32_t ei_leaf_lo;
+    uint16_t ei_leaf_hi;
+    uint16_t ei_unused;
+};
 
-int ext4_print_superblock(struct ext4_superblock superblock);
-int ext4_print_features(struct ext4_superblock* superblock);
-int ext4_print_block_group_descriptor(struct ext4_block_group_descriptor);
-int ext4_print_inode(struct ext4_inode);
-int ext4_print_dir_entries(uint8_t* bytes, uint32_t len);
-int simple_find(uint32_t inode_table_location,
-                FILE* disk, uint32_t inode, char* path_prefix);
 int ext4_probe(FILE* disk, struct fs* fs);
 int ext4_serialize(FILE* disk, struct fs* fs, FILE* serializef);
 int ext4_cleanup(struct fs* fs);
-int ext4_read_block(FILE* disk, int64_t partition_offset, 
-                    struct ext4_superblock superblock, uint64_t block_num, 
-                    uint8_t* buf);
-int ext4_read_dir_entry(uint8_t* buf, struct ext4_dir_entry* dir);
-int ext4_print_block(uint8_t* buf, uint32_t block_size);
-uint64_t ext4_block_size(struct ext4_superblock superblock);
-int ext4_print_sectormap(FILE* disk, int64_t partition_offset,
-                         struct ext4_superblock superblock);
-int64_t ext4_sector_from_block(uint64_t block, struct ext4_superblock super,
-                               int64_t partition_offset);
-char* ext4_last_mount_point(struct ext4_superblock* superblock);
-uint64_t ext4_s_blocks_count(struct ext4_superblock superblock);
 uint64_t ext4_bgd_block_bitmap(struct ext4_block_group_descriptor bgd);
 uint64_t ext4_bgd_inode_bitmap(struct ext4_block_group_descriptor bgd);
 uint64_t ext4_bgd_inode_table(struct ext4_block_group_descriptor bgd);
-int ext4_serialize_fs(struct ext4_superblock* superblock, int64_t offset,
-                      int32_t pte_num, struct bitarray* bits,
-                      char* mount_point, FILE* serializef);
-int ext4_serialize_bgds(FILE* disk, int64_t partition_offset,
-                        struct ext4_superblock* superblock,
-                        struct bitarray* bits, FILE* serializef,
-                        uint8_t* bcache);
-int ext4_serialize_fs_tree(FILE* disk, int64_t partition_offset,
-                           struct ext4_superblock* superblock,
-                           struct bitarray* bits, char* prefix,
-                           FILE* serializef, uint8_t* icache,
-                           uint8_t* bcache);
-int ext4_serialize_journal(FILE* disk, int64_t partition_offset,
-                            struct ext4_superblock* superblock,
-                            struct bitarray* bits, char* mount,
-                            FILE* serializef, uint8_t* icache,
-                            uint8_t* bcache);
-int ext4_cache_bgds(FILE* disk, int64_t partition_offset,
-                    struct ext4_superblock* superblock, uint8_t** cache);
-int ext4_cache_inodes(FILE* disk, int64_t partition_offset,
-                      struct ext4_superblock* superblock, uint8_t** cache,
-                      uint8_t* bcache);
+uint64_t ext4_block_size(struct ext4_superblock superblock);
+uint64_t ext4_extent_index_leaf(struct ext4_extent_idx idx);
+uint64_t ext4_extent_start(struct ext4_extent extent);
+uint64_t ext4_file_size(struct ext4_inode inode);
+uint64_t ext4_s_blocks_count(struct ext4_superblock superblock);
 #endif
