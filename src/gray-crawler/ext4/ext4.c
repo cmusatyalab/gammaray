@@ -24,12 +24,6 @@
  *****************************************************************************/
 #define _FILE_OFFSET_BITS 64
 
-#include "bson.h"
-#include "gray-crawler.h"
-#include "mbr.h"
-#include "ext4.h"
-#include "util.h"
-
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
@@ -37,6 +31,13 @@
 
 #include <sys/stat.h> 
 #include <sys/types.h>
+
+#include "bson.h"
+#include "color.h"
+#include "gray-crawler.h"
+#include "mbr.h"
+#include "ext4.h"
+#include "util.h"
 
 /* for s_flags */
 #define EXT2_FLAGS_TEST_FILESYS                 0x0004
