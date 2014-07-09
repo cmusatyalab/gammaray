@@ -31,6 +31,7 @@
 
 #include "bitarray.h"
 #include "bson.h"
+#include "gray-crawler.h"
 
 enum NTFS_ATTRIBUTE_TYPE
 {

@@ -24,6 +24,7 @@
 #ifndef __GAMMARAY_GRAY_CRAWLER_H
 #define __GAMMARAY_GRAY_CRAWLER_H
 
+#include <stdint.h>
 #include <stdio.h>
 
 #define GRAY_FS(NAME) { #NAME, NAME ## _probe, NAME ## _serialize, NAME ## \
