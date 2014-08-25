@@ -1,7 +1,7 @@
 /*****************************************************************************
  * nbd-test.c                                                                *
  *                                                                           *
- * This file contains a NBD test server based on a host file.                *
+ * This file contains a NBD <--> Redis test server.                          *
  *                                                                           *
  *                                                                           *
  *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
@@ -29,8 +29,8 @@
 #include "color.h"
 #include "nbd.h"
 
-#define USAGE "%s <export name> <export file> <NBD Bind IP> <NBD Port> " \
-              "<Old Handshake y|n>\n"
+#define USAGE "%s <export name> <Redis IP> <Redis port> <Redis DB> " \
+"<Export Size> <NBD Bind IP> <NBD Port> <Old Handshake y|n>\n"
 
 struct nbd_handle
 {
@@ -51,18 +51,19 @@ int main(int argc, char* argv[])
 {
     struct nbd_handle* handle;
    
-    if (argc < 6)
+    if (argc < 9)
     {
         fprintf_light_red(stderr, USAGE, argv[0]);
         exit(EXIT_FAILURE);
     }
 
-    fprintf_blue(stdout, "nbd-test program by: Wolfgang Richter "
+    fprintf_blue(stdout, "nbd-queuer-test program by: Wolfgang Richter "
                          "<wolf@cs.cmu.edu>\n");
 
-    handle = nbd_init_file(argv[1], argv[2], argv[3], argv[4],
-                          (strncmp(argv[5], "y", 1) == 0) ||
-                          (strncmp(argv[5], "Y", 1) == 0));
+    handle = nbd_init_redis(argv[1], argv[2], atoi(argv[3]), atoi(argv[4]),
+                            atoll(argv[5]), argv[6], argv[7],
+                            (strncmp(argv[8], "y", 1) == 0) ||
+                            (strncmp(argv[8], "Y", 1) == 0));
 
     assert(handle != NULL);
     assert(handle->fd != 0);
@@ -77,6 +78,6 @@ int main(int argc, char* argv[])
     nbd_run_loop(handle);
     nbd_shutdown(handle);
 
-    fprintf_light_green(stdout, "-- Passed all tests --\n");
+    fprintf_green(stdout, "-- Shutting down --\n");
     return EXIT_SUCCESS;
 }
