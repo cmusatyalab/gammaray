@@ -16,7 +16,7 @@ although they should be similar for most distributions of Linux.
 2. Follow the [installation procedure](#installing-gammaray) for gammaray
 
 3. Follow the [example](#example-creation-of-gammaray-supported-disk-layout)
-   virtul disk creation instructions
+   virtual disk creation instructions
 
 4. Follow the [instructions](#gammaray-pipeline) for running the gammaray
    pipeline
