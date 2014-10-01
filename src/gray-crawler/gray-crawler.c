@@ -36,6 +36,13 @@
 #include "mbr.h"
 #include "ntfs.h"
 
+/* support multiple partition table types */
+struct gray_fs_pt_crawler pt_crawlers[] = {
+    //GRAY_FS_GPT(gpt), TODO
+    GRAY_PT(mbr),
+    {NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL} /* guard value */
+};
+
 /* supported file system serializers */
 struct gray_fs_crawler crawlers[] = {
     GRAY_FS(ext4),
@@ -61,10 +68,12 @@ void cleanup(FILE* disk, FILE* serializef, struct bitarray* bits)
 int main(int argc, char* args[])
 {
     FILE* disk = NULL, *serializef = NULL;
+    struct gray_fs_pt_crawler* pt_crawler;
     struct gray_fs_crawler* crawler;
     struct bitarray* bits = NULL;
     struct stat fstats;
-    struct disk_mbr mbr;
+    struct pt ptdata;
+    struct pte ptedata;
     struct fs fsdata;
     bool present;
     int i;
@@ -101,15 +110,39 @@ int main(int argc, char* args[])
         return EXIT_FAILURE;
     }
 
-    /* pull MBR info */
-    if (mbr_parse_mbr(disk, &mbr))
+    /* pull MBR/partition table info */
+    pt_crawler = pt_crawlers;
+    present = false;
+
+    while (pt_crawler->pt_name && !present)
+    {
+
+        fprintf_white(stdout, "\nProbing for %s... ",
+                              pt_crawler->pt_name);
+
+        if (pt_crawler->probe(disk, &ptdata))
+        {
+
+            fprintf_white(stdout, "not found.\n");
+        }
+        else
+        {
+            pt_crawler->print(ptdata);
+            present = true;
+            fprintf_light_white(stdout, "found %s partition table!\n",
+                                        pt_crawler->pt_name);
+            break;
+        }
+
+        pt_crawler++;
+    }
+    
+    if (!present)
     {
         cleanup(disk, serializef, bits);
-        fprintf_light_red(stderr, "Error reading MBR from disk. Aborting\n");
+        fprintf_light_red(stderr, "Error reading PT from disk. Aborting.\n");
         return EXIT_FAILURE;
     }
-
-    mbr_print_mbr(mbr);
 
     if (fstat(fileno(disk), &fstats))
     {
@@ -127,17 +160,19 @@ int main(int argc, char* args[])
         return EXIT_FAILURE;
     }
 
-    if (mbr_serialize_mbr(mbr, bits, serializef))
+    if (pt_crawler->serialize_pt(ptdata, bits, serializef))
     {
         cleanup(disk, serializef, bits);
-        fprintf_light_red(stderr, "Error serializing MBR.\n");
+        fprintf_light_red(stderr, "Error serializing PT.\n");
         return EXIT_FAILURE;
     }
 
-    for (i = 0; i < 4; i++) {
+    while (pt_crawler->get_next_partition(ptdata, &ptedata))
+    {
         fsdata = (struct fs) {i, 0, NULL, NULL, NULL};
 
-        fsdata.pt_off = mbr_partition_offset(mbr, i);
+        fsdata.pte = ptedata.pt_num;
+        fsdata.pt_off = ptedata.pt_off;
         fsdata.bits = bits;
 
         if (fsdata.pt_off > 0)
@@ -161,8 +196,9 @@ int main(int argc, char* args[])
 
                     present = true;
 
-                    if (mbr_serialize_partition(i, mbr, serializef))
+                    if (pt_crawler->serialize_pte(ptedata, serializef))
                     {
+                        pt_crawler->cleanup_pte(ptedata);
                         crawler->cleanup(&fsdata);
                         cleanup(disk, serializef, bits);
                         fprintf_light_red(stderr, "Error serializing "
@@ -172,6 +208,7 @@ int main(int argc, char* args[])
                     
                     if (crawler->serialize(disk, &fsdata, serializef))
                     {
+                        pt_crawler->cleanup_pte(ptedata);
                         crawler->cleanup(&fsdata);
                         cleanup(disk, serializef, bits);
                         fprintf_light_red(stderr, "Error serializing "
@@ -180,6 +217,7 @@ int main(int argc, char* args[])
                     }
                 }
 
+                pt_crawler->cleanup_pte(ptedata);
                 crawler->cleanup(&fsdata);
                 
                 crawler++;
@@ -188,6 +226,7 @@ int main(int argc, char* args[])
     }
 
     bitarray_serialize(bits, serializef);
+    pt_crawler->cleanup_pt(ptdata);
     cleanup(disk, serializef, bits);
     return EXIT_SUCCESS;
 }

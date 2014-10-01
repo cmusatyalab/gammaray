@@ -155,50 +155,52 @@ int mbr_print_partition(struct partition_table_entry pte)
     return 0;
 }
 
-int mbr_print_mbr(struct disk_mbr mbr)
+void mbr_print(struct pt pt)
 {
+    struct disk_mbr* mbr = (struct disk_mbr*) pt.pt_info;
     fprintf_light_cyan(stdout, "\n\nAnalyzing Boot Sector\n");
 
     /* Taking apart according to Wikipedia:            
      * http://en.wikipedia.org/wiki/Master_boot_record */
     fprintf_yellow(stdout, "Disk Signature [optional]: 0x%.8"PRIx32"\n",
-                            mbr.disk_signature);
+                            mbr->disk_signature);
 
     fprintf_yellow(stdout, "Position 444 [0x0000]: 0x%.4"PRIx16"\n",
-                           mbr.reserved);
+                           mbr->reserved);
     
-    if (mbr.signature[0] == 0x55 && mbr.signature[1] == 0xaa)
+    if (mbr->signature[0] == 0x55 && mbr->signature[1] == 0xaa)
     {
         fprintf_light_green(stdout, "Verifying MBR Signature [0x55 0xaa]: "
                                     "0x%.2"PRIx8" 0x%.2"
                                     PRIx8"\n\n",
-                                    mbr.signature[0],
-                                    mbr.signature[1]);
+                                    mbr->signature[0],
+                                    mbr->signature[1]);
     }
     else
     {
         fprintf_light_red(stdout, "Verifying MBR Signature [0x55 0xaa]: 0x%.2"
                                   PRIx8" 0x%.2"PRIx8"\n\n",
-                                  mbr.signature[0],
-                                  mbr.signature[1]);
-        return -1; 
+                                  mbr->signature[0],
+                                  mbr->signature[1]);
     }
 
     /* read all 4 partition table entries */
     fprintf_light_yellow(stdout, "\nChecking partition table entry 0.\n");
-    mbr_print_partition(mbr.pt[0]);
+    mbr_print_partition(mbr->pt[0]);
     fprintf_light_yellow(stdout, "\nChecking partition table entry 1.\n");
-    mbr_print_partition(mbr.pt[1]);
+    mbr_print_partition(mbr->pt[1]);
     fprintf_light_yellow(stdout, "\nChecking partition table entry 2.\n");
-    mbr_print_partition(mbr.pt[2]);
+    mbr_print_partition(mbr->pt[2]);
     fprintf_light_yellow(stdout, "\nChecking partition table entry 3.\n");
-    mbr_print_partition(mbr.pt[3]);
-
-    return 0;
+    mbr_print_partition(mbr->pt[3]);
 }
 
-int mbr_parse_mbr(FILE* disk, struct disk_mbr* mbr)
+int mbr_probe(FILE* disk, struct pt* pt)
 {
+    struct disk_mbr* mbr;
+    pt->pt_info = malloc(sizeof(struct disk_mbr));
+    mbr = (struct disk_mbr*) pt->pt_info;
+
     if (fread(mbr, 1, sizeof(struct disk_mbr), disk) < sizeof(struct disk_mbr))
     {
         fprintf_light_red(stderr, "Error reading MBR from raw disk file.\n");
@@ -217,15 +219,36 @@ int mbr_parse_mbr(FILE* disk, struct disk_mbr* mbr)
     return 0;
 }
 
-int mbr_serialize_mbr(struct disk_mbr mbr, struct bitarray* bits,
-                      FILE* serializef)
+int mbr_cleanup_pt(struct pt pt)
+{
+    if (pt.pt_info)
+    {
+        free(pt.pt_info);
+    }
+
+    return 0;
+}
+
+int mbr_cleanup_pte(struct pte pte)
+{
+    if (pte.pte_info)
+    {
+        free(pte.pte_info);
+    }
+
+    return 0;
+}
+
+int mbr_serialize_pt(struct pt pt, struct bitarray* bits,
+                     FILE* serializef)
 {
     struct bson_info* serialized;
     struct bson_kv value;
+    struct disk_mbr* mbr = (struct disk_mbr*) pt.pt_info;
     bool has_gpt = false;
     int ret, sector = 0;
 
-    if (mbr.pt[0].partition_type == 0xee)
+    if (mbr->pt[0].partition_type == 0xee)
         has_gpt = true;
 
     serialized = bson_init();
@@ -258,26 +281,44 @@ int mbr_serialize_mbr(struct disk_mbr mbr, struct bitarray* bits,
     return ret;
 }
 
-int mbr_get_partition_table_entry(struct disk_mbr mbr, int pte_num,
-                                  struct partition_table_entry* pte)
+bool mbr_get_next_partition(struct pt pt, struct pte* pte)
 {
-    memcpy(pte, &mbr.pt[pte_num], sizeof(struct partition_table_entry));
-    return 0;
+    struct disk_mbr* mbr = (struct disk_mbr*) pt.pt_info;
+    struct partition_table_entry* entry = (struct partition_table_entry*)
+                                  malloc(sizeof(struct partition_table_entry));
+    static int pte_num = 0;
+
+    if (pte_num < 4)
+    {
+        memcpy(entry, &mbr->pt[pte_num], sizeof(struct partition_table_entry));
+        pte->pt_num = pte_num;
+        pte->pt_off = entry->first_sector_lba * SECTOR_SIZE;
+        pte->pte_info = (void*) entry;
+        pte_num++;
+    }
+    else
+    {
+        if (entry)
+            free(entry);
+        return false;
+    }
+
+    return true;
 }
 
-int mbr_serialize_partition(uint32_t pte_num, struct disk_mbr mbr,
-                            FILE* serializef)
+int mbr_serialize_pte(struct pte pt_pte,
+                      FILE* serializef)
 {
     struct bson_info* serialized;
     struct bson_kv value;
-    struct partition_table_entry pte;
+    struct partition_table_entry* pte = 
+                             (struct partition_table_entry *) pt_pte.pte_info;
     int32_t partition_type;
     int32_t final_sector;
     int ret;
 
-    mbr_get_partition_table_entry(mbr, pte_num, &pte);
-    partition_type = pte.partition_type;
-    final_sector = pte.first_sector_lba + pte.sector_count;
+    partition_type = pte->partition_type;
+    final_sector = pte->first_sector_lba + pte->sector_count;
 
     serialized = bson_init();
 
@@ -290,7 +331,7 @@ int mbr_serialize_partition(uint32_t pte_num, struct disk_mbr mbr,
 
     value.type = BSON_INT32;
     value.key = "pte_num";
-    value.data = &pte_num;
+    value.data = &pt_pte.pt_num;
 
     bson_serialize(serialized, &value);
 
@@ -302,7 +343,7 @@ int mbr_serialize_partition(uint32_t pte_num, struct disk_mbr mbr,
 
     value.type = BSON_INT32;
     value.key = "first_sector_lba";
-    value.data = &(pte.first_sector_lba);
+    value.data = &(pte->first_sector_lba);
 
     bson_serialize(serialized, &value);
 
