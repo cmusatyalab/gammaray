@@ -2163,6 +2163,9 @@ int ext4_serialize(FILE* disk, struct fs* fs, FILE* serializef)
         return EXIT_FAILURE;
     }
 
+    fs->bcache = bcache;
+    fs->icache = icache;
+
     ext4_serialize_fs_tree(disk, fs->pt_off, ext4_superblock, fs->bits,
                            ext4_last_mount_point(ext4_superblock), serializef,
                            icache, bcache);
