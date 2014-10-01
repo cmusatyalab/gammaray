@@ -31,6 +31,7 @@
 #include <stdio.h>
 
 #include "bitarray.h"
+#include "gray-crawler.h"
 
 struct partition_table_entry
 {
@@ -51,11 +52,12 @@ struct disk_mbr
     uint8_t signature[2];
 }__attribute__((packed));
 
-int mbr_print_mbr(struct disk_mbr mbr);
-int mbr_parse_mbr(FILE* disk, struct disk_mbr* mbr);
-int64_t mbr_partition_offset(struct disk_mbr mbr, int pte);
-int mbr_serialize_mbr(struct disk_mbr mbr, struct bitarray* bits,
-                      FILE* serializef);
-int mbr_serialize_partition(uint32_t pte_num, struct disk_mbr mbr,
-                            FILE* serializef);
+int mbr_probe(FILE* disk, struct pt* pt);
+void mbr_print(struct pt pt);
+int mbr_serialize_pt(struct pt pt, struct bitarray* bits,
+                     FILE* serializef);
+int mbr_serialize_pte(struct pte pte, FILE* serializef);
+bool mbr_get_next_partition(struct pt pt, struct pte* pte);
+int mbr_cleanup_pt(struct pt pt);
+int mbr_cleanup_pte(struct pte pte);
 #endif
