@@ -111,8 +111,8 @@ int64_t mbr_partition_offset(struct disk_mbr mbr, int pte)
  * http://en.wikipedia.org/wiki/Master_boot_record */
 int mbr_print_partition(struct partition_table_entry pte)
 {
-    char size_buf[512];
-    memset(size_buf, 0x00, 512);
+    char size_buf[SECTOR_SIZE];
+    memset(size_buf, 0x00, SECTOR_SIZE);
 
     fprintf_blue(stdout, "Status [0x80 bootable, 0x00 non-bootable]: 0x%.2"
                          PRIx8"\n",
@@ -147,7 +147,8 @@ int mbr_print_partition(struct partition_table_entry pte)
     fprintf_green(stdout, "First Sector LBA: 0x%.8"
                     PRIx32"\n",
                     pte.first_sector_lba);
-    pretty_print_bytes((uint64_t) SECTOR_SIZE*pte.sector_count, size_buf, 512);
+    pretty_print_bytes((uint64_t) SECTOR_SIZE*pte.sector_count, size_buf,
+                       SECTOR_SIZE);
     fprintf_green(stdout, "Number of Sectors: 0x%.8"
                     PRIx32" (%s)\n",
                     pte.sector_count,
