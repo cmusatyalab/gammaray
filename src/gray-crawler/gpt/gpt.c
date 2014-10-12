@@ -34,8 +34,6 @@
 #include "gpt.h"
 #include "util.h"
 
-#define SECTOR_SIZE 512
-
 /* static int print_partition_type(uint8_t type) */
 /* { */
 /*     fprintf_light_magenta(stdout, "TODO\n"); */
@@ -107,7 +105,17 @@ void gpt_print(struct pt pt)
             gpt->first_usable_lba);
     fprintf_yellow(stdout, "Last Usable LBA: 0x%.16"PRIx64"\n",
             gpt->last_usable_lba);
-    fprintf_yellow(stdout, "TODO: uint8_t disk_guid[16]\n");
+    fprintf_yellow(stdout, "Disk GUID: "
+        "0x%.2"PRIx8"%.2"PRIx8"%.2"PRIx8"%.2"PRIx8
+        "%.2"PRIx8"%.2"PRIx8"%.2"PRIx8"%.2"PRIx8
+        "%.2"PRIx8"%.2"PRIx8"%.2"PRIx8"%.2"PRIx8
+        "%.2"PRIx8"%.2"PRIx8"%.2"PRIx8"%.2"PRIx8"\n",
+        gpt->disk_guid[0],gpt->disk_guid[1],gpt->disk_guid[2],
+        gpt->disk_guid[3],gpt->disk_guid[4],gpt->disk_guid[5],
+        gpt->disk_guid[6],gpt->disk_guid[7],gpt->disk_guid[8],
+        gpt->disk_guid[9],gpt->disk_guid[10],gpt->disk_guid[11],
+        gpt->disk_guid[12],gpt->disk_guid[13],gpt->disk_guid[14],
+        gpt->disk_guid[15]);
     fprintf_yellow(stdout, "Starting LBA partition entries: 0x%.16"PRIx64"\n",
             gpt->starting_lba_partition_entries);
     fprintf_yellow(stdout, "Number of partition entries: 0x%.8"PRIx32"\n",
