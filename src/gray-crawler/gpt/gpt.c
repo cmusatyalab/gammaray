@@ -60,6 +60,36 @@ int64_t gpt_partition_offset(struct disk_gpt gpt, int pte)
     return 0;
 }
 
+static void print_128_bit(uint8_t a[16]) {
+  fprintf_yellow(stdout, "0x%.2"PRIx8"%.2"PRIx8"%.2"PRIx8"%.2"PRIx8
+      "%.2"PRIx8"%.2"PRIx8"%.2"PRIx8"%.2"PRIx8
+      "%.2"PRIx8"%.2"PRIx8"%.2"PRIx8"%.2"PRIx8
+      "%.2"PRIx8"%.2"PRIx8"%.2"PRIx8"%.2"PRIx8,
+      a[0],a[1],a[2],a[3],a[4],a[5],a[6],a[7],a[8],
+      a[9],a[10],a[11],a[12],a[13],a[14],a[15]);
+}
+
+/* Prints GPT partiton according to Wikipedia:
+ * http://en.wikipedia.org/wiki/GUID_Partition_Table */
+static void gpt_partition_print(struct gpt_partition_table_entry gpt_pe)
+{
+    fprintf_yellow(stdout, "\nChecking partition table entry.\n");
+    fprintf_green(stdout, "Partition type GUID: ");
+    print_128_bit(gpt_pe.partition_type_guid);
+    fprintf_green(stdout, "\n");
+    fprintf_green(stdout, "Unique partition GUID: ");
+    print_128_bit(gpt_pe.unique_partition_guid);
+    fprintf_green(stdout, "\n");
+    fprintf_green(stdout, "First LBA: 0x%.16"PRIx64"\n",
+        gpt_pe.first_lba);
+    fprintf_green(stdout, "Last LBA: 0x%.16"PRIx64"\n",
+        gpt_pe.last_lba);
+    fprintf_green(stdout, "Attribute Flags: 0x%.16"PRIx64"\n",
+        gpt_pe.attribute_flags);
+    fprintf_green(stdout, "Partition Name: %s\n",
+        gpt_pe.partition_name);
+}
+
 /* Prints GPT according to Wikipedia:
  * http://en.wikipedia.org/wiki/GUID_Partition_Table */
 void gpt_print(struct pt pt)
@@ -105,17 +135,9 @@ void gpt_print(struct pt pt)
             gpt->first_usable_lba);
     fprintf_yellow(stdout, "Last Usable LBA: 0x%.16"PRIx64"\n",
             gpt->last_usable_lba);
-    fprintf_yellow(stdout, "Disk GUID: "
-        "0x%.2"PRIx8"%.2"PRIx8"%.2"PRIx8"%.2"PRIx8
-        "%.2"PRIx8"%.2"PRIx8"%.2"PRIx8"%.2"PRIx8
-        "%.2"PRIx8"%.2"PRIx8"%.2"PRIx8"%.2"PRIx8
-        "%.2"PRIx8"%.2"PRIx8"%.2"PRIx8"%.2"PRIx8"\n",
-        gpt->disk_guid[0],gpt->disk_guid[1],gpt->disk_guid[2],
-        gpt->disk_guid[3],gpt->disk_guid[4],gpt->disk_guid[5],
-        gpt->disk_guid[6],gpt->disk_guid[7],gpt->disk_guid[8],
-        gpt->disk_guid[9],gpt->disk_guid[10],gpt->disk_guid[11],
-        gpt->disk_guid[12],gpt->disk_guid[13],gpt->disk_guid[14],
-        gpt->disk_guid[15]);
+    fprintf_yellow(stdout, "Disk GUID: ");
+    print_128_bit(gpt->disk_guid);
+    fprintf_yellow(stdout, "\n");
     fprintf_yellow(stdout, "Starting LBA partition entries: 0x%.16"PRIx64"\n",
             gpt->starting_lba_partition_entries);
     fprintf_yellow(stdout, "Number of partition entries: 0x%.8"PRIx32"\n",
@@ -124,6 +146,13 @@ void gpt_print(struct pt pt)
             gpt->partition_entry_size);
     fprintf_yellow(stdout, "CRC32 of partition array: 0x%.8"PRIx32"\n",
             gpt->crc32_partition_array);
+
+    /* Read all partition table entries */
+    struct gpt_partition_table_entry* cur_pt = gpt->pt;
+    while (!(cur_pt->first_lba == 0x0 && cur_pt->last_lba == 0x0)) {
+      gpt_partition_print(*cur_pt);
+      cur_pt++;
+    }
 }
 
 int gpt_probe(FILE* disk, struct pt* pt)
