@@ -110,7 +110,7 @@ int64_t mbr_partition_offset(struct disk_mbr mbr, int pte)
 
 /* prints partition entry according to Wikipedia:
  * http://en.wikipedia.org/wiki/Master_boot_record */
-int mbr_print_partition(struct partition_table_entry pte)
+int mbr_print_partition(struct mbr_partition_table_entry pte)
 {
     char size_buf[SECTOR_SIZE];
     memset(size_buf, 0x00, SECTOR_SIZE);
@@ -287,13 +287,13 @@ int mbr_serialize_pt(struct pt pt, struct bitarray* bits,
 bool mbr_get_next_partition(struct pt pt, struct pte* pte)
 {
     struct disk_mbr* mbr = (struct disk_mbr*) pt.pt_info;
-    struct partition_table_entry* entry = (struct partition_table_entry*)
-                                  malloc(sizeof(struct partition_table_entry));
+    struct mbr_partition_table_entry* entry = (struct mbr_partition_table_entry*)
+                                  malloc(sizeof(struct mbr_partition_table_entry));
     static int pte_num = 0;
 
     if (pte_num < 4)
     {
-        memcpy(entry, &mbr->pt[pte_num], sizeof(struct partition_table_entry));
+        memcpy(entry, &mbr->pt[pte_num], sizeof(struct mbr_partition_table_entry));
         pte->pt_num = pte_num;
         pte->pt_off = entry->first_sector_lba * SECTOR_SIZE;
         pte->pte_info = (void*) entry;
@@ -314,8 +314,8 @@ int mbr_serialize_pte(struct pte pt_pte,
 {
     struct bson_info* serialized;
     struct bson_kv value;
-    struct partition_table_entry* pte =
-                             (struct partition_table_entry *) pt_pte.pte_info;
+    struct mbr_partition_table_entry* pte =
+                             (struct mbr_partition_table_entry *) pt_pte.pte_info;
     int32_t partition_type;
     int32_t final_sector;
     int ret;
