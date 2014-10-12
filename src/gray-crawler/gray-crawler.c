@@ -120,6 +120,7 @@ int main(int argc, char* args[])
         fprintf_white(stdout, "\nProbing for %s... ",
                               pt_crawler->pt_name);
 
+        fseek(disk, SEEK_SET, 0);
         if (pt_crawler->probe(disk, &ptdata))
         {
 
