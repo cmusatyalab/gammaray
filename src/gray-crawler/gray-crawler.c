@@ -33,12 +33,13 @@
 #include "color.h"
 #include "ext4.h"
 #include "gray-crawler.h"
+#include "gpt.h"
 #include "mbr.h"
 #include "ntfs.h"
 
 /* support multiple partition table types */
 struct gray_fs_pt_crawler pt_crawlers[] = {
-    //GRAY_FS_GPT(gpt), TODO
+    GRAY_PT(gpt),
     GRAY_PT(mbr),
     {NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL} /* guard value */
 };
@@ -58,7 +59,7 @@ void cleanup(FILE* disk, FILE* serializef, struct bitarray* bits)
         fclose(disk);
 
     if (serializef)
-        fclose(serializef); 
+        fclose(serializef);
 
     if (bits)
         bitarray_destroy(bits);
@@ -84,7 +85,7 @@ int main(int argc, char* args[])
     if (argc < 3)
     {
         fprintf_light_red(stderr, "Usage: %s <raw disk file> "
-                                  "<BSON output file>\n", 
+                                  "<BSON output file>\n",
                                   args[0]);
         return EXIT_FAILURE;
     }
@@ -137,7 +138,7 @@ int main(int argc, char* args[])
 
         pt_crawler++;
     }
-    
+
     if (!present)
     {
         cleanup(disk, serializef, bits);
@@ -185,7 +186,7 @@ int main(int argc, char* args[])
 
                 fprintf_white(stdout, "\nProbing for %s... ",
                                       crawler->fs_name);
-                
+
                 if (crawler->probe(disk, &fsdata))
                 {
                     fprintf_white(stdout, "not found.\n");
@@ -206,7 +207,7 @@ int main(int argc, char* args[])
                                                   "partition entry.\n");
                         return EXIT_FAILURE;
                     }
-                    
+
                     if (crawler->serialize(disk, &fsdata, serializef))
                     {
                         pt_crawler->cleanup_pte(ptedata);
@@ -218,9 +219,9 @@ int main(int argc, char* args[])
                     }
                 }
 
-                pt_crawler->cleanup_pte(ptedata);
+                /* pt_crawler->cleanup_pte(ptedata); */
                 crawler->cleanup(&fsdata);
-                
+
                 crawler++;
             }
         }
