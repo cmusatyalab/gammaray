@@ -97,8 +97,25 @@ void gpt_print(struct pt pt)
     fprintf_light_cyan(stdout, "\n\nAnalyzing Primary GPT Header\n");
     struct disk_gpt* gpt = (struct disk_gpt*)
         (pt.pt_info + sizeof(struct disk_mbr));
-    fprintf_yellow(stdout, "Signature: 0x%.16"PRIx64"\n",
-                            gpt->signature);
+    fprintf_yellow(stdout, "Signature: 0x%.16"PRIx64"\n", gpt->signature);
+    fprintf_yellow(stdout, "Revision: 0x%.8"PRIx32"\n", gpt->revision);
+    fprintf_yellow(stdout, "Header Size: 0x%.8"PRIx32"\n", gpt->header_size);
+    fprintf_yellow(stdout, "Header CRC32: 0x%.8"PRIx32"\n", gpt->crc32_header);
+    fprintf_yellow(stdout, "Current LBA: 0x%.16"PRIx64"\n", gpt->current_lba);
+    fprintf_yellow(stdout, "Backup LBA: 0x%.16"PRIx64"\n", gpt->backup_lba);
+    fprintf_yellow(stdout, "First Usable LBA: 0x%.16"PRIx64"\n",
+            gpt->first_usable_lba);
+    fprintf_yellow(stdout, "Last Usable LBA: 0x%.16"PRIx64"\n",
+            gpt->last_usable_lba);
+    fprintf_yellow(stdout, "TODO: uint8_t disk_guid[16]\n");
+    fprintf_yellow(stdout, "Starting LBA partition entries: 0x%.16"PRIx64"\n",
+            gpt->starting_lba_partition_entries);
+    fprintf_yellow(stdout, "Number of partition entries: 0x%.8"PRIx32"\n",
+            gpt->num_partition_entries);
+    fprintf_yellow(stdout, "Size of a single partition entry: 0x%.8"PRIx32"\n",
+            gpt->partition_entry_size);
+    fprintf_yellow(stdout, "CRC32 of partition array: 0x%.8"PRIx32"\n",
+            gpt->crc32_partition_array);
 }
 
 int gpt_probe(FILE* disk, struct pt* pt)
