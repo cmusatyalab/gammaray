@@ -33,7 +33,7 @@
 #include "bitarray.h"
 #include "gray-crawler.h"
 
-struct partition_table_entry
+struct mbr_partition_table_entry
 {
     uint8_t status;
     uint8_t start_chs[3];
@@ -48,7 +48,7 @@ struct disk_mbr
     uint8_t code[440];
     uint32_t disk_signature;
     uint16_t reserved;
-    struct partition_table_entry pt[4];
+    struct mbr_partition_table_entry pt[4];
     uint8_t signature[2];
 }__attribute__((packed));
 
