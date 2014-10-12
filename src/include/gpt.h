@@ -37,7 +37,7 @@
 struct disk_gpt
 {
     // TODO
-    uint8_t signature[8];
+    uint64_t signature;
 }__attribute__((packed));
 
 int gpt_probe(FILE* disk, struct pt* pt);
