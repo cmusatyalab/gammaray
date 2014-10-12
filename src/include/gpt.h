@@ -24,8 +24,8 @@
  *   See the License for the specific language governing permissions and     *
  *   limitations under the License.                                          *
  *****************************************************************************/
-#ifndef __GAMMARAY_DISK_CRAWLER_gpt_H
-#define __GAMMARAY_DISK_CRAWLER_gpt_H
+#ifndef __GAMMARAY_DISK_CRAWLER_GPT_H
+#define __GAMMARAY_DISK_CRAWLER_GPT_H
 
 #include <inttypes.h>
 #include <stdint.h>
@@ -33,6 +33,16 @@
 
 #include "bitarray.h"
 #include "gray-crawler.h"
+
+struct gpt_partition_table_entry
+{
+    uint8_t partition_type_guid[16];
+    uint8_t unique_partition_guid[16];
+    uint64_t first_lba;
+    uint64_t last_lba;
+    uint64_t attribute_flags;
+    uint8_t partition_name[72];
+}__attribute__((packed));
 
 struct disk_gpt
 {
@@ -50,7 +60,9 @@ struct disk_gpt
     uint32_t num_partition_entries;
     uint32_t partition_entry_size;
     uint32_t crc32_partition_array;
-    void* reserved_2;
+    uint8_t reserved_2[420]; // 420 bytes for a sector size of 512 bytes;
+      // but can be more with larger sector sizes
+    struct gpt_partition_table_entry pt[128];
 }__attribute__((packed));
 
 int gpt_probe(FILE* disk, struct pt* pt);
