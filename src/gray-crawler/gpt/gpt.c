@@ -34,39 +34,18 @@
 #include "gpt.h"
 #include "util.h"
 
-/* static int print_partition_type(uint8_t type) */
-/* { */
-/*     fprintf_light_magenta(stdout, "TODO\n"); */
-/*     /1* fprintf_light_magenta(stdout, "Partition Type: %s\n", gpt_PT_LUT[type]); *1/ */
-/*     return -1; */
-/* } */
+#define SECTOR_SIZE 512
 
-/* static uint8_t get_sector(uint8_t byte) */
-/* { */
-/*     fprintf_light_magenta(stdout, "TODO\n"); */
-/*     return 0x3f & byte; /1* bits 5-0 in second byte of chs *1/ */
-/* } */
-
-/* static uint16_t get_cylinder(uint8_t bytes[2]) */
-/* { */
-/*     fprintf_light_magenta(stdout, "TODO\n"); */
-/*     return -1; */
-/* } */
-
-int64_t gpt_partition_offset(struct disk_gpt gpt, int pte)
-{
-    fprintf_light_magenta(stdout, "gpt_partition_offset\n");
-    fprintf_light_magenta(stdout, "TODO\n");
-    return 0;
-}
-
-static void print_128_bit(uint8_t a[16]) {
+static void print_guid(uint8_t a[16]) {
   fprintf_yellow(stdout, "0x%.2"PRIx8"%.2"PRIx8"%.2"PRIx8"%.2"PRIx8
-      "%.2"PRIx8"%.2"PRIx8"%.2"PRIx8"%.2"PRIx8
-      "%.2"PRIx8"%.2"PRIx8"%.2"PRIx8"%.2"PRIx8
+      "-%.2"PRIx8"%.2"PRIx8"-%.2"PRIx8"%.2"PRIx8
+      "-%.2"PRIx8"%.2"PRIx8"-%.2"PRIx8"%.2"PRIx8
       "%.2"PRIx8"%.2"PRIx8"%.2"PRIx8"%.2"PRIx8,
-      a[0],a[1],a[2],a[3],a[4],a[5],a[6],a[7],a[8],
-      a[9],a[10],a[11],a[12],a[13],a[14],a[15]);
+      a[3],a[2],a[1],a[0],
+      a[5],a[4],
+      a[7],a[6],
+      a[8],a[9],
+      a[10],a[11],a[12],a[13],a[14],a[15]);
 }
 
 /* Prints GPT partiton according to Wikipedia:
@@ -75,10 +54,10 @@ static void gpt_partition_print(struct gpt_partition_table_entry gpt_pe)
 {
     fprintf_yellow(stdout, "\nChecking partition table entry.\n");
     fprintf_green(stdout, "Partition type GUID: ");
-    print_128_bit(gpt_pe.partition_type_guid);
+    print_guid(gpt_pe.partition_type_guid);
     fprintf_green(stdout, "\n");
     fprintf_green(stdout, "Unique partition GUID: ");
-    print_128_bit(gpt_pe.unique_partition_guid);
+    print_guid(gpt_pe.unique_partition_guid);
     fprintf_green(stdout, "\n");
     fprintf_green(stdout, "First LBA: 0x%.16"PRIx64"\n",
         gpt_pe.first_lba);
@@ -86,7 +65,7 @@ static void gpt_partition_print(struct gpt_partition_table_entry gpt_pe)
         gpt_pe.last_lba);
     fprintf_green(stdout, "Attribute Flags: 0x%.16"PRIx64"\n",
         gpt_pe.attribute_flags);
-    fprintf_green(stdout, "Partition Name: %s\n",
+    fprintf_green(stdout, "Partition Name: '%s'\n",
         gpt_pe.partition_name);
 }
 
@@ -94,8 +73,6 @@ static void gpt_partition_print(struct gpt_partition_table_entry gpt_pe)
  * http://en.wikipedia.org/wiki/GUID_Partition_Table */
 void gpt_print(struct pt pt)
 {
-    fprintf_light_magenta(stdout, "gpt_print\n"); // TODO: Remove.
-
     struct disk_mbr* mbr = (struct disk_mbr*) pt.pt_info;
 
     fprintf_light_cyan(stdout, "\n\nAnalyzing Protective MBR Header\n");
@@ -136,7 +113,7 @@ void gpt_print(struct pt pt)
     fprintf_yellow(stdout, "Last Usable LBA: 0x%.16"PRIx64"\n",
             gpt->last_usable_lba);
     fprintf_yellow(stdout, "Disk GUID: ");
-    print_128_bit(gpt->disk_guid);
+    print_guid(gpt->disk_guid);
     fprintf_yellow(stdout, "\n");
     fprintf_yellow(stdout, "Starting LBA partition entries: 0x%.16"PRIx64"\n",
             gpt->starting_lba_partition_entries);
@@ -157,7 +134,6 @@ void gpt_print(struct pt pt)
 
 int gpt_probe(FILE* disk, struct pt* pt)
 {
-    fprintf_light_magenta(stdout, "gpt_probe\n"); // TODO: Remove.
     pt->pt_info = malloc(sizeof(struct disk_mbr) + sizeof(struct disk_gpt));
     struct disk_mbr* mbr = (struct disk_mbr*) pt->pt_info;
 
@@ -196,37 +172,123 @@ int gpt_probe(FILE* disk, struct pt* pt)
 
 int gpt_cleanup_pt(struct pt pt)
 {
-    fprintf_light_magenta(stdout, "gpt_cleanup_pt\n");
-    fprintf_light_magenta(stdout, "TODO\n");
+    if (pt.pt_info)
+    {
+        free(pt.pt_info);
+    }
     return 0;
 }
 
 int gpt_cleanup_pte(struct pte pte)
 {
-    fprintf_light_magenta(stdout, "gpt_cleanup_pte\n");
-    fprintf_light_magenta(stdout, "TODO\n");
+    if (pte.pte_info)
+    {
+        free(pte.pte_info);
+    }
     return 0;
+}
+
+bool gpt_get_next_partition(struct pt pt, struct pte* pte)
+{
+    static struct gpt_partition_table_entry* cur_pt = 0;
+    static uint32_t pt_num = 1;
+
+    if (!cur_pt) {
+      struct disk_gpt* gpt = (struct disk_gpt*)
+        (pt.pt_info + sizeof(struct disk_mbr));
+      cur_pt = gpt->pt;
+    }
+
+    if (!(cur_pt->first_lba == 0x0 && cur_pt->last_lba == 0x0))
+    {
+        struct gpt_partition_table_entry* e = (struct gpt_partition_table_entry*)
+          malloc(sizeof(struct gpt_partition_table_entry));
+        memcpy(e, cur_pt, sizeof(struct gpt_partition_table_entry));
+        pte->pt_num = pt_num;
+        pte->pt_off = e->first_lba * SECTOR_SIZE;
+        pte->pte_info = (void*) e;
+        cur_pt++;
+        pt_num++;
+    }
+    else
+    {
+        return false;
+    }
+
+    return true;
 }
 
 int gpt_serialize_pt(struct pt pt, struct bitarray* bits,
                      FILE* serializef)
 {
-    fprintf_light_magenta(stdout, "gpt_serialize_pt\n");
-    fprintf_light_magenta(stdout, "TODO\n");
-    return -1;
+    struct bson_info* serialized;
+    struct bson_kv value;
+    /* struct disk_mbr* mbr = (struct disk_mbr*) pt.pt_info; */
+    /* struct disk_gpt* gpt = (struct disk_gpt*) */
+    /*   (pt.pt_info + sizeof(struct disk_mbr)); */
+    int ret = 0;
+
+    serialized = bson_init();
+
+    value.type = BSON_STRING;
+    value.size = strlen("gpt");
+    value.key = "type";
+    value.data = "gpt";
+
+    bson_serialize(serialized, &value);
+
+    bson_finalize(serialized);
+    ret = bson_writef(serialized, serializef);
+    bson_cleanup(serialized);
+
+    return ret;
 }
 
-bool gpt_get_next_partition(struct pt pt, struct pte* pte)
-{
-    fprintf_light_magenta(stdout, "gpt_get_next_partition\n");
-    fprintf_light_magenta(stdout, "TODO\n");
-    return false;
-}
 
 int gpt_serialize_pte(struct pte pt_pte,
                       FILE* serializef)
 {
-    fprintf_light_magenta(stdout, "gpt_serialize_pte\n");
-    fprintf_light_magenta(stdout, "TODO\n");
-    return -1;
+    struct bson_info* serialized;
+    struct bson_kv value;
+    struct gpt_partition_table_entry* pte =
+      (struct gpt_partition_table_entry *) pt_pte.pte_info;
+    int ret;
+
+    serialized = bson_init();
+
+    value.type = BSON_STRING;
+    value.size = strlen("partition");
+    value.key = "type";
+    value.data = "partition";
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT32;
+    value.key = "pte_num";
+    value.data = &pt_pte.pt_num;
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_BINARY;
+    value.key = "partition_type_guid";
+    value.data = pte->partition_type_guid;
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT32;
+    value.key = "first_sector_lba";
+    value.data = &(pte->first_lba);
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT32;
+    value.key = "final_sector_lba";
+    value.data = &(pte->last_lba);
+
+    bson_serialize(serialized, &value);
+
+    bson_finalize(serialized);
+    ret = bson_writef(serialized, serializef);
+    bson_cleanup(serialized);
+
+    return ret;
 }
