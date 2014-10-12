@@ -36,8 +36,21 @@
 
 struct disk_gpt
 {
-    // TODO
     uint64_t signature;
+    uint32_t revision;
+    uint32_t header_size;
+    uint32_t crc32_header;
+    uint32_t reserved_1;
+    uint64_t current_lba;
+    uint64_t backup_lba;
+    uint64_t first_usable_lba;
+    uint64_t last_usable_lba;
+    uint8_t disk_guid[16];
+    uint64_t starting_lba_partition_entries;
+    uint32_t num_partition_entries;
+    uint32_t partition_entry_size;
+    uint32_t crc32_partition_array;
+    void* reserved_2;
 }__attribute__((packed));
 
 int gpt_probe(FILE* disk, struct pt* pt);
