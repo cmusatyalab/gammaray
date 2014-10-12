@@ -62,18 +62,43 @@ int64_t gpt_partition_offset(struct disk_gpt gpt, int pte)
     return 0;
 }
 
-/* prints partition entry according to Wikipedia:
- * TODO: http://en.wikipedia.org/wiki/Master_boot_record */
-/* int gpt_print_partition(struct partition_table_entry pte) */
-/* { */
-/*     fprintf_light_magenta(stdout, "TODO\n"); */
-/*     return 0; */
-/* } */
-
+/* Prints GPT according to Wikipedia:
+ * http://en.wikipedia.org/wiki/GUID_Partition_Table */
 void gpt_print(struct pt pt)
 {
-    fprintf_light_magenta(stdout, "gpt_print\n");
-    fprintf_light_magenta(stdout, "TODO\n");
+    fprintf_light_magenta(stdout, "gpt_print\n"); // TODO: Remove.
+
+    struct disk_mbr* mbr = (struct disk_mbr*) pt.pt_info;
+
+    fprintf_light_cyan(stdout, "\n\nAnalyzing Protective MBR Header\n");
+
+    fprintf_yellow(stdout, "Disk Signature [optional]: 0x%.8"PRIx32"\n",
+                            mbr->disk_signature);
+
+    fprintf_yellow(stdout, "Position 444 [0x0000]: 0x%.4"PRIx16"\n",
+                           mbr->reserved);
+
+    if (mbr->signature[0] == 0x55 && mbr->signature[1] == 0xaa)
+    {
+        fprintf_light_green(stdout, "Verifying MBR Signature [0x55 0xaa]: "
+                                    "0x%.2"PRIx8" 0x%.2"
+                                    PRIx8"\n\n",
+                                    mbr->signature[0],
+                                    mbr->signature[1]);
+    }
+    else
+    {
+        fprintf_light_red(stdout, "Verifying MBR Signature [0x55 0xaa]: 0x%.2"
+                                  PRIx8" 0x%.2"PRIx8"\n\n",
+                                  mbr->signature[0],
+                                  mbr->signature[1]);
+    }
+
+    fprintf_light_cyan(stdout, "\n\nAnalyzing Primary GPT Header\n");
+    struct disk_gpt* gpt = (struct disk_gpt*)
+        (pt.pt_info + sizeof(struct disk_mbr));
+    fprintf_yellow(stdout, "Signature: 0x%.16"PRIx64"\n",
+                            gpt->signature);
 }
 
 int gpt_probe(FILE* disk, struct pt* pt)
@@ -98,21 +123,17 @@ int gpt_probe(FILE* disk, struct pt* pt)
         return -1;
     }
 
-    struct disk_gpt* gpt = (struct disk_gpt*) (pt->pt_info +
-            sizeof(struct disk_mbr));
+    struct disk_gpt* gpt = (struct disk_gpt*)
+        (pt->pt_info + sizeof(struct disk_mbr));
     if (fread(gpt, 1, sizeof(struct disk_gpt), disk) < sizeof(struct disk_gpt))
     {
         fprintf_light_red(stderr, "Error reading GPT from raw disk file.\n");
         return -1;
     }
 
-    if (memcmp(gpt->signature, "EFI PART", 8)) {
-        fprintf_light_red(stderr, "Bad GPT signature: "
-          "%.2"PRIx8" %.2"PRIx8" %.2"PRIx8" %.2"PRIx8
-          " %.2"PRIx8" %.2"PRIx8" %.2"PRIx8" %.2"PRIx8".\n",
-          gpt->signature[0],gpt->signature[1],gpt->signature[2],
-          gpt->signature[3],gpt->signature[4],gpt->signature[5],
-          gpt->signature[6],gpt->signature[7]);
+    if (memcmp(&gpt->signature, "EFI PART", 8)) {
+        fprintf_light_red(stderr, "Bad GPT signature: %.16"PRIx64".\n",
+          gpt->signature);
         return -1;
     }
 
