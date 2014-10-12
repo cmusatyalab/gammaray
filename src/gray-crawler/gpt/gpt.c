@@ -78,10 +78,8 @@ void gpt_print(struct pt pt)
 
 int gpt_probe(FILE* disk, struct pt* pt)
 {
-    fprintf_light_magenta(stdout, "gpt_probe\n");
-    fprintf_light_magenta(stdout, "TODO\n");
-
-    pt->pt_info = malloc(sizeof(struct disk_mbr));
+    fprintf_light_magenta(stdout, "gpt_probe\n"); // TODO: Remove.
+    pt->pt_info = malloc(sizeof(struct disk_mbr) + sizeof(struct disk_gpt));
     struct disk_mbr* mbr = (struct disk_mbr*) pt->pt_info;
 
     if (fread(mbr, 1, sizeof(struct disk_mbr), disk) < sizeof(struct disk_mbr))
@@ -100,14 +98,15 @@ int gpt_probe(FILE* disk, struct pt* pt)
         return -1;
     }
 
-    struct disk_gpt* gpt = (struct disk_gpt*) pt->pt_info;
+    struct disk_gpt* gpt = (struct disk_gpt*) (pt->pt_info +
+            sizeof(struct disk_mbr));
     if (fread(gpt, 1, sizeof(struct disk_gpt), disk) < sizeof(struct disk_gpt))
     {
         fprintf_light_red(stderr, "Error reading GPT from raw disk file.\n");
         return -1;
     }
 
-    if (memcmp(gpt->signature, "UFI PART", 8)) {
+    if (memcmp(gpt->signature, "EFI PART", 8)) {
         fprintf_light_red(stderr, "Bad GPT signature: "
           "%.2"PRIx8" %.2"PRIx8" %.2"PRIx8" %.2"PRIx8
           " %.2"PRIx8" %.2"PRIx8" %.2"PRIx8" %.2"PRIx8".\n",
@@ -117,7 +116,7 @@ int gpt_probe(FILE* disk, struct pt* pt)
         return -1;
     }
 
-    return -1;
+    return 0;
 }
 
 int gpt_cleanup_pt(struct pt pt)
