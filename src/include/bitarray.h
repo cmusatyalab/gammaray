@@ -41,6 +41,6 @@ struct bitarray* bitarray_init(uint64_t len);
 struct bitarray* bitarray_init_data(uint8_t* data, uint64_t len);
 void bitarray_destroy(struct bitarray* bits);
 uint64_t bitarray_get_array(struct bitarray* bits, uint8_t** array);
-int bitarray_serialize(struct bitarray* bits, FILE* serializef);
+int bitarray_serialize(struct bitarray* bits, int serializef);
 
 #endif

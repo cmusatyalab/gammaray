@@ -8,7 +8,7 @@
  *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
  *                                                                           *
  *                                                                           *
- *   Copyright 2013 Carnegie Mellon University                               *
+ *   Copyright 2013-2014 Carnegie Mellon University                          *
  *                                                                           *
  *   Licensed under the Apache License, Version 2.0 (the "License");         *
  *   you may not use this file except in compliance with the License.        *
@@ -22,13 +22,17 @@
  *   See the License for the specific language governing permissions and     *
  *   limitations under the License.                                          *
  *****************************************************************************/
+#define _LARGEFILE64_SOURCE
 #include "bson.h"
 #include "__bson.h"
 
 #include <assert.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 off_t fsize(const char* path)
 {
@@ -49,18 +53,18 @@ int bson_make_readable(struct bson_info* bson_info)
     return EXIT_SUCCESS;
 }
 
-int bson_readf(struct bson_info* bson_info, FILE* file)
+int bson_readf(struct bson_info* bson_info, int fd)
 {
     int32_t size;
     if (bson_info == NULL)
         return 0;
 
-    if (file == NULL)
+    if (fd < 0)
         return 0;
 
-    bson_info->f_offset = ftell(file);
+    bson_info->f_offset = lseek64(fd, 0, SEEK_CUR);
 
-    if (fread(&(size), 4, 1, file) != 1)
+    if (read(fd, &(size), (size_t) 4) != (ssize_t) 4)
     {
         return 0;
     }
@@ -80,7 +84,7 @@ int bson_readf(struct bson_info* bson_info, FILE* file)
 
     if (bson_info->buffer)
     {
-        if(fread(bson_info->buffer, 1, size, file) != size)
+        if(read(fd, bson_info->buffer, (size_t) size) != (ssize_t) size)
         {
             return -1;
         }
@@ -98,9 +102,9 @@ int bson_read(struct bson_info* bson_info, const char* fname)
         return EXIT_FAILURE;
 
     off_t size = fsize(fname);
-    FILE* file = fopen(fname, "r");
+    int fd = open(fname, O_RDONLY);
 
-    if (file == NULL)
+    if (fd < 0)
         return EXIT_FAILURE;
 
     if (bson_info->buffer != NULL)
@@ -109,17 +113,17 @@ int bson_read(struct bson_info* bson_info, const char* fname)
     bson_info->buffer = malloc(size);
     if (bson_info->buffer)
     {
-        if(fread(bson_info->buffer, 1, size, file) != size)
+        if(read(fd, bson_info->buffer, (size_t) size) != (ssize_t) size)
         {
-            fclose(file);
+            close(fd);
             return EXIT_FAILURE;
         }
         bson_make_readable(bson_info);
-        fclose(file);
+        close(fd);
         return EXIT_SUCCESS;
     }
 
-    fclose(file);
+    close(fd);
 
     return EXIT_FAILURE;
 }

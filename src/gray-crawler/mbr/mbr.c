@@ -26,6 +26,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "bson.h"
 #include "color.h"
@@ -196,13 +197,14 @@ void mbr_print(struct pt pt)
     mbr_print_partition(mbr->pt[3]);
 }
 
-int mbr_probe(FILE* disk, struct pt* pt)
+int mbr_probe(int disk, struct pt* pt)
 {
     struct disk_mbr* mbr;
     pt->pt_info = malloc(sizeof(struct disk_mbr));
     mbr = (struct disk_mbr*) pt->pt_info;
 
-    if (fread(mbr, 1, sizeof(struct disk_mbr), disk) < sizeof(struct disk_mbr))
+    if (read(disk, mbr, sizeof(struct disk_mbr)) != 
+             (ssize_t) sizeof(struct disk_mbr))
     {
         fprintf_light_red(stderr, "Error reading MBR from raw disk file.\n");
         return -1;
@@ -241,7 +243,7 @@ int mbr_cleanup_pte(struct pte pte)
 }
 
 int mbr_serialize_pt(struct pt pt, struct bitarray* bits,
-                     FILE* serializef)
+                     int serializef)
 {
     struct bson_info* serialized;
     struct bson_kv value;
@@ -308,7 +310,7 @@ bool mbr_get_next_partition(struct pt pt, struct pte* pte)
 }
 
 int mbr_serialize_pte(struct pte pt_pte,
-                      FILE* serializef)
+                      int serializef)
 {
     struct bson_info* serialized;
     struct bson_kv value;

@@ -7,7 +7,7 @@
  *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
  *                                                                           *
  *                                                                           *
- *   Copyright 2013 Carnegie Mellon University                               *
+ *   Copyright 2013-2014 Carnegie Mellon University                          *
  *                                                                           *
  *   Licensed under the Apache License, Version 2.0 (the "License");         *
  *   you may not use this file except in compliance with the License.        *
@@ -58,7 +58,7 @@ struct qemu_bdrv_write
     uint8_t* data;
 };
 
-int qemu_load_md_filter(FILE* index, struct bitarray** bits);
+int qemu_load_md_filter(int index, struct bitarray** bits);
 void qemu_parse_header(uint8_t* event_stream, struct qemu_bdrv_write* write);
 
 #endif

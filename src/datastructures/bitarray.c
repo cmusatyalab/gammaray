@@ -132,7 +132,7 @@ uint64_t bitarray_get_array(struct bitarray* bits, uint8_t** array)
     return bits->len / 8;
 }
 
-int bitarray_serialize(struct bitarray* bits, FILE* serializef)
+int bitarray_serialize(struct bitarray* bits, int serializef)
 {
     struct bson_info* serialized;
     struct bson_kv value;

@@ -22,12 +22,15 @@
  *   See the License for the specific language governing permissions and     *
  *   limitations under the License.                                          *
  *****************************************************************************/
+#define _LARGEFILE64_SOURCE
+#define _GNU_SOURCE
 
 #include <stdint.h>
 #include <stdlib.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 #include <unistd.h>
 
 #include "color.h"
@@ -35,6 +38,7 @@
 #include "gray-crawler.h"
 #include "mbr.h"
 #include "ntfs.h"
+#include "util.h"
 
 /* support multiple partition table types */
 struct gray_fs_pt_crawler pt_crawlers[] = {
@@ -52,13 +56,13 @@ struct gray_fs_crawler crawlers[] = {
 };
 
 /* utility function */
-void cleanup(FILE* disk, FILE* serializef, struct bitarray* bits)
+void cleanup(int disk, int serializef, struct bitarray* bits)
 {
     if (disk)
-        fclose(disk);
+        check_syscall(close(disk));
 
     if (serializef)
-        fclose(serializef); 
+        check_syscall(close(serializef)); 
 
     if (bits)
         bitarray_destroy(bits);
@@ -67,7 +71,7 @@ void cleanup(FILE* disk, FILE* serializef, struct bitarray* bits)
 /* main thread of execution */
 int main(int argc, char* args[])
 {
-    FILE* disk = NULL, *serializef = NULL;
+    int i, disk, serializef;
     struct gray_fs_pt_crawler* pt_crawler;
     struct gray_fs_crawler* crawler;
     struct bitarray* bits = NULL;
@@ -76,7 +80,6 @@ int main(int argc, char* args[])
     struct pte ptedata;
     struct fs fsdata;
     bool present;
-    int i;
 
     fprintf_blue(stdout, "Raw Disk Crawler -- By: Wolfgang Richter "
                          "<wolf@cs.cmu.edu>\n");
@@ -91,18 +94,18 @@ int main(int argc, char* args[])
 
     fprintf_cyan(stdout, "Analyzing Disk: %s\n\n", args[1]);
 
-    disk = fopen(args[1], "r");
+    disk = open(args[1], DISK_FLAGS);
 
-    serializef = fopen(args[2], "w");
-
-    if (disk == NULL)
+    if (disk < 0)
     {
-        fprintf_light_red(stderr, "Error opening raw disk file '%s'. "
+        fprintf_light_red(stderr, "Error opening raw disk file '%s'. ",
                                   "Does it exist?\n", args[1]);
         return EXIT_FAILURE;
     }
 
-    if (serializef == NULL)
+    serializef = open(args[2], SERIALIZEF_FLAGS, SERIALIZEF_MODE);
+
+    if (serializef < 0)
     {
         cleanup(disk, serializef, bits);
         fprintf_light_red(stderr, "Error opening serialization file '%s'. "
@@ -144,7 +147,7 @@ int main(int argc, char* args[])
         return EXIT_FAILURE;
     }
 
-    if (fstat(fileno(disk), &fstats))
+    if (check_syscall(fstat(disk, &fstats)))
     {
         cleanup(disk, serializef, bits);
         fprintf_light_red(stderr, "Error getting fstat info on disk image.\n");

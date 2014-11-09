@@ -200,8 +200,8 @@ struct ext4_extent_idx
     uint16_t ei_unused;
 };
 
-int ext4_probe(FILE* disk, struct fs* fs);
-int ext4_serialize(FILE* disk, struct fs* fs, FILE* serializef);
+int ext4_probe(int disk, struct fs* fs);
+int ext4_serialize(int disk, struct fs* fs, int serializef);
 int ext4_cleanup(struct fs* fs);
 uint64_t ext4_bgd_block_bitmap(struct ext4_block_group_descriptor bgd);
 uint64_t ext4_bgd_inode_bitmap(struct ext4_block_group_descriptor bgd);

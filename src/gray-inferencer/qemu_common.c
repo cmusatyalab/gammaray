@@ -8,7 +8,7 @@
  *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
  *                                                                           *
  *                                                                           *
- *   Copyright 2013 Carnegie Mellon University                               *
+ *   Copyright 2013-2014 Carnegie Mellon University                          *
  *                                                                           *
  *   Licensed under the Apache License, Version 2.0 (the "License");         *
  *   you may not use this file except in compliance with the License.        *
@@ -30,7 +30,7 @@
 #include "bson.h"
 #include "color.h"
 
-int qemu_load_md_filter(FILE* index, struct bitarray** bits)
+int qemu_load_md_filter(int index, struct bitarray** bits)
 {
     struct bson_kv value1, value2;
     struct bson_info* bson = bson_init();

@@ -8,7 +8,7 @@
  *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
  *                                                                           *
  *                                                                           *
- *   Copyright 2013 Carnegie Mellon University                               *
+ *   Copyright 2013-2014 Carnegie Mellon University                          *
  *                                                                           *
  *   Licensed under the Apache License, Version 2.0 (the "License");         *
  *   you may not use this file except in compliance with the License.        *
@@ -22,6 +22,8 @@
  *   See the License for the specific language governing permissions and     *
  *   limitations under the License.                                          *
  *****************************************************************************/
+#define _GNU_SOURCE
+
 #include <fcntl.h>
 #include <inttypes.h>
 #include <stdio.h>
@@ -140,7 +142,7 @@ int main(int argc, char* args[])
 {
     int fd;
     char* index, *db, *stream;
-    FILE* indexf;
+    int indexf;
     struct bitarray* bits;
 
     fprintf_blue(stdout, "gammaray Async Queuer -- "
@@ -169,9 +171,9 @@ int main(int argc, char* args[])
     }
 
     fprintf_cyan(stdout, "Loading MD filter from: %s\n\n", index);
-    indexf = fopen(index, "r");
+    indexf = open(index, O_RDONLY | O_NOATIME); 
 
-    if (indexf == NULL)
+    if (indexf < 0)
     {
         fprintf_light_red(stderr, "Error opening index file to get MD "
                                   "filter.\n");
@@ -191,7 +193,7 @@ int main(int argc, char* args[])
         return EXIT_FAILURE;
     }
 
-    fclose(indexf);
+    check_syscall(close(indexf));
 
     fprintf_cyan(stdout, "Attaching to stream: %s\n\n", stream);
 
