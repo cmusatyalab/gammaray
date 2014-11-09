@@ -23,7 +23,6 @@
  *   limitations under the License.                                          *
  *****************************************************************************/
 #include "util.h"
-#include "color.h"
 
 #include <errno.h>
 #include <inttypes.h>
@@ -214,6 +213,6 @@ uint64_t diff_time(struct timeval start, struct timeval end)
 int check_syscall(int ret)
 {
     if (ret)
-        fprintf_light_red(stderr, "Syscall Error: %s\n", strerror(errno));
+        fprintf(stderr, "Syscall Error: %s\n", strerror(errno));
     return ret;
 }
