@@ -1241,7 +1241,7 @@ int __diff_inodes_ntfs(uint8_t* write, struct kv_store* store,
     uint8_t** list;
     size_t len = 0, len2 = 4096;
     uint8_t *new, is_dir;
-    char* path[len2];
+    char path[len2];
     
     fprintf_light_white(stdout, "__diff_inodes_ntfs()\n");
     fprintf_light_white(stdout, "pointer: %s\n", pointer);

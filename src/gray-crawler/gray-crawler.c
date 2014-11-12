@@ -76,7 +76,6 @@ int main(int argc, char* args[])
     struct pte ptedata;
     struct fs fsdata;
     bool present;
-    int i;
 
     fprintf_blue(stdout, "Raw Disk Crawler -- By: Wolfgang Richter "
                          "<wolf@cs.cmu.edu>\n");
@@ -169,7 +168,7 @@ int main(int argc, char* args[])
 
     while (pt_crawler->get_next_partition(ptdata, &ptedata))
     {
-        fsdata = (struct fs) {i, 0, NULL, NULL, NULL};
+        fsdata = (struct fs) {0, 0, NULL, NULL, NULL};
 
         fsdata.pte = ptedata.pt_num;
         fsdata.pt_off = ptedata.pt_off;
