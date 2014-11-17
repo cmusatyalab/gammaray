@@ -71,7 +71,7 @@ void cleanup(int disk, int serializef, struct bitarray* bits)
 /* main thread of execution */
 int main(int argc, char* args[])
 {
-    int i, disk, serializef;
+    int disk, serializef;
     struct gray_fs_pt_crawler* pt_crawler;
     struct gray_fs_crawler* crawler;
     struct bitarray* bits = NULL;
