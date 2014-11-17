@@ -41,4 +41,6 @@ int32_t sign_extend(uint32_t val, uint32_t bits);
 int64_t sign_extend64(uint64_t val, uint64_t bits);
 
 uint64_t diff_time(struct timeval start, struct timeval end);
+
+int check_syscall(int ret);
 #endif

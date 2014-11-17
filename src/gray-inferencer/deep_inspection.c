@@ -447,7 +447,7 @@ int __reinspect_write(struct super_info* superblock, struct kv_store* store,
     hexdump(buf, len);
 
     return qemu_deep_inspect(superblock, &write, store, write_counter, vmname,
-                             partition_offset, NULL);
+                             partition_offset, -1);
 }
 
 uint64_t __inode_sector(struct kv_store* store, struct super_info* super,
@@ -1541,10 +1541,10 @@ int qemu_load_document(struct kv_store* store, struct bson_info* bson,
                        bool load_lazy, uint64_t* bgdcounter,
                        uint64_t* fcounter);
 
-int __load(char* pointer, FILE* metadata, struct kv_store* store)
+int __load(char* pointer, int metadata, struct kv_store* store)
 {
     struct bson_info* bson = bson_init();
-    off_t offset;
+    off64_t offset;
 
     fprintf_light_blue(stdout, "-- lazy loading file data --\n");
 
@@ -1553,7 +1553,7 @@ int __load(char* pointer, FILE* metadata, struct kv_store* store)
     sscanf(strtok(NULL, ":"), "%"SCNu64, &offset);
 
     /* lseek */
-    if (fseeko(metadata, offset, SEEK_SET))
+    if (lseek64(metadata, offset, SEEK_SET) == (off64_t) -1)
     {
         fprintf(stderr, "ERROR: couldn't seek during MD load.\n");
         return EXIT_FAILURE;
@@ -1579,7 +1579,7 @@ int __load(char* pointer, FILE* metadata, struct kv_store* store)
     return EXIT_SUCCESS;
 }
 
-int __load_list(char* pointer, FILE* metadata, struct kv_store* store)
+int __load_list(char* pointer, int metadata, struct kv_store* store)
 {
     uint64_t listid, i;
     uint8_t** list;
@@ -1612,7 +1612,7 @@ int __qemu_dispatch_write(uint8_t* data,
                           struct super_info* superblock,
                           uint64_t partition_offset,
                           uint64_t sector,
-                          FILE* metadata,
+                          int metadata,
                           struct qemu_bdrv_write* write)
 {
     D_PRINT64(partition_offset);
@@ -1737,7 +1737,7 @@ int qemu_deep_inspect_ntfs(struct ntfs_boot_file* bootf,
 int qemu_deep_inspect(struct super_info* superblock,
                       struct qemu_bdrv_write* write,
                       struct kv_store* store, uint64_t write_counter,
-                      char* vmname, uint64_t partition_offset, FILE* metadata)
+                      char* vmname, uint64_t partition_offset, int metadata)
 {
     uint64_t i;
     uint8_t result[1024];
@@ -2442,7 +2442,7 @@ int qemu_load_document(struct kv_store* store, struct bson_info* bson,
     return EXIT_SUCCESS;
 }
 
-int qemu_load_index(FILE* index, struct kv_store* store)
+int qemu_load_index(int index, struct kv_store* store)
 {
     struct bson_info* bson = bson_init();
     uint64_t file_counter = 0, bgd_counter = 0;

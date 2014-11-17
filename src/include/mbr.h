@@ -52,11 +52,11 @@ struct disk_mbr
     uint8_t signature[2];
 }__attribute__((packed));
 
-int mbr_probe(FILE* disk, struct pt* pt);
+int mbr_probe(int disk, struct pt* pt);
 void mbr_print(struct pt pt);
 int mbr_serialize_pt(struct pt pt, struct bitarray* bits,
-                     FILE* serializef);
-int mbr_serialize_pte(struct pte pte, FILE* serializef);
+                     int serializef);
+int mbr_serialize_pte(struct pte pte, int serializef);
 bool mbr_get_next_partition(struct pt pt, struct pte* pte);
 int mbr_cleanup_pt(struct pt pt);
 int mbr_cleanup_pte(struct pte pte);

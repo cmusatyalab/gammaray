@@ -432,7 +432,7 @@ uint32_t __handle_read(struct nbd_req_header* req, struct nbd_client* client)
 
     assert(buf != NULL);
 
-    if (lseek64(fd, offset, SEEK_SET) == (off_t) -1)
+    if (lseek64(fd, offset, SEEK_SET) == (off64_t) -1)
         return errno;
 
     while (len)
@@ -492,7 +492,7 @@ uint32_t __handle_write(struct nbd_req_header* req, struct nbd_client* client,
         return 0;
     }
 
-    if (lseek64(fd, offset, SEEK_SET) == (off_t) -1)
+    if (lseek64(fd, offset, SEEK_SET) == (off64_t) -1)
         return errno;
 
     while (pos < len)

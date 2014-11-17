@@ -23,11 +23,12 @@
  *   limitations under the License.                                          *
  *****************************************************************************/
 #include "util.h"
-#include "color.h"
 
+#include <errno.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define KB 1024L
 #define MB (KB*1024)
@@ -207,4 +208,11 @@ uint64_t diff_time(struct timeval start, struct timeval end)
     suseconds_t delta_micro = end.tv_usec - start.tv_usec;
     uint64_t micros = delta_seconds * 1000000 + delta_micro;
     return micros;
+}
+
+int check_syscall(int ret)
+{
+    if (ret)
+        fprintf(stderr, "Syscall Error: %s\n", strerror(errno));
+    return ret;
 }

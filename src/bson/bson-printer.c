@@ -7,7 +7,7 @@
  *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
  *                                                                           *
  *                                                                           *
- *   Copyright 2013 Carnegie Mellon University                               *
+ *   Copyright 2013-2014 Carnegie Mellon University                          *
  *                                                                           *
  *   Licensed under the Apache License, Version 2.0 (the "License");         *
  *   you may not use this file except in compliance with the License.        *
@@ -21,15 +21,25 @@
  *   See the License for the specific language governing permissions and     *
  *   limitations under the License.                                          *
  *****************************************************************************/
+#include <sys/types.h>
+#include <sys/stat.h>
+
+
+
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
+
+
 
 #include "bson.h"
 #include "color.h"
+#include "util.h"
 
 int main(int argc, char* argv[])
 {
-    FILE* f;
+    int f;
     struct bson_info* bson;
     int ret;
 
@@ -44,9 +54,9 @@ int main(int argc, char* argv[])
 
     fprintf_cyan(stdout, "Analyzing BSON File: %s\n", argv[1]);
 
-    f = fopen(argv[1], "r");
+    f = open(argv[1], O_RDONLY);
 
-    if (f == NULL)
+    if (f < 0)
     {
         fprintf_light_red(stderr, "Error opening BSON file.\n");
         return EXIT_FAILURE;
@@ -58,7 +68,7 @@ int main(int argc, char* argv[])
         bson_print(stdout, bson);
     
     bson_cleanup(bson);
-    fclose(f);
+    check_syscall(close(f));
 
     return EXIT_SUCCESS;
 }

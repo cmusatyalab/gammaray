@@ -9,7 +9,7 @@
  *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
  *                                                                           *
  *                                                                           *
- *   Copyright 2013 Carnegie Mellon University                               *
+ *   Copyright 2013-2014 Carnegie Mellon University                          *
  *                                                                           *
  *   Licensed under the Apache License, Version 2.0 (the "License");         *
  *   you may not use this file except in compliance with the License.        *
@@ -23,6 +23,8 @@
  *   See the License for the specific language governing permissions and     *
  *   limitations under the License.                                          *
  *****************************************************************************/
+#define _GNU_SOURCE
+
 #include <fcntl.h>
 #include <inttypes.h>
 #include <stdio.h>
@@ -39,7 +41,7 @@
 
 #define SECTOR_SIZE 512 
 
-int read_loop(struct kv_store* store, char* vmname, FILE* index)
+int read_loop(struct kv_store* store, char* vmname, int index)
 {
     struct timeval start, end;
     uint64_t write_counter = 0, partition_offset, time = 0;
@@ -96,7 +98,7 @@ int main(int argc, char* args[])
     int ret = EXIT_SUCCESS;
     uint64_t time;
     char* index, *db, *vmname;
-    FILE* indexf;
+    int indexf;
     struct timeval start, end;
     char pretty_micros[32];
 
@@ -118,9 +120,9 @@ int main(int argc, char* args[])
 
     fprintf_cyan(stdout, "%s: loading index: %s\n\n", vmname, index);
 
-    indexf = fopen(index, "r");
+    indexf = open(index, O_RDONLY | O_NOATIME);
 
-    if (indexf == NULL)
+    if (indexf < 0)
     {
         fprintf_light_red(stderr, "Error opening index file. "
                                   "Does it exist?\n");
@@ -153,7 +155,7 @@ int main(int argc, char* args[])
     ret = read_loop(handle, vmname, indexf);
     gettimeofday(&end, NULL);
 
-    fclose(indexf);
+    check_syscall(close(indexf));
     pretty_print_microseconds(time, pretty_micros, 32);
     fprintf_light_red(stderr, "load_index time: %s.\n", pretty_micros);
 

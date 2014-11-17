@@ -9,7 +9,7 @@
  *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
  *                                                                           *
  *                                                                           *
- *   Copyright 2013 Carnegie Mellon University                               *
+ *   Copyright 2013-2014 Carnegie Mellon University                          *
  *                                                                           *
  *   Licensed under the Apache License, Version 2.0 (the "License");         *
  *   you may not use this file except in compliance with the License.        *
@@ -29,6 +29,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #define START_SIZE 4096
 
@@ -464,18 +465,19 @@ int bson_finalize(struct bson_info* bson_info)
 }
 
 /* save to a file */
-int bson_writef(struct bson_info* bson_info, FILE* file)
+int bson_writef(struct bson_info* bson_info, int fd)
 {
     size_t to_write = bson_info->position;
-    size_t written = 0;
+    ssize_t written = 0;
+
     if (bson_info->buffer)
     {
         while (to_write)
         {
-            written = fwrite(&(bson_info->buffer[written]), 1, to_write, file);
+            written = write(fd, &(bson_info->buffer[written]), to_write);
             if (written != to_write)
             {
-                if (feof(file) || ferror(file))
+                if (written < 0)
                 {
                     free(bson_info->buffer);
                     return EXIT_FAILURE;

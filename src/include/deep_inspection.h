@@ -8,7 +8,7 @@
  *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
  *                                                                           *
  *                                                                           *
- *   Copyright 2013 Carnegie Mellon University                               *
+ *   Copyright 2013-2014 Carnegie Mellon University                          *
  *                                                                           *
  *   Licensed under the Apache License, Version 2.0 (the "License");         *
  *   you may not use this file except in compliance with the License.        *
@@ -117,7 +117,7 @@ struct super_info
 } __attribute__((packed));
 
 /* functions */
-int qemu_load_index(FILE* index, struct kv_store* store);
+int qemu_load_index(int index, struct kv_store* store);
 int qemu_print_write(struct qemu_bdrv_write* write);
 enum SECTOR_TYPE qemu_infer_sector_type(struct ext4_superblock* super,
                                         struct qemu_bdrv_write* write, 
@@ -143,5 +143,5 @@ int qemu_deep_inspect(struct super_info* superblock,
                       struct qemu_bdrv_write* write, struct kv_store* store,
                       uint64_t write_counter, char* vmname,
                       uint64_t partition_offset,
-                      FILE* index);
+                      int index);
 #endif

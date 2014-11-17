@@ -24,15 +24,24 @@
 #ifndef __GAMMARAY_GRAY_CRAWLER_H
 #define __GAMMARAY_GRAY_CRAWLER_H
 
+
+
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+
+
 
 #define GRAY_PT(NAME) { #NAME, NAME ## _probe, NAME ## _print, \
 NAME ## _serialize_pt, NAME ## _serialize_pte, NAME ## _get_next_partition, \
 NAME ## _cleanup_pt, NAME ## _cleanup_pte}
 #define GRAY_FS(NAME) { #NAME, NAME ## _probe, NAME ## _serialize, NAME ## \
 _cleanup}
+
+#define DISK_FLAGS          O_RDONLY | O_LARGEFILE | O_NOATIME
+
+#define SERIALIZEF_FLAGS    O_WRONLY | O_CREAT | O_TRUNC | O_APPEND
+#define SERIALIZEF_MODE     S_IRUSR | S_IRGRP | S_IROTH
 
 struct fs
 {
@@ -59,11 +68,11 @@ struct pte
 struct gray_fs_pt_crawler
 {
     char* pt_name;
-    int (*probe) (FILE* disk, struct pt* pt);
+    int (*probe) (int disk, struct pt* pt);
     void (*print) (struct pt pt);
     int (*serialize_pt) (struct pt pt, struct bitarray* bits,
-                         FILE* serializef);
-    int (*serialize_pte) (struct pte pte, FILE* serializef);
+                         int serializef);
+    int (*serialize_pte) (struct pte pte, int serializef);
     bool (*get_next_partition) (struct pt pt, struct pte* pte);
     int (*cleanup_pt) (struct pt pt);
     int (*cleanup_pte) (struct pte pte);
@@ -72,8 +81,8 @@ struct gray_fs_pt_crawler
 struct gray_fs_crawler
 {
     char* fs_name;
-    int (*probe) (FILE* disk, struct fs* fs);
-    int (*serialize) (FILE* disk, struct fs* fs, FILE* serializef);
+    int (*probe) (int disk, struct fs* fs);
+    int (*serialize) (int disk, struct fs* fs, int serializef);
     int (*cleanup) (struct fs* fs);
 };
 

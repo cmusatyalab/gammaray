@@ -8,7 +8,7 @@
  *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
  *                                                                           *
  *                                                                           *
- *   Copyright 2013 Carnegie Mellon University                               *
+ *   Copyright 2013-2014 Carnegie Mellon University                          *
  *                                                                           *
  *   Licensed under the Apache License, Version 2.0 (the "License");         *
  *   you may not use this file except in compliance with the License.        *
@@ -29,8 +29,8 @@
 extern "C" {
 #endif
 
-#include <stdio.h>
 #include <inttypes.h>
+#include <stdio.h>
 
 /* lib constants */
 enum BSON_TYPE
@@ -124,7 +124,7 @@ bson_finalize(struct bson_info* bson_info);
 /**
  * bson_write
  *
- * helper function to write the BSON-encoded buffer into a FILE* object
+ * Helper function to write the BSON-encoded buffer into a file descriptor. 
  *
  * @param bson_info - metadata structure containing buffer to be written
  * @param file - file with write permissions and opened for writing
@@ -132,7 +132,7 @@ bson_finalize(struct bson_info* bson_info);
  *
  */
 int
-bson_writef(struct bson_info* bson_info, FILE* file);
+bson_writef(struct bson_info* bson_info, int fd);
 
 /**
  * bson_cleanup
@@ -178,12 +178,12 @@ bson_read(struct bson_info* bson_info, const char* fname);
  * buffer maintained by the bson_info metadata structure.
  *
  * @param bson_info - the metadata structure to read into
- * @param file - the file to read from on disk
+ * @param file - the file descriptor to read from on disk
  * @return EXIT_SUCCESS on success, EXIT_FAILURE otherwise
  *
  */
 int
-bson_readf(struct bson_info* bson_info, FILE* file);
+bson_readf(struct bson_info* bson_info, int fd);
 
  /**
   * bson_make_readable
@@ -223,7 +223,7 @@ bson_deserialize(struct bson_info* bson_info, struct bson_kv* value,
  * This function prints a BSON stream as a set of key-value pairs.
  *
  * @param bson_info - the BSON stream to print
- * @param FILE* - the stream to print to
+ * @param stream - the stream to print to
  * @return - EXIT_SUCCESS on success, EXIT_FAILURE otherwise
  *
  */

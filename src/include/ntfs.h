@@ -104,8 +104,8 @@ struct ntfs_non_resident_header
     uint64_t initialized_size;
 } __attribute__((packed));
 
-int ntfs_probe(FILE* disk, struct fs* fs);
-int ntfs_serialize(FILE* disk, struct fs* fs, FILE* serializef);
+int ntfs_probe(int disk, struct fs* fs);
+int ntfs_serialize(int disk, struct fs* fs, int serializef);
 int ntfs_cleanup(struct fs* fs);
 uint64_t ntfs_file_record_size(struct ntfs_boot_file* bootf);
 uint64_t ntfs_cluster_size(struct ntfs_boot_file* bootf);
