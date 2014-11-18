@@ -35,7 +35,7 @@
 
 #define SECTOR_SIZE 512
 
-char* MBR_PT_LUT[] = { "Empty","","","","","Extended","","HPFS/NTFS","","","","W95 FAT32","","","","", /* 0x00 - 0x0f */
+static char* MBR_PT_LUT[] = { "Empty","","","","","Extended","","HPFS/NTFS","","","","W95 FAT32","","","","", /* 0x00 - 0x0f */
                        "","","","","","","","","","","","","","","","", /* 0x10 - 0x1f */
                        "","","","","","","","","","","","","","","","", /* 0x20 - 0x2f */
                        "","","","","","","","","","","","","","","","", /* 0x30 - 0x3f */
@@ -53,18 +53,18 @@ char* MBR_PT_LUT[] = { "Empty","","","","","Extended","","HPFS/NTFS","","","","W
                        "","","","","","","","","","","","","","","",""  /* 0xf0 - 0xff */
                      };
 
-int print_partition_type(uint8_t type)
+static int print_partition_type(uint8_t type)
 {
     fprintf_light_magenta(stdout, "Partition Type: %s\n", MBR_PT_LUT[type]);
     return -1;
 }
 
-uint8_t get_sector(uint8_t byte)
+static uint8_t get_sector(uint8_t byte)
 {
     return 0x3f & byte; /* bits 5-0 in second byte of chs */
 }
 
-uint16_t get_cylinder(uint8_t bytes[2])
+static uint16_t get_cylinder(uint8_t bytes[2])
 {
     uint8_t b1 = bytes[0];
     uint8_t b2 = bytes[1];
@@ -110,7 +110,7 @@ int64_t mbr_partition_offset(struct disk_mbr mbr, int pte)
 
 /* prints partition entry according to Wikipedia:
  * http://en.wikipedia.org/wiki/Master_boot_record */
-int mbr_print_partition(struct partition_table_entry pte)
+int mbr_print_partition(struct mbr_partition_table_entry pte)
 {
     char size_buf[SECTOR_SIZE];
     memset(size_buf, 0x00, SECTOR_SIZE);
@@ -121,12 +121,12 @@ int mbr_print_partition(struct partition_table_entry pte)
     fprintf_blue(stdout, "Partition Type: 0x%.2"
                     PRIx8"\n",
                     pte.partition_type);
-    
+
     print_partition_type(pte.partition_type);
 
     /* check it partition entry is being used */
     if (pte.partition_type == 0x00) return -1;
-    
+
     fprintf_blue(stdout, "Start Head: 0x%.2"
                     PRIx8"\n",
                     pte.start_chs[0]);
@@ -162,14 +162,14 @@ void mbr_print(struct pt pt)
     struct disk_mbr* mbr = (struct disk_mbr*) pt.pt_info;
     fprintf_light_cyan(stdout, "\n\nAnalyzing Boot Sector\n");
 
-    /* Taking apart according to Wikipedia:            
+    /* Taking apart according to Wikipedia:
      * http://en.wikipedia.org/wiki/Master_boot_record */
     fprintf_yellow(stdout, "Disk Signature [optional]: 0x%.8"PRIx32"\n",
                             mbr->disk_signature);
 
     fprintf_yellow(stdout, "Position 444 [0x0000]: 0x%.4"PRIx16"\n",
                            mbr->reserved);
-    
+
     if (mbr->signature[0] == 0x55 && mbr->signature[1] == 0xaa)
     {
         fprintf_light_green(stdout, "Verifying MBR Signature [0x55 0xaa]: "
@@ -280,20 +280,20 @@ int mbr_serialize_pt(struct pt pt, struct bitarray* bits,
     bson_finalize(serialized);
     ret = bson_writef(serialized, serializef);
     bson_cleanup(serialized);
-    
+
     return ret;
 }
 
 bool mbr_get_next_partition(struct pt pt, struct pte* pte)
 {
     struct disk_mbr* mbr = (struct disk_mbr*) pt.pt_info;
-    struct partition_table_entry* entry = (struct partition_table_entry*)
-                                  malloc(sizeof(struct partition_table_entry));
+    struct mbr_partition_table_entry* entry = (struct mbr_partition_table_entry*)
+                                  malloc(sizeof(struct mbr_partition_table_entry));
     static int pte_num = 0;
 
     if (pte_num < 4)
     {
-        memcpy(entry, &mbr->pt[pte_num], sizeof(struct partition_table_entry));
+        memcpy(entry, &mbr->pt[pte_num], sizeof(struct mbr_partition_table_entry));
         pte->pt_num = pte_num;
         pte->pt_off = entry->first_sector_lba * SECTOR_SIZE;
         pte->pte_info = (void*) entry;
@@ -314,8 +314,8 @@ int mbr_serialize_pte(struct pte pt_pte,
 {
     struct bson_info* serialized;
     struct bson_kv value;
-    struct partition_table_entry* pte = 
-                             (struct partition_table_entry *) pt_pte.pte_info;
+    struct mbr_partition_table_entry* pte =
+                             (struct mbr_partition_table_entry *) pt_pte.pte_info;
     int32_t partition_type;
     int32_t final_sector;
     int ret;
@@ -359,6 +359,6 @@ int mbr_serialize_pte(struct pte pt_pte,
     bson_finalize(serialized);
     ret = bson_writef(serialized, serializef);
     bson_cleanup(serialized);
-     
+
     return ret;
 }
