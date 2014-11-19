@@ -27,6 +27,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "bson.h"
 #include "color.h"
@@ -132,12 +133,12 @@ void gpt_print(struct pt pt)
     }
 }
 
-int gpt_probe(FILE* disk, struct pt* pt)
+int gpt_probe(int disk, struct pt* pt)
 {
     pt->pt_info = malloc(sizeof(struct disk_mbr) + sizeof(struct disk_gpt));
     struct disk_mbr* mbr = (struct disk_mbr*) pt->pt_info;
 
-    if (fread(mbr, 1, sizeof(struct disk_mbr), disk) < sizeof(struct disk_mbr))
+    if (read(disk, mbr, sizeof(struct disk_mbr)) < sizeof(struct disk_mbr))
     {
         fprintf_light_red(stderr, "Error reading MBR from raw disk file.\n");
         return -1;
@@ -155,7 +156,7 @@ int gpt_probe(FILE* disk, struct pt* pt)
 
     struct disk_gpt* gpt = (struct disk_gpt*)
         (pt->pt_info + sizeof(struct disk_mbr));
-    if (fread(gpt, 1, sizeof(struct disk_gpt), disk) < sizeof(struct disk_gpt))
+    if (read(disk, gpt, sizeof(struct disk_gpt)) < sizeof(struct disk_gpt))
     {
         fprintf_light_red(stderr, "Error reading GPT from raw disk file.\n");
         return -1;
@@ -219,7 +220,7 @@ bool gpt_get_next_partition(struct pt pt, struct pte* pte)
 }
 
 int gpt_serialize_pt(struct pt pt, struct bitarray* bits,
-                     FILE* serializef)
+                     int serializef)
 {
     struct bson_info* serialized;
     struct bson_kv value;
@@ -246,7 +247,7 @@ int gpt_serialize_pt(struct pt pt, struct bitarray* bits,
 
 
 int gpt_serialize_pte(struct pte pt_pte,
-                      FILE* serializef)
+                      int serializef)
 {
     struct bson_info* serialized;
     struct bson_kv value;

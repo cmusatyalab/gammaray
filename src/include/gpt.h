@@ -65,11 +65,11 @@ struct disk_gpt
     struct gpt_partition_table_entry pt[128];
 }__attribute__((packed));
 
-int gpt_probe(FILE* disk, struct pt* pt);
+int gpt_probe(int disk, struct pt* pt);
 void gpt_print(struct pt pt);
 int gpt_serialize_pt(struct pt pt, struct bitarray* bits,
-                     FILE* serializef);
-int gpt_serialize_pte(struct pte pte, FILE* serializef);
+                     int serializef);
+int gpt_serialize_pte(struct pte pte, int serializef);
 bool gpt_get_next_partition(struct pt pt, struct pte* pte);
 int gpt_cleanup_pt(struct pt pt);
 int gpt_cleanup_pte(struct pte pte);
