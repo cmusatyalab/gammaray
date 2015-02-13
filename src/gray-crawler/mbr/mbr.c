@@ -295,7 +295,7 @@ bool mbr_get_next_partition(struct pt pt, struct pte* pte)
     {
         memcpy(entry, &mbr->pt[pte_num], sizeof(struct mbr_partition_table_entry));
         pte->pt_num = pte_num;
-        pte->pt_off = entry->first_sector_lba * SECTOR_SIZE;
+        pte->pt_off = (int64_t)entry->first_sector_lba * SECTOR_SIZE;
         pte->pte_info = (void*) entry;
         pte_num++;
     }
