@@ -15,7 +15,16 @@
 
 #define SECTOR_SIZE 512
 
-void print_hex_memory(void *mem, int n);
+void print_hex_memory(void *mem, int n) {
+  int i;
+  unsigned char *p = (unsigned char *)mem;
+  for (i=0;i<n;i++) {
+    printf("0x%02x ", p[i]);
+  }
+  printf("\n");
+}
+
+
 int fat32_probe(int disk, struct fs* fs)
 {
   struct fat32_volumeID* volumeID;
@@ -37,13 +46,9 @@ int fat32_probe(int disk, struct fs* fs)
       return -1;
   }
   
-  //fprintf_light_white(stdout, "pt_off: %016llX\n", fs->pt_off);
   fprintf_light_white(stdout, "pt_off: 0x%.16"PRIx64".\n", fs->pt_off);
 
-  //fseeko(disk, fs->pt_off + 0x0B, SEEK_SET);
   lseek64(disk, (off64_t) (fs->pt_off + 0x0B), SEEK_SET);
-  //if (fread((void*)&volumeID->bytes_per_sector, 1, sizeof(uint16_t), disk) !=
-  //      sizeof(uint16_t))
   if (read(disk, (void*)&volumeID->bytes_per_sector, sizeof(uint16_t)) != 
           sizeof(uint16_t))
   {
@@ -51,10 +56,7 @@ int fat32_probe(int disk, struct fs* fs)
         return -1;
   }
 
-  //fseeko(disk, fs->pt_off + 0x0D, SEEK_SET);
   lseek64(disk, (off64_t) (fs->pt_off + 0x0D), SEEK_SET);
-  //if (fread((void*)&volumeID->sectors_per_cluster, 1, sizeof(uint8_t), disk) !=
-  //      sizeof(uint8_t))
   if (read(disk, (void*)&volumeID->sectors_per_cluster, sizeof(uint8_t)) != 
           sizeof(uint8_t))
   {
@@ -63,10 +65,7 @@ int fat32_probe(int disk, struct fs* fs)
   }
 
   printf("SectorsPerCluster %" PRIu8 "\n",volumeID->sectors_per_cluster);
-  //fseeko(disk, fs->pt_off + 0x0E, SEEK_SET);
   lseek64(disk, (off64_t) (fs->pt_off + 0x0E), SEEK_SET);
-  //if (fread((void*)&volumeID->num_reserved_sectors, 1, sizeof(uint16_t), disk) !=
-  //      sizeof(uint16_t))
   if (read(disk, (void*)&volumeID->num_reserved_sectors, sizeof(uint16_t)) != 
           sizeof(uint16_t))
   {
@@ -76,10 +75,7 @@ int fat32_probe(int disk, struct fs* fs)
 
   printf("NumReservedSectors %" PRIu16 "\n",volumeID->num_reserved_sectors);
 
-  //fseeko(disk, fs->pt_off + 0x10, SEEK_SET);
   lseek64(disk, (off64_t) (fs->pt_off + 0x10), SEEK_SET);
-  //if (fread((void*)&volumeID->num_fats, 1, sizeof(uint8_t), disk) !=
-  //      sizeof(uint8_t))
   if (read(disk, (void*)&volumeID->num_fats, sizeof(uint8_t)) != 
           sizeof(uint8_t))
   {
@@ -87,10 +83,7 @@ int fat32_probe(int disk, struct fs* fs)
         return -1;
   }
   fprintf_light_white(stdout, "fat32 numfats: %x\n", volumeID->num_fats);
-  //fseeko(disk, fs->pt_off + 0x24, SEEK_SET);
   lseek64(disk, (off64_t) (fs->pt_off + 0x24), SEEK_SET);
-  //if (fread((void*)&volumeID->sectors_per_fat, 1, sizeof(uint32_t), disk) !=
-  //      sizeof(uint32_t))
   if (read(disk, (void*)&volumeID->sectors_per_fat, sizeof(uint32_t)) != 
           sizeof(uint32_t))
   {
@@ -99,10 +92,7 @@ int fat32_probe(int disk, struct fs* fs)
   }
 
   printf("SectorsPerFat %" PRIu32 "\n",volumeID->sectors_per_fat);
-  //fseeko(disk, fs->pt_off + 0x2C, SEEK_SET);
   lseek64(disk, (off64_t) (fs->pt_off + 0x2C), SEEK_SET);
-  //if (fread((void*)&volumeID->root_dir_first_cluster, 1, sizeof(uint32_t), disk) !=
-  //      sizeof(uint32_t))
   if (read(disk, (void*)&volumeID->root_dir_first_cluster, sizeof(uint32_t)) != 
           sizeof(uint32_t))
   {
@@ -112,9 +102,7 @@ int fat32_probe(int disk, struct fs* fs)
   printf("RootDirFstCluster%" PRIu32 "\n",volumeID->root_dir_first_cluster);
 
   char *volLab = calloc(1, 12);
-  //fseeko(disk, fs->pt_off + 71, SEEK_SET);
   lseek64(disk, (off64_t) (fs->pt_off + 71), SEEK_SET);
-  //if (fread((void*)volLab, 1, 11, disk) != 11)
   if (read(disk, (void*)volLab, 11) != 11)
   {
     fprintf_light_red(stderr, "Error while trying to read fat32 signatureeee.\n");
@@ -122,10 +110,7 @@ int fat32_probe(int disk, struct fs* fs)
   }
   print_hex_memory(volLab, 11);
 
-  //fseeko(disk, fs->pt_off + 0x1FE, SEEK_SET);
   lseek64(disk, (off64_t) (fs->pt_off + 0x1FE), SEEK_SET);
-  //if (fread((void*)&volumeID->signature, 1, sizeof(uint32_t), disk) !=
-  //      sizeof(uint32_t))
   if (read(disk, (void*)&volumeID->signature, sizeof(uint32_t)) != 
           sizeof(uint32_t))
   {
@@ -142,15 +127,6 @@ int fat32_probe(int disk, struct fs* fs)
   return 0;
 }
 
-void print_hex_memory(void *mem, int n) {
-  int i;
-  unsigned char *p = (unsigned char *)mem;
-  for (i=0;i<n;i++) {
-    printf("0x%02x ", p[i]);
-  }
-  printf("\n");
-}
-
 int64_t get_cluster_addr(struct fs* fs, uint32_t cluster_number) {  
   struct fat32_volumeID* volID = fs->fs_info;
   int64_t cluster_begin_lba = (int64_t)volID->num_reserved_sectors + (volID->num_fats * volID->sectors_per_fat);
@@ -165,10 +141,8 @@ uint32_t get_fat_entry(int disk, int cluster_num, struct fs* fs) {
   
   int64_t fat_begin = fs->pt_off + volID->num_reserved_sectors * SECTOR_SIZE;
   int64_t fat_entry_addr = fat_begin + (cluster_num * 4);
-  //fseeko(disk, fat_entry_addr, SEEK_SET);
   lseek64(disk, (off64_t) (fat_entry_addr), SEEK_SET);
   uint32_t result;
-  //if (fread((void*)&result, 1, 4, disk) != 4)
   if (read(disk, (void*)&result, 4) != 4)
   {
     fprintf_light_red(stderr, "Error while trying to read fat entry.\n");
@@ -237,6 +211,25 @@ char* read_short_entry(unsigned char* entry)
   return name;
 }
 
+void print_file_info(struct fat32_file* file_info) {
+  printf("name: %s\n", file_info->name);
+  printf("path: %s\n", file_info->path);
+  printf("is_dir: %s\n", file_info->is_dir ? "true" : "false");
+  printf("cluster_num: %d\n", file_info->cluster_num);
+}
+
+void free_file_info(struct fat32_file* file_info) {
+  free(file_info->name);
+  free(file_info->path);
+}
+
+char* make_path_name(char* path, char* name) {
+  char* file_path = calloc(1, strlen(path) + strlen(name) + 2);
+  strcpy(file_path, path); 
+  strcpy(file_path + strlen(path), "/");
+  strcpy(file_path + strlen(path) + 1, name);
+  return file_path;
+}
 void read_dir_cluster(char* path, int disk, uint32_t cluster_num, struct fs* fs, int serializef) 
 {
   int64_t cluster_addr = get_cluster_addr(fs, cluster_num); int offset = 0;
@@ -244,6 +237,7 @@ void read_dir_cluster(char* path, int disk, uint32_t cluster_num, struct fs* fs,
   lseek64(disk, (off64_t) (cluster_addr), SEEK_SET);
   struct fat32_volumeID* volID = fs->fs_info;
   char* long_name = NULL;
+  struct fat32_file file_info;
   while (true) 
   {
     if (read(disk, (void*)entry, 32) != 32)
@@ -252,27 +246,25 @@ void read_dir_cluster(char* path, int disk, uint32_t cluster_num, struct fs* fs,
         return;
     }
     offset += 32;
-    //print_hex_memory(entry, 32);
     
     if (!(entry[0] ^ (unsigned char)0xe5))
     {
-      //printf("Free Entry!\n");
+      // This entry is empty.
       continue;
     }
     if (!entry[0]) 
     {
-      printf("End of Directory!\n");
+      // No more directory entries.
       break;
     }
     
     if (!(entry[11] ^ (unsigned char)0x08))
     {
-      printf("VOLID\n");
+      // This entry is the volume id.
       continue;
     }
     if (!(entry[11] ^ (unsigned char)0xF)) 
     {
-      //printf("LONG NAME!\n");
       char* entry_name = read_name_long_entry(entry);
       if (!long_name) 
       {
@@ -287,46 +279,41 @@ void read_dir_cluster(char* path, int disk, uint32_t cluster_num, struct fs* fs,
     } 
     else 
     {
-      //printf("SHORT NAME!\n");
       char* short_name = read_short_entry(entry);
       if (long_name) 
       {
-        printf("%s\n", long_name);
-        free(long_name);
+        file_info.name = long_name;
         long_name = NULL;
       }
       else 
       {
-        printf("%s\n", short_name);
+        file_info.name = short_name;
       }
+      
+      uint32_t cluster_hi1 = ((uint32_t) entry[20]) << 16;
+      uint32_t cluster_hi2 = ((uint32_t) entry[21]) << 24;
+      uint32_t cluster_lo1 = ((uint32_t) entry[26]);
+      uint32_t cluster_lo2 = (uint32_t) entry[27] << 8;
+      uint32_t file_cluster_num = 
+          cluster_hi1 | cluster_hi2 | cluster_lo1 | cluster_lo2;
+      file_info.cluster_num = file_cluster_num;
+      file_info.path = make_path_name(path, file_info.name);
       if ((entry[11] & (unsigned char)0x10) && entry[0] ^ (unsigned char)0x2E)  
       {
-        printf("Is dir!\n");
-        uint32_t cluster_hi1 = ((uint32_t) entry[20]) << 16;
-        uint32_t cluster_hi2 = ((uint32_t) entry[21]) << 24;
-        uint32_t cluster_lo1 = ((uint32_t) entry[26]);
-        uint32_t cluster_lo2 = (uint32_t) entry[27] << 8;
-        uint32_t new_dir_cluster_num = 
-          cluster_hi1 | cluster_hi2 | cluster_lo1 | cluster_lo2;
-        printf("dir_clus_num %" PRIu32 "\n", new_dir_cluster_num);
-        char* name;
-        if (long_name) 
-        {
-          name = long_name;
-        }
-        else
-        {
-          name = short_name;
-        }
-        read_dir_cluster(name, disk, new_dir_cluster_num, fs, serializef);
+        file_info.is_dir = true;
+        read_dir_cluster(file_info.path, disk, file_cluster_num, fs, serializef);
         lseek64(disk, (off64_t) (cluster_addr + offset), SEEK_SET);
       }
+      else
+      {
+        file_info.is_dir = false;
+      }
+      print_file_info(&file_info);
+      free_file_info(&file_info);
     }
-    //print_hex_memory(entry, 32);
 
     if (offset == 512 * volID->sectors_per_cluster) 
     {
-      //printf("offset: %d bytes_cluster: %d\n", offset, 512 * volID->sectors_per_cluster);
       uint32_t fat_entry = get_fat_entry(disk, cluster_num, fs);
       if (fat_entry == 0x0FFFFFFF) 
       {

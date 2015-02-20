@@ -13,8 +13,11 @@ struct fat32_volumeID {
   uint16_t signature;
 };
 
-struct fat32_entry {
-  char *name;
+struct fat32_file {
+  char* name;
+  char* path;
+  bool is_dir;
+  uint32_t cluster_num;
 };
 
 int fat32_probe(int disk, struct fs* fs);
