@@ -35,6 +35,7 @@
 
 #include "color.h"
 #include "ext4.h"
+#include "fat32.h"
 #include "gray-crawler.h"
 #include "gpt.h"
 #include "mbr.h"
@@ -52,7 +53,7 @@ struct gray_fs_pt_crawler pt_crawlers[] = {
 struct gray_fs_crawler crawlers[] = {
     GRAY_FS(ext4),
     GRAY_FS(ntfs),
-    //GRAY_FS(fat32), TODO
+    GRAY_FS(fat32),
     {NULL, NULL, NULL, NULL} /* guard value */
 };
 
@@ -175,7 +176,6 @@ int main(int argc, char* args[])
     while (pt_crawler->get_next_partition(ptdata, &ptedata))
     {
         fsdata = (struct fs) {0, 0, NULL, NULL, NULL};
-
         fsdata.pte = ptedata.pt_num;
         fsdata.pt_off = ptedata.pt_off;
         fsdata.bits = bits;
