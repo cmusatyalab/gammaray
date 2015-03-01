@@ -1,3 +1,27 @@
+/*****************************************************************************
+ * fat32.c                                                                   *
+ *                                                                           *
+ * Analyze a FAT32 file system and produce BSON-serialized metadata.         *
+ *                                                                           *
+ *                                                                           *
+ *   Authors: Sang Jin Han <shan1@andrew.cmu.edu>                            *
+ *            Wolfgang Richter <wolf@cs.cmu.edu>                             *
+ *                                                                           *
+ *                                                                           *
+ *   Copyright 2014-2015 Carnegie Mellon University                          *
+ *                                                                           *
+ *   Licensed under the Apache License, Version 2.0 (the "License");         *
+ *   you may not use this file except in compliance with the License.        *
+ *   You may obtain a copy of the License at                                 *
+ *                                                                           *
+ *       http://www.apache.org/licenses/LICENSE-2.0                          *
+ *                                                                           *
+ *   Unless required by applicable law or agreed to in writing, software     *
+ *   distributed under the License is distributed on an "AS IS" BASIS,       *
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.*
+ *   See the License for the specific language governing permissions and     *
+ *   limitations under the License.                                          *
+ *****************************************************************************/
 #define _LARGEFILE64_SOURCE
 
 #include <sys/types.h>
@@ -16,115 +40,118 @@
 #define SECTOR_SIZE 512
 
 void print_hex_memory(void *mem, int n) {
-  int i;
-  unsigned char *p = (unsigned char *)mem;
-  for (i=0;i<n;i++) {
-    printf("0x%02x ", p[i]);
-  }
-  printf("\n");
+    int i;
+    unsigned char *p = (unsigned char *)mem;
+    for (i=0; i<n; i++) {
+        printf("0x%02x ", p[i]);
+    }
+    printf("\n");
 }
-
 
 int fat32_probe(int disk, struct fs* fs)
 {
-  struct fat32_volumeID* volumeID;
-  fs->fs_info = malloc(sizeof(struct fat32_volumeID));
+    struct fat32_volumeID* volumeID;
+    fs->fs_info = malloc(sizeof(struct fat32_volumeID));
 
-  if (fs->fs_info == NULL)
-  {
-      fprintf_light_red(stderr, "Error allocating space for "
-                                "'struct fat32_volumeID'.\n");
-      return -1;
-  }
-
-  volumeID = (struct fat32_volumeID*) fs->fs_info;
-
-  if (fs->pt_off == 0)
-  {
-      fprintf_light_red(stderr, "fat32 probe failed on partition at offset: "
-                                "0x%.16"PRIx64".\n", fs->pt_off);
-      return -1;
-  }
-  
-  fprintf_light_white(stdout, "pt_off: 0x%.16"PRIx64".\n", fs->pt_off);
-
-  lseek64(disk, (off64_t) (fs->pt_off + 0x0B), SEEK_SET);
-  if (read(disk, (void*)&volumeID->bytes_per_sector, sizeof(uint16_t)) != 
-          sizeof(uint16_t))
-  {
-    fprintf_light_red(stderr, "Error while trying to read fat32 bytes_per_sector.\n");
+    if (fs->fs_info == NULL)
+    {
+        fprintf_light_red(stderr, "Error allocating space for "
+                                  "'struct fat32_volumeID'.\n");
         return -1;
-  }
+    }
 
-  lseek64(disk, (off64_t) (fs->pt_off + 0x0D), SEEK_SET);
-  if (read(disk, (void*)&volumeID->sectors_per_cluster, sizeof(uint8_t)) != 
+    volumeID = (struct fat32_volumeID*) fs->fs_info;
+
+    if (fs->pt_off == 0)
+    {
+        fprintf_light_red(stderr, "fat32 probe failed on partition at offset: "
+                                  "0x%.16"PRIx64".\n", fs->pt_off);
+        return -1;
+    }
+
+    fprintf_light_white(stdout, "pt_off: 0x%.16"PRIx64".\n", fs->pt_off);
+
+    lseek64(disk, (off64_t) (fs->pt_off + 0x0B), SEEK_SET);
+    if (read(disk, (void*)&volumeID->bytes_per_sector, sizeof(uint16_t)) != 
+             sizeof(uint16_t))
+    {
+        fprintf_light_red(stderr, "Error while trying to read fat32 bytes_per_sector.\n");
+        return -1;
+    }
+
+    lseek64(disk, (off64_t) (fs->pt_off + 0x0D), SEEK_SET);
+    if (read(disk, (void*)&volumeID->sectors_per_cluster, sizeof(uint8_t)) != 
           sizeof(uint8_t))
-  {
-    fprintf_light_red(stderr, "Error while trying to read fat32 sectors_per_cluster.\n");
+    {
+        fprintf_light_red(stderr, "Error while trying to read fat32 sectors_per_cluster.\n");
         return -1;
-  }
+    }
 
-  printf("SectorsPerCluster %" PRIu8 "\n",volumeID->sectors_per_cluster);
-  lseek64(disk, (off64_t) (fs->pt_off + 0x0E), SEEK_SET);
-  if (read(disk, (void*)&volumeID->num_reserved_sectors, sizeof(uint16_t)) != 
+    printf("SectorsPerCluster %" PRIu8 "\n",volumeID->sectors_per_cluster);
+    lseek64(disk, (off64_t) (fs->pt_off + 0x0E), SEEK_SET);
+    if (read(disk, (void*)&volumeID->num_reserved_sectors, sizeof(uint16_t)) != 
           sizeof(uint16_t))
-  {
-    fprintf_light_red(stderr, "Error while trying to read fat32 num_reserved_sectors.\n");
+    {
+        fprintf_light_red(stderr, "Error while trying to read fat32 num_reserved_sectors.\n");
         return -1;
-  }
+    }
 
-  printf("NumReservedSectors %" PRIu16 "\n",volumeID->num_reserved_sectors);
+    printf("NumReservedSectors %" PRIu16 "\n",volumeID->num_reserved_sectors);
 
-  lseek64(disk, (off64_t) (fs->pt_off + 0x10), SEEK_SET);
-  if (read(disk, (void*)&volumeID->num_fats, sizeof(uint8_t)) != 
-          sizeof(uint8_t))
-  {
-    fprintf_light_red(stderr, "Error while trying to read fat32 num_fats.\n");
+    lseek64(disk, (off64_t) (fs->pt_off + 0x10), SEEK_SET);
+    if (read(disk, (void*)&volumeID->num_fats, sizeof(uint8_t)) != 
+        sizeof(uint8_t))
+    {
+        fprintf_light_red(stderr, "Error while trying to read fat32 num_fats.\n");
         return -1;
-  }
-  fprintf_light_white(stdout, "fat32 numfats: %x\n", volumeID->num_fats);
-  lseek64(disk, (off64_t) (fs->pt_off + 0x24), SEEK_SET);
-  if (read(disk, (void*)&volumeID->sectors_per_fat, sizeof(uint32_t)) != 
+    }
+
+    fprintf_light_white(stdout, "fat32 numfats: %x\n", volumeID->num_fats);
+
+    lseek64(disk, (off64_t) (fs->pt_off + 0x24), SEEK_SET);
+    if (read(disk, (void*)&volumeID->sectors_per_fat, sizeof(uint32_t)) != 
           sizeof(uint32_t))
-  {
-    fprintf_light_red(stderr, "Error while trying to read fat32 sectors_per_fat.\n");
+    {
+        fprintf_light_red(stderr, "Error while trying to read fat32 sectors_per_fat.\n");
         return -1;
-  }
+    }
 
-  printf("SectorsPerFat %" PRIu32 "\n",volumeID->sectors_per_fat);
-  lseek64(disk, (off64_t) (fs->pt_off + 0x2C), SEEK_SET);
-  if (read(disk, (void*)&volumeID->root_dir_first_cluster, sizeof(uint32_t)) != 
+    printf("SectorsPerFat %" PRIu32 "\n",volumeID->sectors_per_fat);
+    lseek64(disk, (off64_t) (fs->pt_off + 0x2C), SEEK_SET);
+    if (read(disk, (void*)&volumeID->root_dir_first_cluster, sizeof(uint32_t)) != 
+        sizeof(uint32_t))
+    {
+        fprintf_light_red(stderr, "Error while trying to read fat32 root_dir_first_cluster.\n");
+        return -1;
+    }
+
+    printf("RootDirFstCluster%" PRIu32 "\n",volumeID->root_dir_first_cluster);
+
+    char *volLab = calloc(1, 12);
+    lseek64(disk, (off64_t) (fs->pt_off + 71), SEEK_SET);
+    if (read(disk, (void*)volLab, 11) != 11)
+    {
+        fprintf_light_red(stderr, "Error while trying to read fat32 signatureeee.\n");
+        return -1;
+    }
+
+    print_hex_memory(volLab, 11);
+
+    lseek64(disk, (off64_t) (fs->pt_off + 0x1FE), SEEK_SET);
+    if (read(disk, (void*)&volumeID->signature, sizeof(uint32_t)) != 
           sizeof(uint32_t))
-  {
-    fprintf_light_red(stderr, "Error while trying to read fat32 root_dir_first_cluster.\n");
+    {
+        fprintf_light_red(stderr, "Error while trying to read fat32 signature.\n");
         return -1;
-  }
-  printf("RootDirFstCluster%" PRIu32 "\n",volumeID->root_dir_first_cluster);
+    }
 
-  char *volLab = calloc(1, 12);
-  lseek64(disk, (off64_t) (fs->pt_off + 71), SEEK_SET);
-  if (read(disk, (void*)volLab, 11) != 11)
-  {
-    fprintf_light_red(stderr, "Error while trying to read fat32 signatureeee.\n");
+    if (volumeID->signature != 0xAA55)
+    {
+        fprintf_light_red(stderr, "Fat32 signature does not match 0xAA55.\n");
         return -1;
-  }
-  print_hex_memory(volLab, 11);
+    }
 
-  lseek64(disk, (off64_t) (fs->pt_off + 0x1FE), SEEK_SET);
-  if (read(disk, (void*)&volumeID->signature, sizeof(uint32_t)) != 
-          sizeof(uint32_t))
-  {
-    fprintf_light_red(stderr, "Error while trying to read fat32 signature.\n");
-        return -1;
-  }
-
-  if (volumeID->signature != 0xAA55)
-  {
-    fprintf_light_red(stderr, "Fat32 signature does not match 0xAA55.\n");
-    return -1;
-  }
-
-  return 0;
+    return 0;
 }
 
 int64_t get_cluster_addr(struct fs* fs, uint32_t cluster_number) {  
@@ -339,6 +366,8 @@ int fat32_serialize(int disk, struct fs* fs, int serializef)
 
 int fat32_cleanup(struct fs* fs)
 { 
-  return 0;
+    if (fs->fs_info)
+        free(fs->fs_info);
+    return 0;
 }
 
