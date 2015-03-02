@@ -186,7 +186,7 @@ int64_t get_cluster_addr(struct fs* fs, uint32_t cluster_number) {
   printf("cluster_begin_lba %" PRId64 "\n", cluster_begin_lba);
   printf("fs PTOFF %" PRId64 "\n", fs->pt_off);
   /* TODO: Define sector size. */
-  return fs->pt_off + (int64_t)512*(cluster_begin_lba + (cluster_number - 2) * volID->sectors_per_cluster);
+  return fs->pt_off + (int64_t)SECTOR_SIZE*(cluster_begin_lba + (cluster_number - 2) * volID->sectors_per_cluster);
 }
 
 uint32_t get_fat_entry(int disk, int cluster_num, struct fs* fs) {
@@ -365,7 +365,7 @@ void read_dir_cluster(char* path, int disk, uint32_t cluster_num, struct fs* fs,
       free_file_info(&file_info);
     }
 
-    if (offset == 512 * volID->sectors_per_cluster) 
+    if (offset == SECTOR_SIZE * volID->sectors_per_cluster) 
     {
       uint32_t fat_entry = get_fat_entry(disk, cluster_num, fs);
       if (fat_entry == 0x0FFFFFFF) 
