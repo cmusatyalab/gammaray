@@ -39,28 +39,25 @@
 
 #define SECTOR_SIZE 512
 
-void print_hex_memory(void *mem, int n) {
-    int i;
-    unsigned char *p = (unsigned char *)mem;
-    for (i=0; i<n; i++) {
-        printf("0x%02x ", p[i]);
-    }
-    printf("\n");
-}
-
 int fat32_probe(int disk, struct fs* fs)
 {
-    struct fat32_volumeID* volumeID;
-    fs->fs_info = malloc(sizeof(struct fat32_volumeID));
+    struct fat32_volumeID* volumeID = malloc(sizeof(struct fat32_volumeID));
+    char *volLab = calloc(1, 12);
 
-    if (fs->fs_info == NULL)
+    if (volumeID == NULL)
     {
         fprintf_light_red(stderr, "Error allocating space for "
                                   "'struct fat32_volumeID'.\n");
         return -1;
     }
 
-    volumeID = (struct fat32_volumeID*) fs->fs_info;
+    if (volLab == NULL)
+    {
+        fprintf_light_red(stderr, "Error allocating volLab.\n");
+        return -1;
+    }
+
+    fs->fs_info = volumeID;
 
     if (fs->pt_off == 0)
     {
@@ -69,9 +66,12 @@ int fat32_probe(int disk, struct fs* fs)
         return -1;
     }
 
-    fprintf_light_white(stdout, "pt_off: 0x%.16"PRIx64".\n", fs->pt_off);
+    if (lseek64(disk, (off64_t) (fs->pt_off + 0x0B), SEEK_SET) == (off64_t) -1)
+    {
+        fprintf_light_red(stderr, "Error seeking while reading FAT32 VolID.\n");
+        return -1;
+    }
 
-    lseek64(disk, (off64_t) (fs->pt_off + 0x0B), SEEK_SET);
     if (read(disk, (void*)&volumeID->bytes_per_sector, sizeof(uint16_t)) != 
              sizeof(uint16_t))
     {
@@ -79,7 +79,13 @@ int fat32_probe(int disk, struct fs* fs)
         return -1;
     }
 
-    lseek64(disk, (off64_t) (fs->pt_off + 0x0D), SEEK_SET);
+    if (lseek64(disk, (off64_t) (fs->pt_off + 0x0D), SEEK_SET) == (off64_t) -1)
+    {
+        fprintf_light_red(stderr, "Error seeking to FAT32 "
+                                  "sectors_per_cluster.\n");
+        return -1;
+    }
+
     if (read(disk, (void*)&volumeID->sectors_per_cluster, sizeof(uint8_t)) != 
           sizeof(uint8_t))
     {
@@ -87,8 +93,13 @@ int fat32_probe(int disk, struct fs* fs)
         return -1;
     }
 
-    printf("SectorsPerCluster %" PRIu8 "\n",volumeID->sectors_per_cluster);
-    lseek64(disk, (off64_t) (fs->pt_off + 0x0E), SEEK_SET);
+    if (lseek64(disk, (off64_t) (fs->pt_off + 0x0E), SEEK_SET) == (off64_t) -1)
+    {
+        fprintf_light_red(stderr, "Error while seeking to FAT32 "
+                                  "num_reserved_sectors.\n");
+        return -1;
+    }
+
     if (read(disk, (void*)&volumeID->num_reserved_sectors, sizeof(uint16_t)) != 
           sizeof(uint16_t))
     {
@@ -96,9 +107,12 @@ int fat32_probe(int disk, struct fs* fs)
         return -1;
     }
 
-    printf("NumReservedSectors %" PRIu16 "\n",volumeID->num_reserved_sectors);
+    if (lseek64(disk, (off64_t) (fs->pt_off + 0x10), SEEK_SET) == (off64_t) -1)
+    {
+        fprintf_light_red(stderr, "Error seeking to FAT32 num_fats.\n");
+        return -1;
+    }
 
-    lseek64(disk, (off64_t) (fs->pt_off + 0x10), SEEK_SET);
     if (read(disk, (void*)&volumeID->num_fats, sizeof(uint8_t)) != 
         sizeof(uint8_t))
     {
@@ -106,9 +120,12 @@ int fat32_probe(int disk, struct fs* fs)
         return -1;
     }
 
-    fprintf_light_white(stdout, "fat32 numfats: %x\n", volumeID->num_fats);
+    if (lseek64(disk, (off64_t) (fs->pt_off + 0x24), SEEK_SET) == (off64_t) -1)
+    {
+        fprintf_light_red(stderr, "Error while trying to seek to FAT32 sectors_per_fat.\n");
+        return -1;
+    }
 
-    lseek64(disk, (off64_t) (fs->pt_off + 0x24), SEEK_SET);
     if (read(disk, (void*)&volumeID->sectors_per_fat, sizeof(uint32_t)) != 
           sizeof(uint32_t))
     {
@@ -116,8 +133,12 @@ int fat32_probe(int disk, struct fs* fs)
         return -1;
     }
 
-    printf("SectorsPerFat %" PRIu32 "\n",volumeID->sectors_per_fat);
-    lseek64(disk, (off64_t) (fs->pt_off + 0x2C), SEEK_SET);
+    if (lseek64(disk, (off64_t) (fs->pt_off + 0x2C), SEEK_SET) == (off64_t) -1)
+    {
+        fprintf_light_red(stderr, "Error while seeking to FAT32 root_dir_first_cluster.\n");
+        return -1;
+    }
+
     if (read(disk, (void*)&volumeID->root_dir_first_cluster, sizeof(uint32_t)) != 
         sizeof(uint32_t))
     {
@@ -125,19 +146,24 @@ int fat32_probe(int disk, struct fs* fs)
         return -1;
     }
 
-    printf("RootDirFstCluster%" PRIu32 "\n",volumeID->root_dir_first_cluster);
+    if (lseek64(disk, (off64_t) (fs->pt_off + 71), SEEK_SET) == (off64_t) -1)
+    {
+        fprintf_light_red(stderr, "Error while seeking to FAT32 volLab.\n");
+        return -1;
+    }
 
-    char *volLab = calloc(1, 12);
-    lseek64(disk, (off64_t) (fs->pt_off + 71), SEEK_SET);
     if (read(disk, (void*)volLab, 11) != 11)
     {
         fprintf_light_red(stderr, "Error while trying to read fat32 signatureeee.\n");
         return -1;
     }
 
-    print_hex_memory(volLab, 11);
+    if (lseek64(disk, (off64_t) (fs->pt_off + 0x1FE), SEEK_SET) == (off64_t) -1)
+    {
+        fprintf_light_red(stderr, "Error while seeking to FAT32 signature.\n");
+        return -1;
+    }
 
-    lseek64(disk, (off64_t) (fs->pt_off + 0x1FE), SEEK_SET);
     if (read(disk, (void*)&volumeID->signature, sizeof(uint32_t)) != 
           sizeof(uint32_t))
     {
