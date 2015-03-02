@@ -152,11 +152,13 @@ int fat32_probe(int disk, struct fs* fs)
         return -1;
     }
 
-    if (read(disk, (void*)volLab, 11) != 11)
+    if (read(disk, (void*) volLab, 11) != 11)
     {
         fprintf_light_red(stderr, "Error while trying to read fat32 signatureeee.\n");
         return -1;
     }
+
+    free(volLab); /* TODO: actually use this */
 
     if (lseek64(disk, (off64_t) (fs->pt_off + 0x1FE), SEEK_SET) == (off64_t) -1)
     {
