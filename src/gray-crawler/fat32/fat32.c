@@ -386,8 +386,108 @@ void read_dir_cluster(char* path, int disk, uint32_t cluster_num, struct fs* fs,
   free(entry);
 }
 
+int fat32_serialize_fs(struct fs* fs, int serializef)
+{
+    struct bson_info* serialized;
+    struct bson_kv value;
+    int64_t partition_offset = fs->pt_off;
+    struct fat32_volumeID* volid = (struct fat32_volumeID*) fs->fs_info;
+    int32_t num_block_groups = volid->num_fats;
+    int32_t num_files = -1;
+    uint64_t block_size = volid->bytes_per_sector * volid->sectors_per_cluster;
+    uint64_t blocks_per_group = (volid->sectors_per_fat * volid->bytes_per_sector) / block_size;
+    uint64_t inode_size = 0;
+    uint64_t inodes_per_group = 0;
+
+    serialized = bson_init();
+
+    value.type = BSON_STRING;
+    value.size = strlen("fs");
+    value.key = "type";
+    value.data = "fs";
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT32;
+    value.key = "pte_num";
+    value.data = &(fs->pte);
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_STRING;
+    value.size = strlen("fat32");
+    value.key = "fs";
+    value.data = "fat32";
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_STRING;
+    value.key = "mount_point";
+    value.size = strlen("/");
+    value.data = "/";
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT32;
+    value.key = "num_block_groups";
+    value.data = &(num_block_groups);
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT32;
+    value.key = "num_files";
+    value.data = &(num_files);
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT64;
+    value.key = "superblock_sector";
+    partition_offset /= SECTOR_SIZE;
+    value.data = &(partition_offset);
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT64;
+    value.key = "superblock_offset";
+    partition_offset %= SECTOR_SIZE;
+    value.data = &(partition_offset);
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT64;
+    value.key = "block_size";
+    value.data = &(block_size);
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT64;
+    value.key = "blocks_per_group";
+    value.data = &(blocks_per_group);
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT64;
+    value.key = "inodes_per_group";
+    value.data = &(inodes_per_group);
+
+    bson_serialize(serialized, &value);
+
+    value.type = BSON_INT64;
+    value.key = "inode_size";
+    value.data = &(inode_size);
+
+    bson_serialize(serialized, &value);
+
+    bson_finalize(serialized);
+    bson_writef(serialized, serializef);
+    bson_cleanup(serialized);
+
+    return 0;
+}
+
 int fat32_serialize(int disk, struct fs* fs, int serializef)
 {
+  fat32_serialize_fs(fs, serializef);
   read_dir_cluster("", disk, 2, fs, serializef);
   return 0;
 }
