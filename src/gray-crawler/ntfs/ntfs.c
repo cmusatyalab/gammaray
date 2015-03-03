@@ -9,7 +9,7 @@
  *   Authors: Wolfgang Richter <wolf@cs.cmu.edu>                             *
  *                                                                           *
  *                                                                           *
- *   Copyright 2013-2014 Carnegie Mellon University                          *
+ *   Copyright 2013-2015 Carnegie Mellon University                          *
  *                                                                           *
  *   Licensed under the Apache License, Version 2.0 (the "License");         *
  *   you may not use this file except in compliance with the License.        *
@@ -434,7 +434,6 @@ int ntfs_serialize_fs(struct ntfs_boot_file* bootf, struct bitarray* bits,
     int32_t num_block_groups = 0;
     int32_t num_files = -1;
     struct bson_info* serialized;
-    struct bson_info* sectors;
     struct bson_kv value;
     uint64_t block_size = bootf->bytes_per_sector;
     uint64_t blocks_per_group = bootf->sectors_per_cluster;
@@ -442,7 +441,6 @@ int ntfs_serialize_fs(struct ntfs_boot_file* bootf, struct bitarray* bits,
     uint64_t inodes_per_group = (blocks_per_group * block_size) / inode_size; 
 
     serialized = bson_init();
-    sectors = bson_init();
 
     value.type = BSON_STRING;
     value.size = strlen("fs");
@@ -523,7 +521,6 @@ int ntfs_serialize_fs(struct ntfs_boot_file* bootf, struct bitarray* bits,
 
     bson_finalize(serialized);
     bson_writef(serialized, serializedf);
-    bson_cleanup(sectors);
     bson_cleanup(serialized);
 
     return EXIT_SUCCESS;
