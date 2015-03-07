@@ -36,6 +36,7 @@
 #include "bson.h"
 #include "color.h"
 #include "fat32.h"
+#include "util.h"
 
 #define SECTOR_SIZE 512
 
@@ -266,11 +267,64 @@ char* read_short_entry(unsigned char* entry)
   return name;
 }
 
+void fill_tm_from_fat32_timestamp(struct tm* result, uint16_t fat32_timestamp) 
+{
+    uint8_t seconds = (fat32_timestamp & 0x1F) << 1;
+    uint8_t minutes = (fat32_timestamp >> 5) & 0x3F;
+    uint8_t hours = (fat32_timestamp >> 11) & 0xF;
+    
+    result->tm_sec = (int) seconds;
+    result->tm_min = (int) minutes;
+    result->tm_hour = (int) hours;
+}
+
+void fill_tm_from_fat32_datestamp(struct tm* result, uint16_t fat32_date)
+{
+    uint8_t day = (uint8_t) (fat32_date & 0x1F);
+    uint8_t month = (fat32_date >> 5) & 0xF;
+    uint8_t year = (fat32_date >> 9) & 0x7F;
+    
+    result->tm_mday = (int) day;
+    result->tm_mon = (int) (month - 1);
+    result->tm_year = (1980 + (int) year) - 1900;
+    result->tm_isdst = -1;
+}
+
 void print_file_info(struct fat32_file* file_info) {
     printf("name: %s\n", file_info->name);
     printf("path: %s\n", file_info->path);
     printf("is_dir: %s\n", file_info->is_dir ? "true" : "false");
-    printf("cluster_num: %d\n", file_info->cluster_num);
+    printf("cluster_num: %u\n", file_info->cluster_num);
+    printf("dir_cluster_num: %u\n", file_info->dir_cluster_num);
+    printf("dir_cluster_addr: %lu\n", file_info->dir_cluster_addr);
+    /*uint64_t remainder = file_info->dir_cluster_addr % SECTOR_SIZE;
+    if (remainder != 0) {
+        printf("WTF\n");
+    }
+    printf("remainder: %lu\n", remainder);*/
+    printf("inode_sector: %lu\n", file_info->inode_sector);
+    printf("inode_offset: %lu\n", file_info->inode_offset);
+    printf("size: %u\n", file_info->size);
+    printf("CRtime_unix: %s", ctime(&(file_info->crtime)));
+    printf("LAtime_unix: %s", ctime(&(file_info->latime)));
+    printf("LWtime_unix: %s", ctime(&(file_info->lwtime)));
+}
+
+void print_fat32_date(char* date_type, uint16_t date) {
+    uint8_t day = (uint8_t) (date & 0x1F);
+    uint8_t month = (date >> 5) & 0xF;
+    uint8_t year = (date >> 9) & 0x7F;
+
+    printf("%s: %u %u %u %u\n", date_type, date, year, month, day);
+}
+
+void print_fat32_timestamp(char* time_type, uint16_t fat32_timestamp)
+{
+    uint8_t seconds = (fat32_timestamp & 0x1F) << 1;
+    uint8_t minutes = (fat32_timestamp >> 5) & 0x3F;
+    uint8_t hours = (fat32_timestamp >> 11) & 0xF;
+    
+    printf("%s: %u %u %u %u\n", time_type, fat32_timestamp, hours, minutes, seconds);
 }
 
 void free_file_info(struct fat32_file* file_info) {
@@ -294,17 +348,17 @@ int fat32_serialize_file_info(struct fat32_file* file, int serializef)
 
     /* @hjs0660 for the variables below without a TODO,
      *          can you confirm they don't exist for FAT32? */
-    uint64_t inode_sector = 0; /* TODO: @hjs0660 fill in sector of dir entry struct (containing cluster start) */
-    uint64_t inode_offset = 0; /* TODO: @hjs0660 offset to dir entry struct from start sector of containing cluster */
+    uint64_t inode_sector = file->inode_sector; /* TODO: @hjs0660 fill in sector of dir entry struct (containing cluster start) */
+    uint64_t inode_offset = file->inode_offset; /* TODO: @hjs0660 offset to dir entry struct from start sector of containing cluster */
     uint32_t inode_num = 0;
-    uint64_t size = 0; /* TODO: @hjs0660 fill in this value */
+    uint64_t size = file->size; /* TODO: @hjs0660 fill in this value */
     uint64_t mode = 0;
     uint64_t link_count = 1;
     uint64_t uid = 0;
     uint64_t gid = 0;
-    uint64_t atime = 0; /* TODO: @hjs0660 make a best effort to calculate this as a UNIX timestamp */
-    uint64_t mtime = 0; /* TODO: @hjs0660 yeah..try to compute this too */
-    uint64_t ctime = 0; /* TODO: @hjs0660 do what you can with the FAT32 times */
+    uint64_t atime = file->latime; /* TODO: @hjs0660 make a best effort to calculate this as a UNIX timestamp */
+    uint64_t mtime = file->lwtime; /* TODO: @hjs0660 yeah..try to compute this too */
+    uint64_t ctime = file->crtime; /* TODO: @hjs0660 do what you can with the FAT32 times */
 
     serialized = bson_init();
     sectors = bson_init();
@@ -406,15 +460,28 @@ int fat32_serialize_file_info(struct fat32_file* file, int serializef)
     return 0;
 }
 
+void fat32_reset_file_info(struct fat32_file* file_info)
+{
+    file_info->name = NULL;
+    file_info->path = NULL;
+    file_info->cluster_num = 0;
+    file_info->inode_sector = 0;
+    file_info->inode_offset = 0;
+    file_info->size = 0;
+    file_info->crtime = 0;
+    file_info->latime = 0;
+    file_info->lwtime = 0;
+
+}
 int read_dir_cluster(char* path, int disk, uint32_t cluster_num,
                      struct fs* fs, int serializef)
 {
-    int64_t cluster_addr = get_cluster_addr(fs, cluster_num);
+    uint64_t cluster_addr = get_cluster_addr(fs, cluster_num);
     int offset = 0;
     unsigned char* entry = calloc(1, 32); 
     struct fat32_volumeID* volID = fs->fs_info;
     char* long_name = NULL;
-    struct fat32_file file_info;
+    struct fat32_file file_info = {0};
 
     if (lseek64(disk, (off64_t) (cluster_addr), SEEK_SET) == (off64_t) -1)
     {
@@ -430,8 +497,6 @@ int read_dir_cluster(char* path, int disk, uint32_t cluster_num,
             fprintf_light_red(stderr, "Error while trying to read record.\n");
             return -1;
         }
-
-        offset += 32;
 
         if (!(entry[0] ^ (unsigned char) 0xe5))
         {
@@ -450,6 +515,16 @@ int read_dir_cluster(char* path, int disk, uint32_t cluster_num,
             // This entry is the volume id.
             continue;
         }
+
+        if (file_info.inode_sector == 0) 
+        {
+            file_info.dir_cluster_num = cluster_num;
+            file_info.dir_cluster_addr = cluster_addr;
+            file_info.inode_sector = cluster_addr / SECTOR_SIZE;
+            file_info.inode_offset = offset;
+        }
+
+        offset += 32;
 
         if (!(entry[11] ^ (unsigned char) 0xF)) 
         {
@@ -479,7 +554,41 @@ int read_dir_cluster(char* path, int disk, uint32_t cluster_num,
             {
                 file_info.name = short_name;
             }
-          
+            uint8_t crtime_tenth = *((uint8_t*) (entry + 13));
+            uint16_t crtime = *((uint16_t*) (entry + 14));
+            uint16_t crdate = *((uint16_t*) (entry + 16));
+            uint16_t ladate = *((uint16_t*) (entry + 18));
+            uint16_t lwtime = *((uint16_t*) (entry + 22));
+            uint16_t lwdate = *((uint16_t*) (entry + 24));
+            struct tm crinfo = {0};
+            struct tm lainfo = {0};
+            struct tm lwinfo = {0};
+            fill_tm_from_fat32_datestamp(&crinfo, crdate);
+            fill_tm_from_fat32_timestamp(&crinfo, crtime);
+            crinfo.tm_sec += (int) (crtime_tenth / 100);
+            time_t created_unix_time = mktime(&crinfo);
+            /*print_fat32_date("Created date", crdate);
+            print_fat32_timestamp("Created time", crtime);
+            printf("Ctime_tenth: %u\n", crtime_tenth);
+            printf("Ctime_unix: %s\n", ctime(&created_unix_time));*/
+
+            fill_tm_from_fat32_datestamp(&lainfo, ladate);
+            time_t lastaccessed_unix_time = mktime(&lainfo);
+            /*print_fat32_date("Accessed", ladate);
+            printf("LAtime_unix: %s\n", ctime(&lastaccessed_unix_time));*/
+
+            fill_tm_from_fat32_datestamp(&lwinfo, lwdate);
+            fill_tm_from_fat32_timestamp(&lwinfo, lwtime);
+            time_t lastwritten_unix_time = mktime(&lwinfo);
+            /*print_fat32_date("Wrote date", lwdate);
+            print_fat32_timestamp("Wrote time", lwtime);
+            printf("LAtime_unix: %s\n", ctime(&lastwritten_unix_time));*/
+            
+            //hexdump(entry, 32);
+            file_info.crtime = created_unix_time;
+            file_info.latime = lastaccessed_unix_time;
+            file_info.lwtime = lastwritten_unix_time;
+            file_info.size = *((uint32_t*) (entry + 28));
             uint32_t cluster_hi1 = ((uint32_t) entry[20]) << 16;
             uint32_t cluster_hi2 = ((uint32_t) entry[21]) << 24;
             uint32_t cluster_lo1 = ((uint32_t) entry[26]);
@@ -492,17 +601,20 @@ int read_dir_cluster(char* path, int disk, uint32_t cluster_num,
             if ((entry[11] & (unsigned char)0x10) && entry[0] ^ (unsigned char)0x2E)  
             {
                 file_info.is_dir = true;
+                print_file_info(&file_info);
                 read_dir_cluster(file_info.path, disk, file_cluster_num, fs, serializef);
                 lseek64(disk, (off64_t) (cluster_addr + offset), SEEK_SET);
             }
             else
             {
                 file_info.is_dir = false;
+                print_file_info(&file_info);
             }
 
             fat32_serialize_file_info(&file_info, serializef);
-            print_file_info(&file_info);
+            //print_file_info(&file_info);
             free_file_info(&file_info);
+            fat32_reset_file_info(&file_info);
         }
 
         if (offset == SECTOR_SIZE * volID->sectors_per_cluster) 
