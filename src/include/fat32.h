@@ -1,6 +1,8 @@
 #ifndef __GAMMARAY_DISK_CRAWLER_FAT32_H
 #define __GAMMARAY_DISK_CRAWLER_FAT32_H
 
+#include <time.h>
+
 #include "gray-crawler.h"
 
 struct fat32_volumeID {
@@ -18,6 +20,14 @@ struct fat32_file {
     char* path;
     bool is_dir;
     uint32_t cluster_num;
+    uint32_t dir_cluster_num;
+    uint64_t dir_cluster_addr;
+    uint64_t inode_sector;
+    uint64_t inode_offset;
+    uint32_t size;
+    time_t crtime;
+    time_t latime;
+    time_t lwtime;
 };
 
 int fat32_probe(int disk, struct fs* fs);
