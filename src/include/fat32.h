@@ -5,6 +5,8 @@
 
 #include "gray-crawler.h"
 
+#define FAT32_EOC 0x0FFFFFFF
+
 struct fat32_volumeID {
     uint16_t bytes_per_sector;
     uint8_t sectors_per_cluster;

@@ -339,7 +339,8 @@ void print_fat32_timestamp(char* time_type, uint16_t fat32_timestamp)
     uint8_t minutes = (fat32_timestamp >> 5) & 0x3F;
     uint8_t hours = (fat32_timestamp >> 11) & 0xF;
     
-    printf("%s: %u %u %u %u\n", time_type, fat32_timestamp, hours, minutes, seconds);
+    printf("%s: %u %u %u %u\n", time_type, fat32_timestamp, hours, minutes,
+           seconds);
 }
 
 void free_file_info(struct fat32_file* file_info) {
@@ -625,7 +626,7 @@ int read_dir_cluster(char* path, int disk, uint32_t cluster_num,
         {
             uint32_t fat_entry = get_fat_entry(disk, cluster_num, fs);
 
-            if (fat_entry == 0x0FFFFFFF) 
+            if (fat_entry == FAT32_EOC) 
             {
                 printf("End of Directory! (fat_entry) \n");
                 return 0;
