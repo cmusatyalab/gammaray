@@ -207,18 +207,23 @@ int64_t get_cluster_addr(struct fs* fs, uint32_t cluster_number) {
 }
 
 uint32_t get_fat_entry(int disk, int cluster_num, struct fs* fs) {
-  struct fat32_volumeID* volID = fs->fs_info;
-  
-  int64_t fat_begin = fs->pt_off + volID->num_reserved_sectors * SECTOR_SIZE;
-  int64_t fat_entry_addr = fat_begin + (cluster_num * 4);
-  lseek64(disk, (off64_t) (fat_entry_addr), SEEK_SET);
-  uint32_t result;
-  if (read(disk, (void*)&result, 4) != 4)
-  {
-    fprintf_light_red(stderr, "Error while trying to read fat entry.\n");
-    return -1;
-  }
-  return result;
+    struct fat32_volumeID* volID = fs->fs_info;
+    int64_t fat_begin = fs->pt_off + volID->num_reserved_sectors * SECTOR_SIZE;
+    int64_t fat_entry_addr = fat_begin + (cluster_num * 4);
+    off64_t curr_offset = lseek64(disk, 0, SEEK_CUR);
+    uint32_t result;
+    lseek64(disk, (off64_t) (fat_entry_addr), SEEK_SET);
+
+    if (read(disk, (void*)&result, 4) != 4)
+    {
+        fprintf_light_red(stderr, "Error while trying to read fat entry.\n");
+        return -1;
+    }
+
+    /* defensively set offset back */
+    lseek64(disk, curr_offset, SEEK_SET);
+
+    return result;
 }
 
 char* read_name_long_entry(unsigned char* entry) 
