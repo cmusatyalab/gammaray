@@ -6,6 +6,7 @@
 #include "gray-crawler.h"
 
 #define FAT32_EOC 0x0FFFFFFF
+#define FAT32_BPB 0x0FFFFFF8
 
 struct fat32_volumeID {
     uint16_t bytes_per_sector;

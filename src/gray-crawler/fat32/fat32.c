@@ -356,12 +356,14 @@ char* make_path_name(char* path, char* name) {
     return file_path;
 }
 
-int fat32_serialize_file_info(struct fat32_file* file, int serializef)
+int fat32_serialize_file_info(struct fs* fs, int disk,
+                              struct fat32_file* file, int serializef)
 {
     struct bson_info* serialized;
     struct bson_info* sectors;
     struct bson_kv value;
 
+    uint64_t cluster_num = file->cluster_num;
     uint64_t inode_sector = file->inode_sector;
     uint64_t inode_offset = file->inode_offset;
     uint32_t inode_num = 0;
@@ -463,8 +465,11 @@ int fat32_serialize_file_info(struct fat32_file* file, int serializef)
 
     bson_serialize(serialized, &value);
 
-    /* TODO: @hjs0660 should we lookup all clusters associated with
-     *                a file here?  or elsewhere? */
+    while(cluster_num != FAT32_EOC && cluster_num != FAT32_BPB)
+    {
+        fprintf(stdout, "*** --> cluster_num: %"PRIu64"\n", cluster_num);
+        cluster_num = get_fat_entry(disk, cluster_num, fs);
+    }
 
     bson_finalize(serialized);
     bson_writef(serialized, serializef);
@@ -617,7 +622,7 @@ int read_dir_cluster(char* path, int disk, uint32_t cluster_num,
                 print_file_info(&file_info);
             }
 
-            fat32_serialize_file_info(&file_info, serializef);
+            fat32_serialize_file_info(fs, disk, &file_info, serializef);
             free_file_info(&file_info);
             fat32_reset_file_info(&file_info);
         }
