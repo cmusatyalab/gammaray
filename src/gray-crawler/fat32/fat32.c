@@ -367,8 +367,13 @@ int fat32_serialize_file_info(struct fs* fs, int disk,
     struct bson_info* serialized;
     struct bson_info* sectors;
     struct bson_kv value;
+    struct bson_kv sector_value;
 
+    char count[32];
+
+    uint64_t counter = 0;
     uint64_t cluster_num = file->cluster_num;
+    uint64_t cluster_sector = 0;
     uint64_t inode_sector = file->inode_sector;
     uint64_t inode_offset = file->inode_offset;
     uint32_t inode_num = 0;
@@ -470,11 +475,28 @@ int fat32_serialize_file_info(struct fs* fs, int disk,
 
     bson_serialize(serialized, &value);
 
-    while(cluster_num != FAT32_EOC && cluster_num != FAT32_BPB)
+    value.type = BSON_ARRAY;
+    value.key = "sectors";
+    value.data = sectors;
+
+    while(cluster_num != FAT32_EOC &&
+          cluster_num != FAT32_BPB)
     {
-        fprintf(stdout, "*** --> cluster_num: %"PRIu64"\n", cluster_num);
+        cluster_sector = get_cluster_addr(fs, cluster_num) / SECTOR_SIZE;
         cluster_num = get_fat_entry(disk, cluster_num, fs);
+        snprintf(count, 32, "%"PRIu64, counter);
+
+        sector_value.key = count;
+        sector_value.type = BSON_INT64;
+        sector_value.data = &cluster_sector;
+
+        bson_serialize(sectors, &sector_value);
+
+        counter += 1;
     }
+
+    bson_finalize(sectors);
+    bson_serialize(serialized, &value);
 
     bson_finalize(serialized);
     bson_writef(serialized, serializef);
