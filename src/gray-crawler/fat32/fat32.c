@@ -377,7 +377,7 @@ int fat32_serialize_file_info(struct fs* fs, int disk,
     uint64_t cluster_sector = 0;
     uint64_t inode_sector = file->inode_sector;
     uint64_t inode_offset = file->inode_offset;
-    uint32_t inode_num = 0;
+    static uint32_t inode_num = 0;
     uint64_t size = file->size;
     uint64_t mode = 0;
     uint64_t link_count = 1;
@@ -413,6 +413,7 @@ int fat32_serialize_file_info(struct fs* fs, int disk,
     value.type = BSON_INT32; 
     value.key = "inode_num";
     value.data = &inode_num;
+    inode_num++;
 
     bson_serialize(serialized, &value);
 
@@ -509,7 +510,6 @@ int fat32_serialize_file_info(struct fs* fs, int disk,
         bson_finalize(files);
         bson_serialize(serialized, &value);
     }
-
 
     bson_finalize(serialized);
     bson_writef(serialized, serializef);
