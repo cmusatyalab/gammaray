@@ -366,6 +366,7 @@ int fat32_serialize_file_info(struct fs* fs, int disk,
 {
     struct bson_info* serialized;
     struct bson_info* sectors;
+    struct bson_info* files;
     struct bson_kv value;
     struct bson_kv sector_value;
 
@@ -388,6 +389,7 @@ int fat32_serialize_file_info(struct fs* fs, int disk,
 
     serialized = bson_init();
     sectors = bson_init();
+    files = bson_init();
 
     value.type = BSON_STRING;
     value.size = strlen("file");
@@ -498,10 +500,22 @@ int fat32_serialize_file_info(struct fs* fs, int disk,
     bson_finalize(sectors);
     bson_serialize(serialized, &value);
 
+    /* TODO: fill in list of files in a directory */
+    if (file->is_dir)
+    {
+        value.type = BSON_ARRAY;
+        value.key = "sectors";
+        value.data = sectors;
+        bson_finalize(files);
+        bson_serialize(serialized, &value);
+    }
+
+
     bson_finalize(serialized);
     bson_writef(serialized, serializef);
     bson_cleanup(serialized);
     bson_cleanup(sectors);
+    bson_cleanup(files);
 
     return 0;
 }
