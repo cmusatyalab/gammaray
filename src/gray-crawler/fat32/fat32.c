@@ -543,6 +543,17 @@ int read_dir_cluster(char* path, int disk, uint32_t cluster_num,
     char* long_name = NULL;
     struct fat32_file file_info = {0};
 
+    /* TODO: @hsj0660 thoughts on this?
+              special case serialize root dir first */
+    if (cluster_num == 2)
+    {
+        file_info.is_dir = true;
+        file_info.cluster_num = cluster_num;
+        file_info.path = "/";
+        fat32_serialize_file_info(fs, disk, &file_info, serializef);
+        fat32_reset_file_info(&file_info);
+    }
+
     if (lseek64(disk, (off64_t) (cluster_addr), SEEK_SET) == (off64_t) -1)
     {
         fprintf_light_red(stderr, "Failed seeking to cluster_addr: "
