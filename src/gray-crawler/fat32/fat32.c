@@ -413,9 +413,9 @@ int fat32_serialize_file_info(struct fs* fs, int disk,
     value.type = BSON_INT32; 
     value.key = "inode_num";
     value.data = &inode_num;
-    inode_num++;
 
     bson_serialize(serialized, &value);
+    inode_num++;
 
     value.type = BSON_STRING;
     value.size = strlen(file->path);
