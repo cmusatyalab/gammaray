@@ -361,6 +361,139 @@ char* make_path_name(char* path, char* name) {
     return file_path;
 }
 
+void fat32_reset_file_info(struct fat32_file* file_info)
+{
+    file_info->name = NULL;
+    file_info->path = NULL;
+    file_info->cluster_num = 0;
+    file_info->inode_sector = 0;
+    file_info->inode_offset = 0;
+    file_info->size = 0;
+    file_info->crtime = 0;
+    file_info->latime = 0;
+    file_info->lwtime = 0;
+}
+
+int fat32_get_dir_entries(char* path, int disk, uint32_t cluster_num,
+                          struct fs* fs, int serializef)
+{
+    uint64_t cluster_addr = get_cluster_addr(fs, cluster_num);
+    int offset = 0;
+    unsigned char* entry = calloc(1, 32); 
+    struct fat32_volumeID* volID = fs->fs_info;
+    char* long_name = NULL;
+    struct fat32_file file_info = {0};
+    off64_t curr_offset = lseek64(disk, 0, SEEK_CUR);
+
+    if (lseek64(disk, (off64_t) (cluster_addr), SEEK_SET) == (off64_t) -1)
+    {
+        fprintf_light_red(stderr, "Failed seeking to cluster_addr: "
+                                  "%"PRIu64"\n", (uint64_t) cluster_addr);
+        return -1;
+    }
+
+    while (true) 
+    {
+        if (read(disk, (void*)entry, 32) != 32)
+        {
+            fprintf_light_red(stderr, "Error while trying to read record.\n");
+            return -1;
+        }
+
+        if (!(entry[0] ^ (unsigned char) 0xe5))
+        {
+            // This entry is empty.
+            continue;
+        }
+
+        if (!entry[0]) 
+        {
+            // No more directory entries.
+            break;
+        }
+
+        if (!(entry[11] ^ (unsigned char) 0x08))
+        {
+            // This entry is the volume id.
+            continue;
+        }
+
+        offset += 32;
+
+        if (!(entry[11] ^ (unsigned char) 0xF)) 
+        {
+            char* entry_name = read_name_long_entry(entry);
+
+            if (!long_name) 
+            {
+                long_name = entry_name;
+            }
+            else 
+            {
+                char* temp = long_name;
+                long_name = calloc(1, strlen(temp) + strlen(entry_name) + 1);
+                strcpy(long_name, entry_name); strcat(long_name, temp);
+            }
+        } 
+        else 
+        {
+            char* short_name = read_short_entry(entry);
+
+            if (long_name) 
+            {
+                file_info.name = long_name;
+                long_name = NULL;
+            }
+            else 
+            {
+                file_info.name = short_name;
+            }
+
+            file_info.path = make_path_name(path, file_info.name);
+
+            fprintf_light_white(stdout, "---> file: %s\n", file_info.path);
+
+            if ((entry[11] & (unsigned char)0x10) && entry[0] ^
+                (unsigned char)0x2E)  
+            {
+                file_info.is_dir = true;
+                lseek64(disk, (off64_t) (cluster_addr + offset), SEEK_SET);
+            }
+            else
+            {
+                file_info.is_dir = false;
+            }
+
+            free_file_info(&file_info);
+            fat32_reset_file_info(&file_info);
+        }
+
+        if (offset == SECTOR_SIZE * volID->sectors_per_cluster) 
+        {
+            uint32_t fat_entry = get_fat_entry(disk, cluster_num, fs);
+
+            if (fat_entry == FAT32_EOC) 
+            {
+                printf("End of Directory! (fat_entry) \n");
+                return 0;
+            }
+            cluster_num = fat_entry;
+            printf("fat_entry %" PRIu32 "\n", fat_entry);
+            cluster_addr = get_cluster_addr(fs,fat_entry);
+            printf("cluster_addr %" PRId64 "\n", cluster_addr);
+            offset = 0;
+            lseek64(disk, (off64_t) (cluster_addr), SEEK_SET);
+        }
+    }
+
+    free(entry);
+
+    /* defensively set offset back */
+    lseek64(disk, curr_offset, SEEK_SET);
+
+    return 0;
+}
+
 int fat32_serialize_file_info(struct fs* fs, int disk,
                               struct fat32_file* file, int serializef)
 {
@@ -507,6 +640,8 @@ int fat32_serialize_file_info(struct fs* fs, int disk,
         value.type = BSON_ARRAY;
         value.key = "files";
         value.data = files;
+        fat32_get_dir_entries(file->path, disk, file->cluster_num, fs,
+                              serializef);
         bson_finalize(files);
         bson_serialize(serialized, &value);
     }
@@ -520,18 +655,7 @@ int fat32_serialize_file_info(struct fs* fs, int disk,
     return 0;
 }
 
-void fat32_reset_file_info(struct fat32_file* file_info)
-{
-    file_info->name = NULL;
-    file_info->path = NULL;
-    file_info->cluster_num = 0;
-    file_info->inode_sector = 0;
-    file_info->inode_offset = 0;
-    file_info->size = 0;
-    file_info->crtime = 0;
-    file_info->latime = 0;
-    file_info->lwtime = 0;
-}
+
 
 int read_dir_cluster(char* path, int disk, uint32_t cluster_num,
                      struct fs* fs, int serializef)
