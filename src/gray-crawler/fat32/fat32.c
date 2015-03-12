@@ -505,8 +505,8 @@ int fat32_serialize_file_info(struct fs* fs, int disk,
     if (file->is_dir)
     {
         value.type = BSON_ARRAY;
-        value.key = "sectors";
-        value.data = sectors;
+        value.key = "files";
+        value.data = files;
         bson_finalize(files);
         bson_serialize(serialized, &value);
     }
