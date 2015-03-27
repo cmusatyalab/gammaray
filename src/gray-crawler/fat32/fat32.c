@@ -400,6 +400,8 @@ int fat32_get_dir_entries(char* path, int disk, uint32_t cluster_num,
             return -1;
         }
 
+        offset += 32;
+
         if (!(entry[0] ^ (unsigned char) 0xe5))
         {
             // This entry is empty.
@@ -417,8 +419,6 @@ int fat32_get_dir_entries(char* path, int disk, uint32_t cluster_num,
             // This entry is the volume id.
             continue;
         }
-
-        offset += 32;
 
         if (!(entry[11] ^ (unsigned char) 0xF)) 
         {
