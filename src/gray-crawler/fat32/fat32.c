@@ -473,6 +473,7 @@ void fat32_reset_file_info(struct fat32_file* file_info)
     file_info->lwtime = 0;
 
 }
+
 int read_dir_cluster(char* path, int disk, uint32_t cluster_num,
                      struct fs* fs, int serializef)
 {
@@ -497,6 +498,8 @@ int read_dir_cluster(char* path, int disk, uint32_t cluster_num,
             fprintf_light_red(stderr, "Error while trying to read record.\n");
             return -1;
         }
+        
+        offset += 32;
 
         if (!(entry[0] ^ (unsigned char) 0xe5))
         {
@@ -524,7 +527,6 @@ int read_dir_cluster(char* path, int disk, uint32_t cluster_num,
             file_info.inode_offset = offset;
         }
 
-        offset += 32;
 
         if (!(entry[11] ^ (unsigned char) 0xF)) 
         {
@@ -553,6 +555,8 @@ int read_dir_cluster(char* path, int disk, uint32_t cluster_num,
             else 
             {
                 file_info.name = short_name;
+                hexdump((uint8_t*)short_name, strlen(short_name));
+                printf("NO LONG NAME\n");
             }
             uint8_t crtime_tenth = *((uint8_t*) (entry + 13));
             uint16_t crtime = *((uint16_t*) (entry + 14));
