@@ -409,6 +409,8 @@ int fat32_get_dir_entries(char* path, int disk, uint32_t cluster_num,
             return -1;
         }
 
+        offset += 32;
+
         if (!(entry[0] ^ (unsigned char) 0xe5))
         {
             // This entry is empty.
@@ -426,8 +428,6 @@ int fat32_get_dir_entries(char* path, int disk, uint32_t cluster_num,
             // This entry is the volume id.
             continue;
         }
-
-        offset += 32;
 
         if (!(entry[11] ^ (unsigned char) 0xF)) 
         {
@@ -674,7 +674,6 @@ int fat32_serialize_file_info(struct fs* fs, int disk,
 }
 
 
-
 int read_dir_cluster(char* path, int disk, uint32_t cluster_num,
                      struct fs* fs, int serializef)
 {
@@ -710,6 +709,8 @@ int read_dir_cluster(char* path, int disk, uint32_t cluster_num,
             fprintf_light_red(stderr, "Error while trying to read record.\n");
             return -1;
         }
+        
+        offset += 32;
 
         if (!(entry[0] ^ (unsigned char) 0xe5))
         {
@@ -737,7 +738,6 @@ int read_dir_cluster(char* path, int disk, uint32_t cluster_num,
             file_info.inode_offset = offset;
         }
 
-        offset += 32;
 
         if (!(entry[11] ^ (unsigned char) 0xF)) 
         {
@@ -766,6 +766,8 @@ int read_dir_cluster(char* path, int disk, uint32_t cluster_num,
             else 
             {
                 file_info.name = short_name;
+                hexdump((uint8_t*)short_name, strlen(short_name));
+                printf("NO LONG NAME\n");
             }
             uint8_t crtime_tenth = *((uint8_t*) (entry + 13));
             uint16_t crtime = *((uint16_t*) (entry + 14));
