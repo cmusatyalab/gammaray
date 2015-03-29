@@ -375,7 +375,8 @@ void fat32_reset_file_info(struct fat32_file* file_info)
 }
 
 int fat32_get_dir_entries(char* path, int disk, uint32_t cluster_num,
-                          struct fs* fs, int serializef)
+                          struct fs* fs, int serializef, uint64_t inode_num,
+                          struct bson_info* files)
 {
     uint64_t cluster_addr = get_cluster_addr(fs, cluster_num);
     int offset = 0;
@@ -384,6 +385,9 @@ int fat32_get_dir_entries(char* path, int disk, uint32_t cluster_num,
     char* long_name = NULL;
     struct fat32_file file_info = {0};
     off64_t curr_offset = lseek64(disk, 0, SEEK_CUR);
+    char dentry_key[32];
+    struct bson_kv dentry;
+    uint8_t file_entry_buf[4096 + sizeof(uint64_t)];
 
     if (lseek64(disk, (off64_t) (cluster_addr), SEEK_SET) == (off64_t) -1)
     {
@@ -391,6 +395,11 @@ int fat32_get_dir_entries(char* path, int disk, uint32_t cluster_num,
                                   "%"PRIu64"\n", (uint64_t) cluster_addr);
         return -1;
     }
+
+    snprintf(dentry_key, 32, "%"PRIu64, cluster_addr);
+    dentry.key = dentry_key;
+    dentry.type = BSON_BINARY;
+    dentry.data = file_entry_buf;
 
     while (true) 
     {
@@ -452,6 +461,13 @@ int fat32_get_dir_entries(char* path, int disk, uint32_t cluster_num,
             file_info.path = make_path_name(path, file_info.name);
 
             fprintf_light_white(stdout, "---> file: %s\n", file_info.path);
+            
+            inode_num++;
+            memcpy(file_entry_buf, &inode_num, sizeof(uint64_t));
+            memcpy(&(file_entry_buf[sizeof(uint64_t)]), file_info.path,
+                   strlen(file_info.path));
+            dentry.size = sizeof(uint64_t) + strlen(file_info.path);
+            bson_serialize(files, &dentry);
 
             if ((entry[11] & (unsigned char)0x10) && entry[0] ^
                 (unsigned char)0x2E)  
@@ -483,6 +499,7 @@ int fat32_get_dir_entries(char* path, int disk, uint32_t cluster_num,
             printf("cluster_addr %" PRId64 "\n", cluster_addr);
             offset = 0;
             lseek64(disk, (off64_t) (cluster_addr), SEEK_SET);
+            snprintf(dentry_key, 32, "%"PRIu64, cluster_addr);
         }
     }
 
@@ -510,7 +527,7 @@ int fat32_serialize_file_info(struct fs* fs, int disk,
     uint64_t cluster_sector = 0;
     uint64_t inode_sector = file->inode_sector;
     uint64_t inode_offset = file->inode_offset;
-    static uint32_t inode_num = 0;
+    static uint64_t inode_num = 0;
     uint64_t size = file->size;
     uint64_t mode = 0;
     uint64_t link_count = 1;
@@ -641,7 +658,7 @@ int fat32_serialize_file_info(struct fs* fs, int disk,
         value.key = "files";
         value.data = files;
         fat32_get_dir_entries(file->path, disk, file->cluster_num, fs,
-                              serializef);
+                              serializef, inode_num, files);
         bson_finalize(files);
         bson_serialize(serialized, &value);
     }
@@ -651,6 +668,7 @@ int fat32_serialize_file_info(struct fs* fs, int disk,
     bson_cleanup(serialized);
     bson_cleanup(sectors);
     bson_cleanup(files);
+    inode_num++;
 
     return 0;
 }
