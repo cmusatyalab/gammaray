@@ -541,6 +541,18 @@ int fat32_serialize_file_info(struct fs* fs, int disk,
     sectors = bson_init();
     files = bson_init();
 
+    if (file->is_dir)
+    {
+
+        /* TODO: pass pointer to inode_num to get count from entire subtree */
+        /* TODO: merge walking code to have recursion here to serialize all
+         *       files and folders in subtree before this file */
+        /* TODO: inside of this get_dir_entries I think we need to serialize
+         *       things? */
+        fat32_get_dir_entries(file->path, disk, file->cluster_num, fs,
+                              serializef, inode_num, files);
+    }
+
     value.type = BSON_STRING;
     value.size = strlen("file");
     value.key = "type";
@@ -651,14 +663,12 @@ int fat32_serialize_file_info(struct fs* fs, int disk,
     bson_finalize(sectors);
     bson_serialize(serialized, &value);
 
-    /* TODO: fill in list of files in a directory */
     if (file->is_dir)
     {
         value.type = BSON_ARRAY;
         value.key = "files";
         value.data = files;
-        fat32_get_dir_entries(file->path, disk, file->cluster_num, fs,
-                              serializef, inode_num, files);
+
         bson_finalize(files);
         bson_serialize(serialized, &value);
     }
@@ -668,7 +678,6 @@ int fat32_serialize_file_info(struct fs* fs, int disk,
     bson_cleanup(serialized);
     bson_cleanup(sectors);
     bson_cleanup(files);
-    inode_num++;
 
     return 0;
 }
@@ -684,8 +693,6 @@ int read_dir_cluster(char* path, int disk, uint32_t cluster_num,
     char* long_name = NULL;
     struct fat32_file file_info = {0};
 
-    /* TODO: @hsj0660 thoughts on this?
-              special case serialize root dir first */
     if (cluster_num == 2)
     {
         file_info.is_dir = true;
