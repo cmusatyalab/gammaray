@@ -27,6 +27,7 @@ struct fat32_file {
     uint64_t dir_cluster_addr;
     uint64_t inode_sector;
     uint64_t inode_offset;
+    uint64_t inode_num;
     uint32_t size;
     time_t crtime;
     time_t latime;
