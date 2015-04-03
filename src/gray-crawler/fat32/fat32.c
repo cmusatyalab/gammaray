@@ -511,23 +511,25 @@ int fat32_get_dir_entries(char* path, int disk, uint32_t cluster_num,
     return 0;
 }
 
-int fat32_serialize_file_info(struct fs* fs, int disk,
-                              struct fat32_file* file, int serializef)
+int fat32_serialize_file_info(struct fs* fs, int disk, struct fat32_file* file, 
+                              int serializef, struct bson_info* prev_dir_files,
+                              struct bson_info* cur_dir_files)
 {
     struct bson_info* serialized;
     struct bson_info* sectors;
-    struct bson_info* files;
     struct bson_kv value;
     struct bson_kv sector_value;
+    struct bson_kv dentry;
 
     char count[32];
 
     uint64_t counter = 0;
     uint64_t cluster_num = file->cluster_num;
+    uint64_t cluster_addr = get_cluster_addr(fs, file->cluster_num);
     uint64_t cluster_sector = 0;
     uint64_t inode_sector = file->inode_sector;
     uint64_t inode_offset = file->inode_offset;
-    static uint64_t inode_num = 0;
+    uint64_t inode_num = file->inode_num;
     uint64_t size = file->size;
     uint64_t mode = 0;
     uint64_t link_count = 1;
@@ -537,21 +539,11 @@ int fat32_serialize_file_info(struct fs* fs, int disk,
     uint64_t mtime = file->lwtime;
     uint64_t ctime = file->crtime;
 
+    uint8_t file_entry_buf[4096 + sizeof(uint64_t)];
+    char dentry_key[32];
+  
     serialized = bson_init();
     sectors = bson_init();
-    files = bson_init();
-
-    if (file->is_dir)
-    {
-
-        /* TODO: pass pointer to inode_num to get count from entire subtree */
-        /* TODO: merge walking code to have recursion here to serialize all
-         *       files and folders in subtree before this file */
-        /* TODO: inside of this get_dir_entries I think we need to serialize
-         *       things? */
-        fat32_get_dir_entries(file->path, disk, file->cluster_num, fs,
-                              serializef, inode_num, files);
-    }
 
     value.type = BSON_STRING;
     value.size = strlen("file");
@@ -577,7 +569,6 @@ int fat32_serialize_file_info(struct fs* fs, int disk,
     value.data = &inode_num;
 
     bson_serialize(serialized, &value);
-    inode_num++;
 
     value.type = BSON_STRING;
     value.size = strlen(file->path);
@@ -663,28 +654,38 @@ int fat32_serialize_file_info(struct fs* fs, int disk,
     bson_finalize(sectors);
     bson_serialize(serialized, &value);
 
-    if (file->is_dir)
-    {
-        value.type = BSON_ARRAY;
-        value.key = "files";
-        value.data = files;
+    if (prev_dir_files != NULL) {
+      snprintf(dentry_key, 32, "%"PRIu64, cluster_addr);
+      dentry.key = dentry_key;
+      dentry.type = BSON_BINARY;
+      dentry.data = file_entry_buf;
+      dentry.size = sizeof(uint64_t) + strlen(file->path);
+      memcpy(file_entry_buf, &inode_num, sizeof(uint64_t));
+      memcpy(&(file_entry_buf[sizeof(uint64_t)]), file->path, strlen(file->path));
+      bson_serialize(prev_dir_files, &dentry);
+    }
 
-        bson_finalize(files);
-        bson_serialize(serialized, &value);
+    if (cur_dir_files != NULL) {
+      value.type = BSON_ARRAY;
+      value.key = "files";
+      value.data = cur_dir_files;
+      bson_finalize(cur_dir_files);
+      bson_serialize(serialized, &value);
     }
 
     bson_finalize(serialized);
     bson_writef(serialized, serializef);
     bson_cleanup(serialized);
     bson_cleanup(sectors);
-    bson_cleanup(files);
-
+    if (cur_dir_files) {
+      bson_cleanup(cur_dir_files);
+    }
     return 0;
 }
 
 
 int read_dir_cluster(char* path, int disk, uint32_t cluster_num,
-                     struct fs* fs, int serializef)
+                     struct fs* fs, struct bson_info* prev_dir_files, int serializef)
 {
     uint64_t cluster_addr = get_cluster_addr(fs, cluster_num);
     int offset = 0;
@@ -692,15 +693,7 @@ int read_dir_cluster(char* path, int disk, uint32_t cluster_num,
     struct fat32_volumeID* volID = fs->fs_info;
     char* long_name = NULL;
     struct fat32_file file_info = {0};
-
-    if (cluster_num == 2)
-    {
-        file_info.is_dir = true;
-        file_info.cluster_num = cluster_num;
-        file_info.path = "/";
-        fat32_serialize_file_info(fs, disk, &file_info, serializef);
-        fat32_reset_file_info(&file_info);
-    }
+    static uint64_t inode_num = 1; //root is zero
 
     if (lseek64(disk, (off64_t) (cluster_addr), SEEK_SET) == (off64_t) -1)
     {
@@ -776,6 +769,8 @@ int read_dir_cluster(char* path, int disk, uint32_t cluster_num,
                 hexdump((uint8_t*)short_name, strlen(short_name));
                 printf("NO LONG NAME\n");
             }
+            file_info.inode_num = inode_num;
+            inode_num++;
             uint8_t crtime_tenth = *((uint8_t*) (entry + 13));
             uint16_t crtime = *((uint16_t*) (entry + 14));
             uint16_t crdate = *((uint16_t*) (entry + 16));
@@ -809,14 +804,17 @@ int read_dir_cluster(char* path, int disk, uint32_t cluster_num,
                                         cluster_lo1 | cluster_lo2;
             file_info.cluster_num = file_cluster_num;
             file_info.path = make_path_name(path, file_info.name);
+            
+            struct bson_info* cur_dir_files = NULL;
 
             if ((entry[11] & (unsigned char)0x10) && entry[0] ^
                 (unsigned char)0x2E)  
             {
                 file_info.is_dir = true;
+                cur_dir_files = bson_init();
                 print_file_info(&file_info);
                 read_dir_cluster(file_info.path, disk, file_cluster_num, fs,
-                                 serializef);
+                                 cur_dir_files, serializef);
                 lseek64(disk, (off64_t) (cluster_addr + offset), SEEK_SET);
             }
             else
@@ -825,7 +823,8 @@ int read_dir_cluster(char* path, int disk, uint32_t cluster_num,
                 print_file_info(&file_info);
             }
 
-            fat32_serialize_file_info(fs, disk, &file_info, serializef);
+            fat32_serialize_file_info(fs, disk, &file_info, serializef,
+                                      prev_dir_files, cur_dir_files);
             free_file_info(&file_info);
             fat32_reset_file_info(&file_info);
         }
@@ -955,14 +954,22 @@ int fat32_serialize_fs(struct fs* fs, int serializef)
 
 int fat32_serialize(int disk, struct fs* fs, int serializef)
 {
+    struct fat32_file root = {0};
+    struct bson_info* root_files = bson_init();
+    
     fat32_serialize_fs(fs, serializef);
 
+    root.is_dir = true;
+    root.inode_num = 0;
+    root.cluster_num = 2;
+    root.path = "/";
     /* serialize root file system depth-first */
-    if (read_dir_cluster("", disk, 2, fs, serializef))
+    if (read_dir_cluster("", disk, 2, fs, root_files, serializef))
     {
         fprintf_light_red(stderr, "Error reading dir cluster 2.\n");
         return -1;
     }
+    fat32_serialize_file_info(fs, disk, &root, serializef, NULL, root_files);
 
     return 0;
 }
