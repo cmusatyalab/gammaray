@@ -1,0 +1,12 @@
+Journal support does not seem successfully reverse-engineered in open source
+communities:
+
+    [2007] http://tuxera.com/forum/viewtopic.php?p=38047&sid=4bb9a2909b51d5b0af153ed25ed0488d#p38047 
+    [2014] http://tuxera.com/forum/viewtopic.php?p=38061&sid=27703257affc3e3660fd308b344b2dfb#p38061
+    [2014] http://tuxera.com/forum/viewtopic.php?p=38067&sid=27703257affc3e3660fd308b344b2dfb#p38067
+
+gammaray built based of off (mostly) this document:
+  http://read.pudn.com/downloads69/ebook/246721/ntfsdoc.pdf  
+
+    Which doesn't have a full understanding of the LogFile:
+        "Little is known about the LogFile's structure."
