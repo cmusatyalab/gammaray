@@ -10,3 +10,80 @@ gammaray built based of off (mostly) this document [2005, Tuxera]:
 
     Which doesn't have a full understanding of the LogFile:
         "Little is known about the LogFile's structure."
+
+
+From: https://technet.microsoft.com/en-us/library/cc781134%28v=ws.10%29.aspx
+
+To ensure that a transaction can either be completed or rolled back, NTFS
+performs the following steps for each transaction:
+
+0. Records the metadata operations of a transaction in a log file cached in
+memory.
+
+1. Records the actual metadata operations in memory.
+
+2. Marks the transaction in the cached log file as committed.
+
+3. Flushes the log file to disk.
+
+4. Flushes the actual metadata operations to disk.
+
+Steps 4 and 5 occur in a lazy fashion after the transaction is completed,
+meaning that the flush operations are not tied to the transaction itself.
+Instead, NTFS modifies the log and metadata quickly in memory, and then
+flushes later at a convenient time to boost performance.
+
+NTFS guarantees that the log records containing the metadata operations of the
+transaction are written to disk before the metadata that is modified in the
+transaction is written to disk. After NTFS updates the cache, NTFS commits the
+transaction by recording in the cached log file that the transaction is
+complete. After the cached log file is flushed to disk, all committed
+transactions are guaranteed to be completed, even if the system fails before
+the changes are written to disk.
+
+Note
+Applications can specify the FILE_FLAG_WRITE_THROUGH Win32 flag to instruct
+the system to write through any intermediate cache and go directly to disk.
+The system can still cache write operations, but cannot lazily flush them.
+
+If a system failure occurs, NTFS has enough information in the log to complete
+or abort any partial NTFS transaction. During recovery operations, NTFS redoes
+each committed transaction found in the log file. Then NTFS locates in the log
+file the transactions that were not committed at the time of the system
+failure and undoes each metadata operation recorded in the log file. Because
+NTFS flushes the log to disk before any metadata changes are written to disk,
+NTFS has complete information available about any metadata changes that need
+to be rolled back during recovery.
+
+Note
+NTFS uses transaction logging and recovery to guarantee that the volume
+structure is not corrupted. For this reason, all file system data is
+accessible after a system failure. NTFS guarantees user data only if the
+program used to create the data uses the FILE_FLAG_WRITE_THROUGH Win32 flag.
+If the program does not use this flag, user data can be lost due to a system
+failure. If a system failure does occur, NTFS shows either the previous data,
+the new data, or zeros. Users do not see random data on the volume as the
+result of a crash.
+
+
+
+Source: http://www.sasag.org/wp-content/uploads/2012/07/SASAG-2012-NTFS.pptx
+
+1. $LogFile checkpointed every 5 seconds
+
+2. No strong semantics on flushing the log out to the rest of the disk
+    + Seems hard to even force 
+
+
+
+Source: https://www.osronline.com/showthread.cfm?link=184262
+
+"As has been said many times in the past there is no way to force NTFS to
+flush any data (either meta or file) in a manner that can be relied on,
+except for dismounting the volume.
+
+
+Don Burn (MVP, Windows DKD)
+Windows Filesystem and Driver Consulting
+Website: http://www.windrvr.com
+Blog: http://msmvps.com/blogs/WinDrvr"
