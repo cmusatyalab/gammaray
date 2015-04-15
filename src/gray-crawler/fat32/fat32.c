@@ -389,7 +389,6 @@ int fat32_serialize_file_info(struct fs* fs, int disk, struct fat32_file* file,
 
     uint64_t counter = 0;
     uint64_t cluster_num = file->cluster_num;
-    //uint64_t cluster_addr = get_cluster_addr(fs, file->cluster_num);
     uint64_t cluster_sector = 0;
     uint64_t inode_sector = file->inode_sector;
     uint64_t inode_offset = file->inode_offset;
@@ -564,7 +563,6 @@ int read_dir_cluster(char* path, int disk, uint32_t cluster_num,
     char* long_name = NULL;
     struct fat32_file file_info = {0};
     static uint64_t inode_num = 2; //root is zero, root_dot is one
-
     if (lseek64(disk, (off64_t) (cluster_addr), SEEK_SET) == (off64_t) -1)
     {
         fprintf_light_red(stderr, "Failed seeking to cluster_addr: "
