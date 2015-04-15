@@ -270,14 +270,14 @@ int main(int argc, char* argv[])
     fd_disk = open(path, O_RDONLY);
     argc -= 1;
 
-    if (redis_hash_field_get(handle, REDIS_SUPERBLOCK_SECTOR_GET, 0,
+    if (redis_hash_field_get(handle, REDIS_SUPERBLOCK_SECTOR_GET, 1,
                              "block_size", (uint8_t*) &block_size, &len))
         return -ENOENT;
 
     if (len != 8)
         return EXIT_FAILURE;
 
-    if (qemu_get_pt_offset(handle, &partition_offset, (uint64_t) 0))
+    if (qemu_get_pt_offset(handle, &partition_offset, (uint64_t) 1))
         return EXIT_FAILURE;
 
     return fuse_main(argc, argv, &gammarayfs_oper, NULL);
