@@ -245,7 +245,13 @@ char* read_name_long_entry(unsigned char* entry)
         {
             idx = 2 * (i - 11) + 28;
         }
-        memcpy(name + i, entry + idx, 1);
+        char fst_byte = *(entry + idx + 1);
+        //char ninth_bit = *(entry + idx) >> 7;
+        if (fst_byte) {
+          *(name + i) = 0x3F;
+        } else {
+          memcpy(name + i, entry + idx, 1);
+        }
         if (!*(entry + idx)) break;
     }
     return name;
