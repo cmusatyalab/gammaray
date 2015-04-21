@@ -227,7 +227,7 @@ uint32_t get_fat_entry(int disk, int cluster_num, struct fs* fs) {
     return result;
 }
 
-char* read_name_long_entry(unsigned char* entry) 
+char* read_name_long_entry(unsigned char* entry)
 {
     char *name = calloc(1, 14);
     int idx; int i;
@@ -235,7 +235,7 @@ char* read_name_long_entry(unsigned char* entry)
     {
         if (i < 5)
         {
-            idx = 2 * i + 1;
+            idx = (2 * i) + 1;
         }
         else if (i < 11)
         {
@@ -245,8 +245,13 @@ char* read_name_long_entry(unsigned char* entry)
         {
             idx = 2 * (i - 11) + 28;
         }
-
-        memcpy(name + i, entry + idx, 1);
+        char fst_byte = *(entry + idx + 1);
+        //char ninth_bit = *(entry + idx) >> 7;
+        if (fst_byte) {
+          *(name + i) = 0x3F;
+        } else {
+          memcpy(name + i, entry + idx, 1);
+        }
         if (!*(entry + idx)) break;
     }
     return name;
@@ -314,6 +319,56 @@ void fill_tm_from_fat32_datestamp(struct tm* result, uint16_t fat32_date)
     result->tm_mon = (int) (month - 1);
     result->tm_year = (1980 + (int) year) - 1900;
     result->tm_isdst = -1;
+}
+
+void remove_trailing_spaces(char* str) {
+  int len = strlen(str); int last_space = 0;
+  int i;
+  bool seen_space = false;
+  for (i = 0; i < len; i++) {
+    if (str[i] == 0x20 && !seen_space) {
+      seen_space = true;
+      last_space = i;
+    } else if (str[i] != 0x20) {
+      seen_space = false;
+    }
+  }
+  if (seen_space) str[last_space] = 0;
+}
+
+void remove_leading_spaces(char* str) {
+  int i, len = strlen(str);
+  for (i = 0; i < len; i++) {
+    if (str[i] != 0x2e) {
+      break;
+    }
+    str++;
+  }
+}
+
+bool is_empty_extension(char* ext) {
+  return !strcmp(ext, "   ");
+}
+
+bool is_dot_or_dotdot_entry(struct fat32_file* file_info) {
+  return !strcmp(file_info->name, ".") || !strcmp(file_info->name, "..");
+}
+
+char* convert_short_filename(char* short_filename) {
+  char* extension = short_filename + 8;
+  char* name = calloc(1, 9); char* full_name;
+  memcpy(name, short_filename, 8);
+  extension = short_filename + 8;
+  remove_trailing_spaces(name);
+  if (!is_empty_extension(extension)) {
+    remove_trailing_spaces(extension);
+    full_name = calloc(1, 2 + strlen(extension) + strlen(name));
+    strcpy(full_name, name);
+    *(full_name + strlen(name)) = '.';
+    strcpy(full_name + strlen(name) + 1, extension);
+    return full_name;
+  } 
+  return name;
 }
 
 void print_file_info(struct fat32_file* file_info) {
@@ -455,7 +510,7 @@ int fat32_serialize_file_info(struct fs* fs, int disk, struct fat32_file* file,
     if (file->is_dir) {
       mode = S_IFDIR | 0755;
     } else {
-      mode = S_IFREG | 0444;
+      mode = S_IFREG | 0755;
     }
 
     value.type = BSON_INT64; 
@@ -562,7 +617,7 @@ int read_dir_cluster(char* path, int disk, uint32_t cluster_num,
     struct fat32_volumeID* volID = fs->fs_info;
     char* long_name = NULL;
     struct fat32_file file_info = {0};
-    static uint64_t inode_num = 2; //root is zero, root_dot is one
+    static uint64_t inode_num = 1; //root is zero, root_dot is one
     if (lseek64(disk, (off64_t) (cluster_addr), SEEK_SET) == (off64_t) -1)
     {
         fprintf_light_red(stderr, "Failed seeking to cluster_addr: "
@@ -629,14 +684,17 @@ int read_dir_cluster(char* path, int disk, uint32_t cluster_num,
             if (long_name) 
             {
                 file_info.name = long_name;
+                remove_trailing_spaces(file_info.name);
                 long_name = NULL;
             }
             else 
             {
-                file_info.name = short_name;
+                file_info.name = convert_short_filename(short_name);
                 hexdump((uint8_t*)short_name, strlen(short_name));
-                printf("NO LONG NAME\n");
+                printf("NO LONG NAME %s\n", file_info.name);
             }
+
+            
             file_info.inode_num = inode_num;
             inode_num++;
             uint8_t crtime_tenth = *((uint8_t*) (entry + 13));
@@ -690,9 +748,10 @@ int read_dir_cluster(char* path, int disk, uint32_t cluster_num,
                 file_info.is_dir = false;
                 print_file_info(&file_info);
             }
-
-            fat32_serialize_file_info(fs, disk, &file_info, serializef,
+            if (!is_dot_or_dotdot_entry(&file_info)) {
+              fat32_serialize_file_info(fs, disk, &file_info, serializef,
                                       prev_dir_files, cur_dir_files);
+            }
             free_file_info(&file_info);
             fat32_reset_file_info(&file_info);
         }
@@ -832,13 +891,13 @@ int fat32_serialize(int disk, struct fs* fs, int serializef)
     root.cluster_num = 2;
     root.path = "/";
 
-    struct fat32_file root_dot = {0};
+    /*struct fat32_file root_dot = {0};
     root_dot.name = ".";
     root_dot.path = "/.";
     root_dot.is_dir = true;
     root_dot.cluster_num = 2;
     root_dot.inode_num = 1;
-    root_dot.inode_sector = get_cluster_addr(fs, 2) / SECTOR_SIZE;
+    root_dot.inode_sector = get_cluster_addr(fs, 2) / SECTOR_SIZE;*/
 
     /* serialize root file system depth-first */
     if (read_dir_cluster("", disk, 2, fs, root_files, serializef))
@@ -846,7 +905,7 @@ int fat32_serialize(int disk, struct fs* fs, int serializef)
         fprintf_light_red(stderr, "Error reading dir cluster 2.\n");
         return -1;
     }
-    fat32_serialize_file_info(fs, disk, &root_dot, serializef, root_files, NULL);
+    //fat32_serialize_file_info(fs, disk, &root_dot, serializef, root_files, NULL);
     fat32_serialize_file_info(fs, disk, &root, serializef, NULL, root_files);
 
     return 0;

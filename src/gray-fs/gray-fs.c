@@ -192,7 +192,7 @@ static int gammarayfs_read(const char* path, char* buf, size_t size,
                            off_t offset, struct fuse_file_info* fi)
 {
     uint64_t inode_num = gammarayfs_pathlookup(path), position = 0,
-             i = 0, start = offset / 4096, end;
+             i = 0, start = offset / block_size, end;
     int64_t sector = 0;
     uint8_t** list;
     size_t len = 0;
