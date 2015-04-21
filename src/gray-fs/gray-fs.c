@@ -192,7 +192,7 @@ static int gammarayfs_read(const char* path, char* buf, size_t size,
                            off_t offset, struct fuse_file_info* fi)
 {
     uint64_t inode_num = gammarayfs_pathlookup(path), position = 0,
-             i = 0, start = offset / 4096, end;
+             i = 0, start = offset / block_size, end;
     int64_t sector = 0;
     uint8_t** list;
     size_t len = 0;
@@ -270,14 +270,14 @@ int main(int argc, char* argv[])
     fd_disk = open(path, O_RDONLY);
     argc -= 1;
 
-    if (redis_hash_field_get(handle, REDIS_SUPERBLOCK_SECTOR_GET, 0,
+    if (redis_hash_field_get(handle, REDIS_SUPERBLOCK_SECTOR_GET, 1,
                              "block_size", (uint8_t*) &block_size, &len))
         return -ENOENT;
 
     if (len != 8)
         return EXIT_FAILURE;
 
-    if (qemu_get_pt_offset(handle, &partition_offset, (uint64_t) 0))
+    if (qemu_get_pt_offset(handle, &partition_offset, (uint64_t) 1))
         return EXIT_FAILURE;
 
     return fuse_main(argc, argv, &gammarayfs_oper, NULL);
